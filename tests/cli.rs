@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 fn bin() -> &'static str {
-    env!("CARGO_BIN_EXE_mongoose")
+    env!("CARGO_BIN_EXE_rikki")
 }
 
 fn tk() -> &'static str {

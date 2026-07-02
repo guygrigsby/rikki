@@ -7,10 +7,10 @@ fn main() -> ExitCode {
     match argv.next() {
         Some(file) => {
             let args: Vec<String> = argv.map(|a| a.to_string_lossy().to_string()).collect();
-            mongoose::report(mongoose::run_with(std::path::Path::new(&file), args, true))
+            rikki::report(rikki::run_with(std::path::Path::new(&file), args, true))
         }
         None => {
-            mongoose::repl::run();
+            rikki::repl::run();
             ExitCode::SUCCESS
         }
     }

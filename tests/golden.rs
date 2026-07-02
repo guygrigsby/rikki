@@ -52,19 +52,19 @@ fn golden() {
             continue;
         }
         ran += 1;
-        let res = mongoose::run_source(mg);
+        let res = rikki::run_source(mg);
         let out_f = mg.with_extension("out");
         let err_f = mg.with_extension("err");
         let ok = if out_f.exists() {
             let want = fs::read_to_string(&out_f).unwrap();
-            matches!(res.exit, mongoose::ExitKind::Ok) && res.stdout == want
+            matches!(res.exit, rikki::ExitKind::Ok) && res.stdout == want
         } else if err_f.exists() {
             let want = fs::read_to_string(&err_f).unwrap();
             let got = match &res.exit {
-                mongoose::ExitKind::CompileError(m) | mongoose::ExitKind::RuntimeError(m) => {
+                rikki::ExitKind::CompileError(m) | rikki::ExitKind::RuntimeError(m) => {
                     m.clone()
                 }
-                mongoose::ExitKind::Ok => String::new(),
+                rikki::ExitKind::Ok => String::new(),
             };
             want.lines()
                 .map(str::trim)

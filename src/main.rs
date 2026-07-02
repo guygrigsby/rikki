@@ -40,15 +40,15 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     match cli.cmd {
         Cmd::Run { file, args } => {
-            with_entry(file, |f| mongoose::report(mongoose::run_with(f, args.clone(), true)))
+            with_entry(file, |f| rikki::report(rikki::run_with(f, args.clone(), true)))
         }
-        Cmd::Check { file } => with_entry(file, |f| mongoose::report(mongoose::check_source(f))),
+        Cmd::Check { file } => with_entry(file, |f| rikki::report(rikki::check_source(f))),
         Cmd::Py {
             cmd: PyCmd::Add { package },
         } => py_add(&package),
         Cmd::New { name } => new_project(&name),
         Cmd::Repl => {
-            mongoose::repl::run();
+            rikki::repl::run();
             ExitCode::SUCCESS
         }
     }
@@ -57,7 +57,7 @@ fn main() -> ExitCode {
 /// Resolve the file to operate on: the explicit arg if given, otherwise the
 /// enclosing project's src/main.mg; then run `f` on it.
 fn with_entry(file: Option<PathBuf>, f: impl FnOnce(&std::path::Path) -> ExitCode) -> ExitCode {
-    match mongoose::resolve_entry(file) {
+    match rikki::resolve_entry(file) {
         Ok(path) => f(&path),
         Err(e) => {
             eprintln!("error: {e}");
@@ -78,7 +78,7 @@ fn new_project(name: &str) -> ExitCode {
             root.join("mongoose.toml"),
             format!(
                 "[project]\nname = {name:?}\npython = {:?}\n",
-                mongoose::bridge::embedded_python()
+                rikki::bridge::embedded_python()
             ),
         )?;
         std::fs::write(
@@ -102,11 +102,11 @@ fn new_project(name: &str) -> ExitCode {
 
 fn py_add(package: &str) -> ExitCode {
     let cwd = std::env::current_dir().expect("cwd");
-    let Some(root) = mongoose::project::Project::find(&cwd) else {
+    let Some(root) = rikki::project::Project::find(&cwd) else {
         eprintln!("error: no mongoose.toml found; run: mongoose new <name>");
         return ExitCode::FAILURE;
     };
-    let mut proj = match mongoose::project::Project::load(&root) {
+    let mut proj = match rikki::project::Project::load(&root) {
         Ok(p) => p,
         Err(e) => {
             eprintln!("error: {e}");
