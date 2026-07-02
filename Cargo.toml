@@ -10,6 +10,7 @@ clap = { version = "4", features = ["derive"] }
 ctrlc = "3.5.2"
 indexmap = "2"
 pyo3 = { version = "0.29.0", features = ["py-clone"] }
+toml = "1.1.2"
 ureq = "3.3.0"
 
 [[bin]]

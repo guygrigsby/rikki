@@ -6,6 +6,7 @@ pub mod interp;
 pub mod lexer;
 pub mod loader;
 pub mod parser;
+pub mod project;
 pub mod stdlib;
 pub mod token;
 pub mod typecheck;
@@ -27,25 +28,66 @@ pub struct RunResult {
 }
 
 pub fn run_source(path: &Path) -> RunResult {
-    let src = match std::fs::read_to_string(path) {
-        Ok(s) => s,
-        Err(e) => {
-            return RunResult {
-                stdout: String::new(),
-                exit: ExitKind::CompileError(format!("{}: {e}", path.display())),
-            }
-        }
-    };
-    drop(src);
+    compile_and(path, true)
+}
+
+/// Typecheck only; never provisions an environment or runs code.
+pub fn check_source(path: &Path) -> RunResult {
+    compile_and(path, false)
+}
+
+fn compile_err(msg: impl Into<String>) -> RunResult {
+    RunResult { stdout: String::new(), exit: ExitKind::CompileError(msg.into()) }
+}
+
+fn compile_and(path: &Path, run: bool) -> RunResult {
+    if !path.exists() {
+        return compile_err(format!("{}: no such file", path.display()));
+    }
     let prog = match loader::load(path) {
         Ok(p) => p,
-        Err(d) => {
-            return RunResult { stdout: String::new(), exit: ExitKind::CompileError(d.to_string()) }
-        }
+        Err(d) => return compile_err(d.to_string()),
     };
+    // python imports: validate against the project manifest, provision the env
+    let py_imports: Vec<String> = prog
+        .decls
+        .iter()
+        .filter_map(|d| match d {
+            ast::Decl::Import { path, py: true, .. } => Some(path.clone()),
+            _ => None,
+        })
+        .collect();
+    if !py_imports.is_empty() {
+        if let Some(root) = project::Project::find(path) {
+            let proj = match project::Project::load(&root) {
+                Ok(p) => p,
+                Err(e) => return compile_err(e),
+            };
+            let provision =
+                run && (!proj.py_deps.is_empty() || root.join("mongoose.lock").exists());
+            if provision {
+                if let Err(e) = proj.ensure_env("uv") {
+                    return compile_err(e);
+                }
+                bridge::init(Some(&proj.venv()));
+            }
+            for m in &py_imports {
+                let top = m.split('.').next().unwrap_or(m);
+                if !proj.py_deps.contains_key(top) && !bridge::is_stdlib(top) {
+                    return compile_err(format!(
+                        "import py {m:?}: not declared in mongoose.toml; run: mongoose py add {top}"
+                    ));
+                }
+            }
+        }
+        // no project: bare interpreter, stdlib python only
+    }
     if let Err(diags) = typecheck::check(&prog) {
         let msg = diags.iter().map(|d| d.to_string()).collect::<Vec<_>>().join("\n");
-        return RunResult { stdout: String::new(), exit: ExitKind::CompileError(msg) };
+        return compile_err(msg);
+    }
+    if !run {
+        return RunResult { stdout: String::new(), exit: ExitKind::Ok };
     }
     let mut interp = interp::Interp::new(&prog);
     let result = interp.run_main();

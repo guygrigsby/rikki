@@ -236,6 +236,18 @@ pub fn display(h: &PyHandle) -> String {
     })
 }
 
+/// Is `name` a Python standard-library module? Used by the manifest check:
+/// stdlib imports need no declaration in mongoose.toml.
+pub fn is_stdlib(name: &str) -> bool {
+    init(None);
+    Python::attach(|py| {
+        py.import("sys")
+            .and_then(|sys| sys.getattr("stdlib_module_names"))
+            .and_then(|names| names.contains(name))
+            .unwrap_or(false)
+    })
+}
+
 pub fn is_none(h: &PyHandle) -> bool {
     Python::attach(|py| h.0.bind(py).is_none())
 }
