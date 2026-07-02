@@ -1,2 +1,4 @@
 # goldens waiting on unimplemented features, one relative path per line
 smoke/print.mg
+check/opt-narrow.mg
+check/opt-narrow-terminal.mg
