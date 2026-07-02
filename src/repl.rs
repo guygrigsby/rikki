@@ -7,9 +7,9 @@
 use std::io::{BufRead, Write};
 
 use crate::ast::{Decl, Program};
-use crate::builtins::render;
 use crate::interp::Interp;
 use crate::parser;
+use crate::value::render;
 
 pub fn run() {
     let empty: &'static Program = Box::leak(Box::default());

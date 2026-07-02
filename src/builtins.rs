@@ -1,6 +1,6 @@
 use crate::ast::TypeExpr;
 use crate::interp::{Fault, Interp};
-use crate::value::{ErrVal, Value};
+use crate::value::{render, ErrVal, Value};
 
 impl Interp<'_> {
     pub(crate) fn builtin_call(&mut self, name: &str, args: Vec<Value>) -> Result<Value, Fault> {
@@ -456,43 +456,5 @@ impl Interp<'_> {
             return Err(self.fault("printf: wrong argument count"));
         }
         Ok(out)
-    }
-}
-
-/// Canonical rendering, shared by print, %v, and str().
-pub fn render(v: &Value) -> String {
-    match v {
-        Value::Int(i) => i.to_string(),
-        Value::Float(f) => f.to_string(),
-        Value::Bool(b) => b.to_string(),
-        Value::Str(s) => s.clone(),
-        Value::List(items) => {
-            let inner = items.iter().map(render).collect::<Vec<_>>().join(", ");
-            format!("[{inner}]")
-        }
-        Value::Map(m) => {
-            let inner = m
-                .iter()
-                .map(|(k, v)| format!("{}: {}", render(&k.to_value()), render(v)))
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("{{{inner}}}")
-        }
-        Value::Struct { name, fields } => {
-            let inner = fields
-                .iter()
-                .map(|(k, v)| format!("{k}: {}", render(v)))
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("{name}{{{inner}}}")
-        }
-        Value::NoneV => "none".into(),
-        Value::Py(h) => crate::bridge::display(h),
-        Value::Err(e) => format!("error({})", e.msg),
-        Value::Fn(_) => "fn".into(),
-        Value::Module(m) => format!("module {m}"),
-        Value::Ctx(_) => "ctx".into(),
-        Value::Tuple(items) => items.iter().map(render).collect::<Vec<_>>().join(", "),
-        Value::Unit => "()".into(),
     }
 }

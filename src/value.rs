@@ -3,8 +3,9 @@ use std::rc::Rc;
 
 use crate::ast::{Block, Param, TypeExpr};
 
-/// Runtime value. `Clone` is a deep copy (value semantics); the future `py`
-/// variant is the documented reference exception.
+/// Runtime value. `Clone` is a deep copy (value semantics); `py` and ctx
+/// values are the documented reference exceptions, and closures share their
+/// immutable captured environment (ADR 0009).
 #[derive(Debug, Clone)]
 pub enum Value {
     Int(i64),
@@ -12,7 +13,10 @@ pub enum Value {
     Bool(bool),
     Str(String),
     List(Vec<Value>),
+    /// Insertion order is language-visible (iteration, rendering); the
+    /// IndexMap is semantics, not an optimization target.
     Map(IndexMap<MapKey, Value>),
+    /// Field order is declaration order, also language-visible.
     Struct {
         name: String,
         fields: IndexMap<String, Value>,
@@ -70,6 +74,8 @@ pub struct ErrVal {
 pub enum FnRef {
     /// Top-level function, by name.
     Decl(String),
+    /// Shared, not deep-copied: ClosureData is immutable after capture, so
+    /// sharing is observationally value-like (ADR 0009).
     Closure(Rc<ClosureData>),
     /// Zero value of a fn type; calling it is a fault.
     Zero,
@@ -86,46 +92,99 @@ pub struct ClosureData {
 }
 
 impl Value {
-    pub fn is_none(&self) -> bool {
-        matches!(self, Value::NoneV)
-    }
-
     /// Equality per the language: scalars, none, options, and structural
     /// (recursive) equality for lists, structs, maps, and tuples. Py, fn,
-    /// ctx, and module values never compare equal.
+    /// ctx, module, error, and unit values never compare equal, even to
+    /// themselves. Matching on `self` exhaustively (no catch-all) so a new
+    /// variant forces an equality decision at compile time.
     pub fn eq_value(&self, other: &Value) -> bool {
-        match (self, other) {
-            (Value::Int(a), Value::Int(b)) => a == b,
-            (Value::Float(a), Value::Float(b)) => a == b,
-            (Value::Bool(a), Value::Bool(b)) => a == b,
-            (Value::Str(a), Value::Str(b)) => a == b,
-            (Value::NoneV, Value::NoneV) => true,
-            (Value::NoneV, _) | (_, Value::NoneV) => false,
-            (Value::List(a), Value::List(b)) | (Value::Tuple(a), Value::Tuple(b)) => {
-                a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.eq_value(y))
-            }
-            (
-                Value::Struct {
-                    name: an,
-                    fields: af,
-                },
+        match self {
+            Value::Int(a) => matches!(other, Value::Int(b) if a == b),
+            Value::Float(a) => matches!(other, Value::Float(b) if a == b),
+            Value::Bool(a) => matches!(other, Value::Bool(b) if a == b),
+            Value::Str(a) => matches!(other, Value::Str(b) if a == b),
+            Value::NoneV => matches!(other, Value::NoneV),
+            Value::List(a) => match other {
+                Value::List(b) => eq_seq(a, b),
+                _ => false,
+            },
+            Value::Tuple(a) => match other {
+                Value::Tuple(b) => eq_seq(a, b),
+                _ => false,
+            },
+            Value::Struct {
+                name: an,
+                fields: af,
+            } => match other {
                 Value::Struct {
                     name: bn,
                     fields: bf,
-                },
-            ) => {
-                an == bn
-                    && af.len() == bf.len()
-                    && af
-                        .iter()
-                        .all(|(k, v)| bf.get(k).is_some_and(|w| v.eq_value(w)))
-            }
-            (Value::Map(a), Value::Map(b)) => {
-                a.len() == b.len()
-                    && a.iter()
-                        .all(|(k, v)| b.get(k).is_some_and(|w| v.eq_value(w)))
-            }
-            _ => false,
+                } => {
+                    an == bn
+                        && af.len() == bf.len()
+                        && af
+                            .iter()
+                            .all(|(k, v)| bf.get(k).is_some_and(|w| v.eq_value(w)))
+                }
+                _ => false,
+            },
+            Value::Map(a) => match other {
+                Value::Map(b) => {
+                    a.len() == b.len()
+                        && a.iter()
+                            .all(|(k, v)| b.get(k).is_some_and(|w| v.eq_value(w)))
+                }
+                _ => false,
+            },
+            Value::Py(_)
+            | Value::Err(_)
+            | Value::Fn(_)
+            | Value::Module(_)
+            | Value::Ctx(_)
+            | Value::Unit => false,
         }
+    }
+}
+
+fn eq_seq(a: &[Value], b: &[Value]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.eq_value(y))
+}
+
+/// Canonical rendering, shared by print, %v, str() conversion, and the
+/// bridge's "cannot pass X to python" diagnostics.
+pub fn render(v: &Value) -> String {
+    match v {
+        Value::Int(i) => i.to_string(),
+        Value::Float(f) => f.to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Str(s) => s.clone(),
+        Value::List(items) => {
+            let inner = items.iter().map(render).collect::<Vec<_>>().join(", ");
+            format!("[{inner}]")
+        }
+        Value::Map(m) => {
+            let inner = m
+                .iter()
+                .map(|(k, v)| format!("{}: {}", render(&k.to_value()), render(v)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{{{inner}}}")
+        }
+        Value::Struct { name, fields } => {
+            let inner = fields
+                .iter()
+                .map(|(k, v)| format!("{k}: {}", render(v)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{name}{{{inner}}}")
+        }
+        Value::NoneV => "none".into(),
+        Value::Py(h) => crate::bridge::display(h),
+        Value::Err(e) => format!("error({})", e.msg),
+        Value::Fn(_) => "fn".into(),
+        Value::Module(m) => format!("module {m}"),
+        Value::Ctx(_) => "ctx".into(),
+        Value::Tuple(items) => items.iter().map(render).collect::<Vec<_>>().join(", "),
+        Value::Unit => "()".into(),
     }
 }

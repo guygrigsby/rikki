@@ -214,7 +214,7 @@ fn to_py(py: Python<'_>, v: &Value) -> Result<Py<PyAny>, ErrVal> {
         }
         other => {
             return Err(ErrVal {
-                msg: format!("cannot pass {} to python", crate::builtins::render(other)),
+                msg: format!("cannot pass {} to python", crate::value::render(other)),
                 ..Default::default()
             })
         }
@@ -308,10 +308,6 @@ pub fn is_stdlib(name: &str) -> bool {
             .and_then(|names| names.contains(name))
             .unwrap_or(false)
     })
-}
-
-pub fn is_none(h: &PyHandle) -> bool {
-    Python::attach(|py| h.0.bind(py).is_none())
 }
 
 #[cfg(test)]
