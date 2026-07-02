@@ -1283,34 +1283,20 @@ impl Checker {
     /// Statically checks a literal printf/sprintf format against the
     /// argument types. Mirrors the runtime verb table.
     fn check_format(&mut self, name: &str, fmt: &str, arg_tys: &[Type], line: u32, col: u32) {
-        let mut verbs = vec![];
-        let mut chars = fmt.chars().peekable();
-        while let Some(c) = chars.next() {
-            if c != '%' {
-                continue;
+        let pieces = match crate::fmt::parse(fmt) {
+            Ok(p) => p,
+            Err(e) => {
+                self.diag(line, col, e.msg(name));
+                return;
             }
-            if chars.peek() == Some(&'%') {
-                chars.next();
-                continue;
-            }
-            // width and precision
-            while chars.peek().is_some_and(|d| d.is_ascii_digit()) {
-                chars.next();
-            }
-            if chars.peek() == Some(&'.') {
-                chars.next();
-                while chars.peek().is_some_and(|d| d.is_ascii_digit()) {
-                    chars.next();
-                }
-            }
-            match chars.next() {
-                Some(v) => verbs.push(v),
-                None => {
-                    self.diag(line, col, format!("{name}: format ends inside a verb"));
-                    return;
-                }
-            }
-        }
+        };
+        let verbs: Vec<char> = pieces
+            .iter()
+            .filter_map(|p| match p {
+                crate::fmt::Piece::Verb { verb, .. } => Some(*verb),
+                crate::fmt::Piece::Lit(_) => None,
+            })
+            .collect();
         if verbs.len() != arg_tys.len() {
             self.diag(
                 line,

@@ -2,6 +2,7 @@ pub mod ast;
 pub mod bridge;
 pub mod builtins;
 pub mod diag;
+mod fmt;
 pub mod interp;
 pub mod lexer;
 pub mod loader;

@@ -15,7 +15,7 @@ impl Interp<'_> {
                 let Some(Value::Str(fmt)) = args.first() else {
                     return Err(self.fault(format!("{name} needs a format string")));
                 };
-                let s = self.format(fmt.clone(), &args[1..])?;
+                let s = self.format(fmt, &args[1..])?;
                 if name == "printf" {
                     self.out.push_str(&s);
                     Ok(Value::Unit)
@@ -417,48 +417,18 @@ impl Interp<'_> {
         crate::stdlib::constant(self, &module, name)
     }
 
-    fn format(&self, fmt: String, args: &[Value]) -> Result<String, Fault> {
+    fn format(&self, fmt: &str, args: &[Value]) -> Result<String, Fault> {
+        let pieces = crate::fmt::parse(fmt).map_err(|e| self.fault(e.msg("printf")))?;
         let mut out = String::new();
-        let mut chars = fmt.chars().peekable();
         let mut next = 0usize;
-        while let Some(c) = chars.next() {
-            if c != '%' {
-                out.push(c);
-                continue;
-            }
-            if chars.peek() == Some(&'%') {
-                chars.next();
-                out.push('%');
-                continue;
-            }
-            // width and precision, capped: an absurd pad is an allocation
-            // abort the panic net cannot catch, so it faults instead.
-            const MAX_PAD: usize = 1 << 20;
-            let mut width = String::new();
-            while chars.peek().is_some_and(|d| d.is_ascii_digit()) {
-                width.push(chars.next().unwrap());
-            }
-            let w: usize = match width.parse() {
-                _ if width.is_empty() => 0,
-                Ok(w) if w <= MAX_PAD => w,
-                _ => return Err(self.fault("printf: width too large")),
-            };
-            let mut prec: Option<usize> = None;
-            if chars.peek() == Some(&'.') {
-                chars.next();
-                let mut p = String::new();
-                while chars.peek().is_some_and(|d| d.is_ascii_digit()) {
-                    p.push(chars.next().unwrap());
+        for piece in pieces {
+            let (width, prec, verb) = match piece {
+                crate::fmt::Piece::Lit(s) => {
+                    out.push_str(&s);
+                    continue;
                 }
-                prec = match p.parse() {
-                    _ if p.is_empty() => None,
-                    Ok(n) if n <= MAX_PAD => Some(n),
-                    _ => return Err(self.fault("printf: precision too large")),
-                };
-            }
-            let verb = chars
-                .next()
-                .ok_or_else(|| self.fault("printf: format ends inside a verb"))?;
+                crate::fmt::Piece::Verb { width, prec, verb } => (width, prec, verb),
+            };
             let arg = args
                 .get(next)
                 .ok_or_else(|| self.fault("printf: wrong argument count"))?;
@@ -479,8 +449,8 @@ impl Interp<'_> {
             };
             // pad by character count, not byte length
             let n = rendered.chars().count();
-            if n < w {
-                out.push_str(&" ".repeat(w - n));
+            if n < width {
+                out.push_str(&" ".repeat(width - n));
             }
             out.push_str(&rendered);
         }

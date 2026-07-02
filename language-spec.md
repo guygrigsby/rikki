@@ -1447,8 +1447,8 @@ The complete set of fault conditions reachable from checked programs:
 - `printf`/`sprintf` with a non-literal format string whose verbs do not
   match the arguments at runtime (wrong count, wrong type, unknown verb, or
   a format ending inside a verb; section 14.3);
-- `printf`/`sprintf` width or precision exceeding the implementation's pad
-  limit (section 14.2);
+- `printf`/`sprintf` with a non-literal format string whose width or
+  precision exceeds the implementation's pad limit (section 14.2);
 - operations on list elements whose actual type does not match the list's
   static element type after an unchecked `[]T` conversion
   (section 7.7).
@@ -1601,8 +1601,9 @@ decimal digit sequences, in the form `%[width][.precision]verb`. Width pads
 on the left with spaces to the given count of code points (not bytes).
 Precision is honored by `%f`; on other verbs it is accepted and ignored.
 There is no left-align or zero-pad flag. A width or precision exceeding the
-implementation's pad limit (2^20 in the reference implementation) faults at
-runtime (chapter 12), even when the format string is a literal.
+implementation's pad limit (2^20 in the reference implementation) is
+rejected: a compile-time diagnostic when the format string is a literal
+(section 14.3), a fault otherwise (chapter 12).
 
 ### 14.3 Static and dynamic format checking
 
