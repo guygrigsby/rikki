@@ -1,0 +1,23 @@
+fn main() {
+    // numeric and identity conversions are single-valued: use inline
+    f := 2.5
+    print(int(f))
+    print(int(f) + 1)
+    n := 7
+    print(float(n) / 2.0)
+    print(str(n) + "!")
+    print(str(3.0))
+    print(str(true))
+    print(str([1, 2]))
+    print(bool(true))
+    // saturation and NaN stay defined, no error slot
+    big := 9007199254740992.0 * 9007199254740992.0
+    print(int(big))
+    // str sources stay fallible
+    m, err := int("41")
+    if err == none {
+        print(m + 1)
+    }
+    _, err2 := int("nope")
+    print(err2 != none)
+}

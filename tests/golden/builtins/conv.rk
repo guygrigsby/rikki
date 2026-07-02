@@ -8,11 +8,11 @@ fn main() {
         print(err2.msg)
         print(m)
     }
-    t, _ := int(3.9)
+    t := int(3.9)
     print(t)
     f, _ := float("2.5")
     print(f)
-    s, _ := str(123)
+    s := str(123)
     print(s + "!")
     b, _ := bool("true")
     print(b)

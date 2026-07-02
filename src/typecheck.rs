@@ -1024,7 +1024,19 @@ impl Checker {
                 if !ok {
                     self.diag(line, col, format!("cannot convert {at} to {t}"));
                 }
-                ExprTy::Multi(vec![t, err_opt()])
+                // fallible only from py (bridge) or str (parse); numeric,
+                // identity, str-render, and list pass-through are single-valued
+                let fallible = matches!(
+                    (&t, &at),
+                    (_, Type::Py)
+                        | (_, Type::Unknown)
+                        | (Type::Int | Type::Float | Type::Bool, Type::Str)
+                );
+                if fallible {
+                    ExprTy::Multi(vec![t, err_opt()])
+                } else {
+                    ExprTy::One(t)
+                }
             }
         }
     }

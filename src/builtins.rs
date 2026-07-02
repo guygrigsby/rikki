@@ -92,7 +92,8 @@ impl Interp<'_> {
         }
     }
 
-    /// Fallible conversions: always (T, error?).
+    /// Conversions. py and str sources yield (T, error?); other pairs are
+    /// infallible and yield the bare value, matching the checker.
     pub(crate) fn convert(&mut self, target: &TypeExpr, v: Value) -> Result<Value, Fault> {
         let ok = |v| Ok(Value::Tuple(vec![v, Value::NoneV]));
         let fail = |this: &Self, t: &TypeExpr, msg: String| {
@@ -124,27 +125,29 @@ impl Interp<'_> {
                 Err(e) => Value::Tuple(vec![self.zero(target), Value::Err(e)]),
             });
         }
+        // infallible pairs return the value bare; str sources keep the
+        // (T, error?) tuple the checker promises for them
         match (name, v) {
-            ("int", Value::Int(i)) => ok(Value::Int(i)),
-            ("int", Value::Float(f)) => ok(Value::Int(f as i64)),
+            ("int", Value::Int(i)) => Ok(Value::Int(i)),
+            ("int", Value::Float(f)) => Ok(Value::Int(f as i64)),
             ("int", Value::Str(s)) => match s.trim().parse::<i64>() {
                 Ok(i) => ok(Value::Int(i)),
                 Err(_) => fail(self, target, format!("cannot parse {s:?} as int")),
             },
-            ("float", Value::Float(f)) => ok(Value::Float(f)),
-            ("float", Value::Int(i)) => ok(Value::Float(i as f64)),
+            ("float", Value::Float(f)) => Ok(Value::Float(f)),
+            ("float", Value::Int(i)) => Ok(Value::Float(i as f64)),
             ("float", Value::Str(s)) => match s.trim().parse::<f64>() {
                 Ok(f) => ok(Value::Float(f)),
                 Err(_) => fail(self, target, format!("cannot parse {s:?} as float")),
             },
-            ("bool", Value::Bool(b)) => ok(Value::Bool(b)),
+            ("bool", Value::Bool(b)) => Ok(Value::Bool(b)),
             ("bool", Value::Str(s)) => match s.trim() {
                 "true" => ok(Value::Bool(true)),
                 "false" => ok(Value::Bool(false)),
                 _ => fail(self, target, format!("cannot parse {s:?} as bool")),
             },
-            ("str", v) => ok(Value::Str(render(&v))),
-            ("list", Value::List(items)) => ok(Value::List(items)),
+            ("str", v) => Ok(Value::Str(render(&v))),
+            ("list", Value::List(items)) => Ok(Value::List(items)),
             // py conversions land with the bridge
             (t, v) => fail(
                 self,

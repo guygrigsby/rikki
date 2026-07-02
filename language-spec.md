@@ -798,14 +798,17 @@ Conversion = ( "int" | "float" | "str" | "bool" ) "(" Expression ")"
            | SliceType "(" Expression ")" .
 ```
 
-Conversions are the explicit, fallible casts of the language. Every
-conversion expression has the multi-value type `(T, error?)` and must be
-consumed accordingly (sections 7.10, 10.2), even when it cannot in fact fail:
+Conversions are the explicit casts of the language. Fallibility follows the
+operand type: a conversion from `str` (a parse) or from `py` (a bridge
+extraction, section 13.5) has the multi-value type `(T, error?)` and must be
+consumed accordingly (sections 7.10, 10.2). Every other permitted pair
+cannot fail, is single-valued, and is used inline:
 
 ```
-n, err := int("42")       // 42, none
+n, err := int("42")       // 42, none: str source is a parse
 m, err2 := int("x")       // 0, error("cannot parse \"x\" as int")
-s, _ := str(123)          // "123", never fails
+i := int(3.9)             // 3: numeric conversions are single-valued
+s := str(123) + "!"       // "123!": str(x) never fails
 ```
 
 Permitted operand types and behavior, for non-`py` operands:
@@ -826,8 +829,8 @@ Permitted operand types and behavior, for non-`py` operands:
 Any other operand type is a compile-time error ("cannot convert").
 
 `[]T` applied to a rikki list performs no per-element checking in v1:
-the list value passes through, and the expression's static type becomes
-`[]T`. If the actual elements do not match `T`, later operations on them
+the list value passes through single-valued, and the expression's static
+type becomes `[]T`. If the actual elements do not match `T`, later operations on them
 fault at runtime. Programs must not rely on this as a checked cast; its
 intended use is extraction from `py` values, where elements are genuinely
 converted (section 13.5).
