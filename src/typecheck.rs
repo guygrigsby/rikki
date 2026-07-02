@@ -122,29 +122,7 @@ impl Checker {
                     self.imports
                         .insert(path.clone(), ImportKind::Std(path.clone()));
                     if path == "http" {
-                        self.structs.insert(
-                            "Request".into(),
-                            vec![
-                                ("method".into(), Type::Str),
-                                ("url".into(), Type::Str),
-                                ("body".into(), Type::Str),
-                                (
-                                    "headers".into(),
-                                    Type::Map(Box::new(Type::Str), Box::new(Type::Str)),
-                                ),
-                            ],
-                        );
-                        self.structs.insert(
-                            "Response".into(),
-                            vec![
-                                ("status".into(), Type::Int),
-                                ("body".into(), Type::Str),
-                                (
-                                    "headers".into(),
-                                    Type::Map(Box::new(Type::Str), Box::new(Type::Str)),
-                                ),
-                            ],
-                        );
+                        self.structs.extend(crate::stdlib::http::struct_types());
                     }
                     if path == "ctx" {
                         self.structs.insert("Ctx".into(), vec![]);

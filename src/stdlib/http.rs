@@ -3,8 +3,71 @@ use std::time::Duration;
 use indexmap::IndexMap;
 use ureq::Agent;
 
+use crate::ast::TypeExpr;
 use crate::interp::{Fault, Interp};
+use crate::types::Type;
 use crate::value::{ErrVal, MapKey, Value};
+
+/// The struct shapes `import "http"` injects into a program: the single
+/// source consumed by the checker (as `Type`) and the interpreter (as
+/// `TypeExpr`), so the two representations cannot drift.
+enum FieldTy {
+    Int,
+    Str,
+    MapStrStr,
+}
+
+const STRUCTS: &[(&str, &[(&str, FieldTy)])] = &[
+    (
+        "Request",
+        &[
+            ("method", FieldTy::Str),
+            ("url", FieldTy::Str),
+            ("body", FieldTy::Str),
+            ("headers", FieldTy::MapStrStr),
+        ],
+    ),
+    (
+        "Response",
+        &[
+            ("status", FieldTy::Int),
+            ("body", FieldTy::Str),
+            ("headers", FieldTy::MapStrStr),
+        ],
+    ),
+];
+
+pub(crate) fn struct_types() -> Vec<(String, Vec<(String, Type)>)> {
+    shapes(|ft| match ft {
+        FieldTy::Int => Type::Int,
+        FieldTy::Str => Type::Str,
+        FieldTy::MapStrStr => Type::Map(Box::new(Type::Str), Box::new(Type::Str)),
+    })
+}
+
+pub(crate) fn struct_exprs() -> Vec<(String, Vec<(String, TypeExpr)>)> {
+    let named = |n: &str| TypeExpr::Named(n.into());
+    shapes(move |ft| match ft {
+        FieldTy::Int => named("int"),
+        FieldTy::Str => named("str"),
+        FieldTy::MapStrStr => TypeExpr::Map(Box::new(named("str")), Box::new(named("str"))),
+    })
+}
+
+fn shapes<T>(ty: impl Fn(&FieldTy) -> T) -> Vec<(String, Vec<(String, T)>)> {
+    STRUCTS
+        .iter()
+        .map(|(name, fields)| {
+            (
+                name.to_string(),
+                fields
+                    .iter()
+                    .map(|(f, ft)| (f.to_string(), ty(ft)))
+                    .collect(),
+            )
+        })
+        .collect()
+}
 
 fn zero_response() -> Value {
     let mut fields = IndexMap::new();

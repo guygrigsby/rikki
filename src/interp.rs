@@ -111,25 +111,7 @@ impl<'p> Interp<'p> {
                     if !*py {
                         globals.insert(path.clone(), Value::Module(path.clone()));
                         if path == "http" {
-                            let s = |n: &str| TypeExpr::Named(n.into());
-                            let headers = TypeExpr::Map(Box::new(s("str")), Box::new(s("str")));
-                            structs.insert(
-                                "Request".into(),
-                                vec![
-                                    ("method".into(), s("str")),
-                                    ("url".into(), s("str")),
-                                    ("body".into(), s("str")),
-                                    ("headers".into(), headers.clone()),
-                                ],
-                            );
-                            structs.insert(
-                                "Response".into(),
-                                vec![
-                                    ("status".into(), s("int")),
-                                    ("body".into(), s("str")),
-                                    ("headers".into(), headers),
-                                ],
-                            );
+                            structs.extend(crate::stdlib::http::struct_exprs());
                         }
                     }
                     if *py {
