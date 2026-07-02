@@ -1,13 +1,13 @@
-# The Mongoose Programming Language Specification
+# The Rikki Programming Language Specification
 
-Version 1 (v1). This document is the normative reference for the mongoose
+Version 1 (v1). This document is the normative reference for the rikki
 language: it states what a conforming implementation must do. Rationale and
 design history live in the design document at
 `docs/specs/2026-07-01-mongoose-v1-design.md`; where that document and this
 one could disagree, this one governs the language, and the golden tests under
 `tests/golden/` are its executable companion (see the final chapter).
 
-Source files use the `.mg` extension.
+Source files use the `.rk` extension.
 
 ## Table of contents
 
@@ -33,9 +33,9 @@ Source files use the `.mg` extension.
 
 ## 1. Introduction
 
-Mongoose is a statically typed, interpreted language with value semantics,
+Rikki is a statically typed, interpreted language with value semantics,
 errors as values, option types instead of nil, and an embedded Python bridge.
-A mongoose program is checked in full before any of it runs; a program that
+A rikki program is checked in full before any of it runs; a program that
 passes the checker cannot crash the hosting process at runtime. The worst
 outcomes available to a running program are returning an error from `main`
 and a runtime fault, both of which terminate the program in a controlled way
@@ -526,7 +526,7 @@ Three forms exist, distinguished by the `py` marker and the path string:
 
 - `import "name"` where `name` is one of the standard library modules
   `math`, `error`, `file`, `ctx`, `http` imports that module (chapter 15).
-- `import "path.mg"` where the path ends in `.mg` imports another mongoose
+- `import "path.rk"` where the path ends in `.rk` imports another rikki
   source file as a module (chapter 16).
 - `import py "modname"` imports a Python module through the bridge
   (chapter 13). Dotted module paths (`import py "os.path"`) are permitted.
@@ -736,7 +736,7 @@ the builtin constructors `error.new` and `error.wrap` (section 15.1), and on
 A named argument (`identifier ":" Expression`) binds the value to the named
 Python parameter and is permitted only in calls whose callee is a py value
 (chapter 13); a named argument in any other call is a compile-time error, as
-is a positional argument following a named one. Mongoose functions are
+is a positional argument following a named one. Rikki functions are
 positional only.
 
 Arguments are evaluated left to right, after the callee (or receiver)
@@ -817,7 +817,7 @@ Permitted operand types and behavior, for non-`py` operands:
 
 Any other operand type is a compile-time error ("cannot convert").
 
-`[]T` applied to a mongoose list performs no per-element checking in v1:
+`[]T` applied to a rikki list performs no per-element checking in v1:
 the list value passes through, and the expression's static type becomes
 `[]T`. If the actual elements do not match `T`, later operations on them
 fault at runtime. Programs must not rely on this as a checked cast; its
@@ -1162,7 +1162,7 @@ ForStmt = "for" Block
         | "for" Condition Block .
 ```
 
-Mongoose has one loop keyword with three forms:
+Rikki has one loop keyword with three forms:
 
 - `for { ... }` loops forever; only `break` or `return` leaves it.
 - `for cond { ... }` evaluates `cond` (a `bool`) before each iteration and
@@ -1399,7 +1399,7 @@ print(ps.contains(Point{x: 1, y: 2}))   // true
 A fault is a runtime error that terminates the program. Faults are not
 catchable in v1: no language construct observes or recovers one. A fault must
 terminate the program with a nonzero exit status and a diagnostic including a
-mongoose call-stack trace, and must never crash the hosting process, raise a
+rikki call-stack trace, and must never crash the hosting process, raise a
 foreign exception, or trigger undefined behavior. An interpreter panic is an
 implementation bug, never specified program behavior.
 
@@ -1448,7 +1448,7 @@ A `py` value supports:
 - the binary operators `+ - * / % == != < <= > >=` when either operand is
   `py`, dispatched to the corresponding Python operation and yielding `py`
   (comparisons included: the result is a Python bool as a `py` value, not a
-  mongoose `bool`).
+  rikki `bool`).
 
 `&& ||` reject `py` operands; unary `!` and `-` are not defined on `py`;
 `py` values cannot be sliced, iterated with `for ... in`, used as conditions,
@@ -1459,7 +1459,7 @@ or assigned into (`x.attr = v`, `x[i] = v` are compile-time errors).
 Every operation of section 13.2 may raise a Python exception. As specified in
 section 7.11, a chain of such operations is fallible as a single unit typed
 `(py, error?)` at consumption. The first exception in a chain converts to a
-mongoose error value and aborts the remainder of the chain.
+rikki error value and aborts the remainder of the chain.
 
 ### 13.4 Exception conversion
 
@@ -1473,11 +1473,11 @@ A Python exception becomes an error value with:
 
 ### 13.5 Conversions across the bridge
 
-Inbound (mongoose value passed as an argument or index to a Python
+Inbound (rikki value passed as an argument or index to a Python
 operation): conversion is automatic, per this table, applied recursively to
 list elements and map entries:
 
-| Mongoose | Python |
+| Rikki | Python |
 |----------|--------|
 | `int` | `int` |
 | `float` | `float` |
@@ -1493,7 +1493,7 @@ conversion error at compile time but produces an error value at runtime
 ("cannot pass ... to python"), flowing through the chain's error slot like
 any Python exception.
 
-Outbound (Python object to mongoose value): always explicit and fallible,
+Outbound (Python object to rikki value): always explicit and fallible,
 via the conversions of section 7.7 applied to a `py` operand. Each yields
 `(T, error?)`:
 
@@ -1606,7 +1606,7 @@ args() []str
 ```
 
 Returns the program's arguments: everything after the source file on the
-command line (`tk prog.mg a b` and `mongoose run prog.mg a b` both yield
+command line (`tk prog.rk a b` and `rikki run prog.rk a b` both yield
 `["a", "b"]`). Takes no arguments. In contexts with no command line (tests,
 embedding) the list is empty.
 
@@ -1773,19 +1773,19 @@ Behavior:
 
 ### 16.1 File imports
 
-`import "util.mg"` imports another mongoose source file. The path is
+`import "util.rk"` imports another rikki source file. The path is
 resolved relative to the directory of the importing file. The imported
 file's top-level functions and structs become visible under a namespace
-equal to the file's stem (the file name without `.mg`):
+equal to the file's stem (the file name without `.rk`):
 
 ```
-// util.mg
+// util.rk
 struct Pair { a int, b int }
 fn double(x int) int { return x * 2 }
 fn make(a int, b int) Pair { return Pair{a: a, b: b} }
 
-// main.mg
-import "util.mg"
+// main.rk
+import "util.rk"
 
 fn sum(p util.Pair) int { return p.a + p.b }
 
@@ -1838,7 +1838,7 @@ A program run terminates in one of four ways:
 | `main` returns (no error) | 0 | none |
 | compile error (lex, parse, or typecheck) | nonzero | each diagnostic as `line:col: message` on standard error; the program does not run at all |
 | `main` returns a non-none error | nonzero | the error's `msg` on standard error |
-| runtime fault (chapter 12) | nonzero | the fault message and a mongoose stack trace on standard error |
+| runtime fault (chapter 12) | nonzero | the fault message and a rikki stack trace on standard error |
 
 Program output written by `print`/`printf` up to the point of termination is
 delivered to standard output in all cases. A program that typechecks must
@@ -1846,48 +1846,48 @@ never terminate by crashing the host process.
 
 ### 17.3 The two binaries
 
-- `mongoose` is the toolchain: `mongoose run [file]` typechecks and runs
-  (defaulting to the enclosing project's `src/main.mg`); `mongoose check
+- `rikki` is the toolchain: `rikki run [file]` typechecks and runs
+  (defaulting to the enclosing project's `src/main.rk`); `rikki check
   [file]` typechecks only and never runs code or provisions an environment;
-  `mongoose new <name>` scaffolds a project; `mongoose py add <pkg>` declares
-  a Python dependency and syncs the environment; `mongoose repl` starts the
+  `rikki new <name>` scaffolds a project; `rikki py add <pkg>` declares
+  a Python dependency and syncs the environment; `rikki repl` starts the
   REPL.
-- `tk` is the runner: `tk file.mg` typechecks and runs the file; bare `tk`
+- `tk` is the runner: `tk file.rk` typechecks and runs the file; bare `tk`
   starts the REPL.
 
-Bare `mongoose run` and `mongoose check` outside any project fail with a
-diagnostic. `mongoose check` on a valid program produces no output and exits
+Bare `rikki run` and `rikki check` outside any project fail with a
+diagnostic. `rikki check` on a valid program produces no output and exits
 0.
 
 ### 17.4 Projects
 
-A project is a directory tree rooted at a `mongoose.toml` manifest, found by
+A project is a directory tree rooted at a `rikki.toml` manifest, found by
 walking upward from the file being operated on (or the working directory).
 The layout:
 
-- `mongoose.toml`: project name, Python version pin, and declared Python
+- `rikki.toml`: project name, Python version pin, and declared Python
   dependencies (`[py-deps]`).
-- `mongoose.lock`: exact resolved Python package versions. Manifest and lock
+- `rikki.lock`: exact resolved Python package versions. Manifest and lock
   together fully determine the Python environment.
-- `.mongoose/`: the generated virtual environment and sync markers.
+- `.rikki/`: the generated virtual environment and sync markers.
   Disposable; deleting it is always safe, it regenerates on the next run.
-- `src/main.mg`: the default entry point for bare `mongoose run`.
+- `src/main.rk`: the default entry point for bare `rikki run`.
 
 ### 17.5 The manifest rule for py imports
 
 When the compiled file lies inside a project, every `import py "m"` is
 validated at compile time: the top-level segment of `m` (the part before the
-first `.`) must either be declared under `[py-deps]` in `mongoose.toml` or be
+first `.`) must either be declared under `[py-deps]` in `rikki.toml` or be
 a module of the Python standard library. Declared names match import names
 case-insensitively with `-` and `_` interchangeable, mirroring PyPI name
 normalization (`sentence-transformers` satisfies
 `import py "sentence_transformers"`). An undeclared import is a compile-time
-error directing the user to `mongoose py add`.
+error directing the user to `rikki py add`.
 
 The manifest's `python` pin must match the interpreter embedded in the
-running mongoose (major.minor); a mismatch is a compile-time error naming
+running rikki (major.minor); a mismatch is a compile-time error naming
 both versions. When the pin is omitted it defaults to the embedded version.
-`mongoose new` scaffolds with the embedded version.
+`rikki new` scaffolds with the embedded version.
 
 Inside a project, `sys.executable` in the embedded interpreter refers to the
 project venv's python, so Python libraries that spawn worker interpreters
@@ -1897,11 +1897,11 @@ Outside a project there is no manifest to check; py imports resolve at
 program start against the embedded interpreter, and a missing module is a
 runtime error (section 13.1). Running a project with declared Python
 dependencies provisions the environment automatically before execution;
-`mongoose check` never provisions.
+`rikki check` never provisions.
 
 ### 17.6 The REPL
 
-Bare `tk` (or `mongoose repl`) starts an interactive session. The v1 REPL is
+Bare `tk` (or `rikki repl`) starts an interactive session. The v1 REPL is
 unchecked: input goes to the evaluator without typechecking, and faults are
 reported and survived rather than ending the session. A line whose first
 word is `fn`, `struct`, or `import` is treated as a declaration and
@@ -1920,7 +1920,7 @@ Limits a program may rely on, stated as minimum guarantees:
   ("expression too deeply nested"), never a crash. The reference
   implementation's limit is exactly 256.
 - Call depth: an implementation must support at least 1000 simultaneously
-  active mongoose function calls. Exceeding the implementation's limit is a
+  active rikki function calls. Exceeding the implementation's limit is a
   runtime fault ("recursion limit exceeded") carrying a (possibly truncated)
   stack trace, never a host stack overflow. The reference implementation's
   limit is exactly 1000.
@@ -1930,7 +1930,7 @@ Limits a program may rely on, stated as minimum guarantees:
 ## 19. Conformance and maintenance
 
 The golden tests under `tests/golden/` are the executable companion to this
-specification: each `.mg` file paired with an `.out` (expected stdout of a
+specification: each `.rk` file paired with an `.out` (expected stdout of a
 successful run) or `.err` (required substrings of the compile or runtime
 diagnostic) fixes observable behavior. A conforming implementation must pass
 them. Where this document and a golden test disagree, the golden test is
