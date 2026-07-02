@@ -1,0 +1,5 @@
+fn main() {
+    xs := []int{1}
+    xs = append(xs, "a")
+    print(xs)
+}

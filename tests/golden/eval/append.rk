@@ -1,0 +1,15 @@
+fn main() {
+    xs := []int{}
+    xs = append(xs, 1)
+    xs = append(xs, 2, 3, 4)
+    print(xs)
+    // zero values: a copy
+    ys := append(xs)
+    print(ys)
+    // value semantics: the original is untouched
+    zs := append(xs, 9)
+    print(xs)
+    print(zs)
+    words := append([]str{"a"}, "b")
+    print(words)
+}

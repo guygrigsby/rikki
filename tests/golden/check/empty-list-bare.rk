@@ -1,6 +1,6 @@
 fn main() {
     xs := []
-    ys := xs.append(1)
-    zs := ys.append("mixed")
+    ys := append(xs, 1)
+    zs := append(ys, "mixed")
     print(zs)
 }

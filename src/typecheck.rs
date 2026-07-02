@@ -1147,6 +1147,41 @@ impl Checker {
                             Type::Unit
                         });
                     }
+                    "append" => {
+                        if args.is_empty() {
+                            self.diag(line, col, "append takes a list and values");
+                            return ExprTy::One(Type::Unknown);
+                        }
+                        let t0 = self.expr_one(&args[0], None);
+                        return match t0 {
+                            Type::List(elem) => {
+                                for a in &args[1..] {
+                                    let t = self.expr_one(a, Some(&elem));
+                                    if !elem.accepts(&t) {
+                                        self.diag(
+                                            a.line,
+                                            a.col,
+                                            format!("expected {elem}, got {t}"),
+                                        );
+                                    }
+                                }
+                                ExprTy::One(Type::List(elem))
+                            }
+                            Type::Unknown => {
+                                for a in &args[1..] {
+                                    self.expr_one(a, None);
+                                }
+                                ExprTy::One(Type::Unknown)
+                            }
+                            _ => {
+                                self.diag(line, col, format!("append needs a list, got {t0}"));
+                                for a in &args[1..] {
+                                    self.expr_one(a, None);
+                                }
+                                ExprTy::One(Type::Unknown)
+                            }
+                        };
+                    }
                     "ord" => {
                         if args.len() != 1 {
                             self.diag(line, col, "ord takes one argument");
@@ -1518,10 +1553,6 @@ impl Checker {
             (List(elem), "sorted_by") => {
                 let f = Fn(vec![(**elem).clone(), (**elem).clone()], vec![Bool]);
                 self.args_with_fn(&f, args, line, col);
-                one(recv.clone())
-            }
-            (List(elem), "append") => {
-                self.check_args(&[(**elem).clone()], args, line, col);
                 one(recv.clone())
             }
             (List(elem), "contains") => {

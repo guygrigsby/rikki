@@ -192,7 +192,7 @@ always denote a conversion (section 7.7), and `map [` in expression position
 always begins a map literal. Slice types and slice conversions are written
 with the `[]` prefix (`[]int`, `[]float(x)`; sections 5.9, 7.7) and involve
 no reserved name. Builtin function names (`print`, `printf`, `sprintf`,
-`len`, `ord`, `chr`, `args`, `input`) are also not reserved; a variable or
+`len`, `append`, `ord`, `chr`, `args`, `input`) are also not reserved; a variable or
 function declaration with the same name shadows the builtin.
 
 ### 4.5 Operators and punctuation
@@ -736,7 +736,7 @@ parameter type. A call of a non-function is a compile-time error
 ("not callable").
 
 `x.m(a1, ..., an)` is a method call. Methods exist only on strings, slices,
-and maps (section 14.9), on `Ctx` (section 15.4), on modules
+and maps (section 14.10), on `Ctx` (section 15.4), on modules
 (where `mod.f(...)` calls the module function), on `error` as the receiver of
 the builtin constructors `error.new` and `error.wrap` (section 15.1), and on
 `py` values (chapter 13). User struct types have no methods in v1.
@@ -1396,7 +1396,7 @@ mutate(a)
 print(a[0])   // 1
 ```
 
-Builtin methods are value-semantic too: `xs.append(v)`, `m.delete(k)`, and
+The `append` builtin and builtin methods are value-semantic too: `append(xs, v)`, `m.delete(k)`, and
 `xs.sorted()` return new containers and leave the receiver untouched.
 
 ### 11.2 Equality
@@ -1650,7 +1650,18 @@ The one-character string for code point `n`. A value that is not a valid
 Unicode scalar (negative, greater than 0x10FFFF, or a surrogate) is a
 runtime fault. `chr(ord(c)) == c` for every one-character `c`.
 
-### 14.9 Methods on builtin types
+### 14.9 append
+
+```
+append(xs []T, v1 T, ..., vn T) []T
+```
+
+A copy of `xs` with the values appended, as in Go: `xs = append(xs, v)`.
+The first argument must be a list; every following value must be assignable
+to its element type. Zero values yield a plain copy. The original list is
+never modified (chapter 12).
+
+### 14.10 Methods on builtin types
 
 All receivers are unchanged; results are new values.
 
@@ -1684,7 +1695,6 @@ List methods (receiver `[]T`):
 | `sum` | `() T` | `T` must be `int` or `float`; sum of elements. Summing an empty `[]int` yields 0; the result of summing an empty `[]float` is unspecified in v1 (the reference implementation yields a value that faults on later float use) |
 | `sorted` | `() []T` | `T` must be `int`, `float`, or `str`; ascending copy |
 | `sorted_by` | `(before fn(T, T) bool) []T` | sorted copy per comparator; stable |
-| `append` | `(v T) []T` | copy with `v` appended |
 | `contains` | `(v T) bool` | structural membership (section 11.2) |
 | `join` | `(sep str) str` | `T` must be `str`; concatenation with separator |
 

@@ -9,7 +9,7 @@ fn main() error? {
   }
   l := []int{}
   for i, c := range s {
-    l[i] = int(c)
+    l = append(l, int(c))
   }
   printf("%v", l)
   return none

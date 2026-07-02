@@ -2,7 +2,7 @@ fn main() {
     // empty typed literal needs no context
     ids := []int{}
     print(len(ids))
-    ids = ids.append(7)
+    ids = append(ids, 7)
     print(ids)
     // nonempty typed form
     names := []str{"a", "b"}

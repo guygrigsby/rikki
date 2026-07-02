@@ -29,6 +29,16 @@ impl Interp<'_> {
                 Some(Value::Map(m)) => Ok(Value::Int(m.len() as i64)),
                 _ => Err(self.fault("len needs str, list, or map")),
             },
+            "append" => {
+                let mut it = args.into_iter();
+                match it.next() {
+                    Some(Value::List(mut items)) => {
+                        items.extend(it);
+                        Ok(Value::List(items))
+                    }
+                    _ => Err(self.fault("append needs a list first argument")),
+                }
+            }
             "ord" => match args.first() {
                 Some(Value::Str(s)) => {
                     let mut it = s.chars();
@@ -277,14 +287,6 @@ impl Interp<'_> {
                     }
                     out.insert(pos, it);
                 }
-                Ok(Value::List(out))
-            }
-            "append" => {
-                let v = args
-                    .pop()
-                    .ok_or_else(|| self.fault("append needs a value"))?;
-                let mut out = items;
-                out.push(v);
                 Ok(Value::List(out))
             }
             "contains" => {

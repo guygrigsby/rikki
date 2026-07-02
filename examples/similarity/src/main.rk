@@ -15,7 +15,7 @@ fn rank(query str, corpus []str) ([]Hit, error?) {
     scores := check []float(sims[0].tolist())
     hits := []Hit{}
     for i, text := range corpus {
-        hits = hits.append(Hit{text: text, score: scores[i]})
+        hits = append(hits, Hit{text: text, score: scores[i]})
     }
     return hits.sorted_by(fn(a, b) { a.score > b.score }), none
 }

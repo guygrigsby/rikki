@@ -86,7 +86,7 @@ fn main() (error?) {
         if line == "" {
             continue
         }
-        history = history.append(map[str]str{"role": "user", "content": line})
+        history = append(history, map[str]str{"role": "user", "content": line})
         hjson, jerr := str(json.dumps(history))
         if jerr != none {
             // our own state failed to encode: that is a bug, die loudly
@@ -109,7 +109,7 @@ fn main() (error?) {
             continue
         }
         fails = 0
-        history = history.append(map[str]str{"role": "assistant", "content": reply})
+        history = append(history, map[str]str{"role": "assistant", "content": reply})
     }
     print("bye")
     return none

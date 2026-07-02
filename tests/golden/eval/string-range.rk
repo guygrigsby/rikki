@@ -25,7 +25,7 @@ fn main() {
     // build codepoints from a file-like string
     l := []int{}
     for _, c := range "hi" {
-        l = l.append(ord(c))
+        l = append(l, ord(c))
     }
     print(l)
 }
