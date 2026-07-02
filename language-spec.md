@@ -1829,6 +1829,10 @@ running mongoose (major.minor); a mismatch is a compile-time error naming
 both versions. When the pin is omitted it defaults to the embedded version.
 `mongoose new` scaffolds with the embedded version.
 
+Inside a project, `sys.executable` in the embedded interpreter refers to the
+project venv's python, so Python libraries that spawn worker interpreters
+(multiprocessing and similar) function normally.
+
 Outside a project there is no manifest to check; py imports resolve at
 program start against the embedded interpreter, and a missing module is a
 runtime error (section 13.1). Running a project with declared Python

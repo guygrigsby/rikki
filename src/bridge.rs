@@ -52,6 +52,22 @@ pub fn init(venv: Option<&Path>) {
             }
         }
         Python::initialize();
+        // Inside an embedded interpreter sys.executable is the host binary
+        // (tavi); libraries that re-exec `sys.executable -c ...`
+        // (multiprocessing, joblib, tokenizers) would invoke the runner.
+        // Point it at the venv's real python instead.
+        if let Some(v) = venv {
+            let py_bin = v.join("bin").join("python");
+            if py_bin.exists() {
+                let path = py_bin.to_string_lossy().to_string();
+                Python::attach(|py| {
+                    if let Ok(sys) = py.import("sys") {
+                        let _ = sys.setattr("executable", &path);
+                        let _ = sys.setattr("_base_executable", &path);
+                    }
+                });
+            }
+        }
     });
 }
 
