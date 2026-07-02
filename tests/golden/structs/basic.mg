@@ -1,8 +1,8 @@
 struct User {
-    name: str
-    age: int
+    name str
+    age int
 }
-fn birthday(u: User) User {
+fn birthday(u User) User {
     u.age = u.age + 1
     return u
 }

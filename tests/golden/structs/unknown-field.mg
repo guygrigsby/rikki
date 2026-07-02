@@ -1,5 +1,5 @@
 struct User {
-    name: str
+    name str
 }
 fn main() {
     u := User{name: "guy"}

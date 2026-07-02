@@ -1,6 +1,6 @@
 import py "json"
 
-fn poke(obj: py) (error?) {
+fn poke(obj py) (error?) {
     check obj.keys()
     return none
 }

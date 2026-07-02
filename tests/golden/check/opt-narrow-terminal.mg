@@ -1,5 +1,5 @@
 struct User {
-    name: str
+    name str
 }
 fn find() User? {
     return User{name: "guy"}

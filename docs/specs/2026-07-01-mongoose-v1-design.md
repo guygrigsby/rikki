@@ -2,7 +2,7 @@
 
 Status: approved 2026-07-01. Supersedes the ichor design entirely (removed at `fe59f69`).
 
-Rationale document. For exact language rules the normative reference is `language-spec.md` at the repo root; where details here have drifted (known: Ctx is also a reference type, `bool(x)` exists, `.pytype`/`.traceback` exist on every error, inbound conversions include `none` and `py` passthrough, all failures exit 1), the spec governs.
+Rationale document. For exact language rules the normative reference is `language-spec.md` at the repo root; where details here have drifted (known Ctx is also a reference type, `bool(x)` exists, `.pytype`/`.traceback` exist on every error, inbound conversions include `none` and `py` passthrough, all failures exit 1), the spec governs.
 
 Interpreted language with Go's discipline and CPython's ecosystem. Named for the animal that hunts snakes and shrugs off venom. CLI is `mongoose`, source files are `.mg`.
 
@@ -20,7 +20,7 @@ This exists elsewhere (Mojo, Nim, Julia). Building it anyway; the point is the l
 Go-shaped. Braces, `:=` inference on locals, explicit signatures on functions.
 
 ```
-fn fetch(url: str) (str, error?) {
+fn fetch(url str) (str, error?) {
     resp, err := http.get(url)
     if err != none {
         return "", err
@@ -166,11 +166,11 @@ The mundane stuff, pinned so the implementation plan has exact answers.
 - Comments: `//`.
 - Control flow: `if` / `else if` / `else`, conditions strictly `bool`. One loop keyword: `for x in xs`, `for k, v in m`, `for cond { }`, bare `for { }` infinite. `break` and `continue`. `range(n)` and `range(a, b)` are builtins returning `list[int]`.
 - Operators: `+ - * / %` on `int`; `+ - * /` on `float`; `+` concatenates `str` and `list`; `== !=` on comparable values; `< <= > >=` on `int`, `float`, `str`; `&& || !` on `bool`. No mixed `int`/`float` arithmetic.
-- Structs: `struct User { name: str, age: int }`, literal `User{name: "guy", age: 44}`, dot access. No methods on user structs in v1.
+- Structs: `struct User { name str, age int }`, literal `User{name: "guy", age: 44}`, dot access. No methods on user structs in v1.
 - Indexing: `xs[i]` (fault if out of bounds), `xs[i] = v`, slices `xs[a:b]`. Map read `m[k]` returns `V?` (missing key is `none`, flow typing applies); `m[k] = v` inserts or updates. Map iteration and `keys()` follow insertion order.
 - String methods: `split`, `trim`, `contains`, `replace`, `upper`, `lower`, `starts_with`, `ends_with`. List methods: `map`, `filter`, `each`, `sum`, `sorted`, `sorted_by`, `append`, `contains`, `join` (on `list[str]`). Map methods: `keys`, `values`, `has`, `delete`.
 - Runtime faults (division by zero, integer overflow, index out of bounds, recursion past 1000 frames): not catchable in v1. The interpreter stops the program and reports the fault with a mongoose stack trace, exiting nonzero. Still never a process crash or a Rust panic. The parser likewise bounds expression nesting (256 levels) rather than crash on hostile input.
-- Recursive structs must break the cycle with an option (`next: Node?`), list, or map; a by-value cycle is a compile error (such a value could never be constructed).
+- Recursive structs must break the cycle with an option (`next Node?`), list, or map; a by-value cycle is a compile error (such a value could never be constructed).
 - A bare `[]` with no surrounding type context is a compile error; in a typed position (argument, return, field, assignment to a declared list) it infers fine.
 - Concatenating `list[T] + list[T?]` widens to `list[T?]`, never the reverse.
 - `contains` compares structurally (lists, structs, maps, recursively). The `==` operator stays scalar-only in v1.

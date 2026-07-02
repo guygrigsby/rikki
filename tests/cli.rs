@@ -215,7 +215,7 @@ fn repl_evaluates() {
         .stdin
         .as_mut()
         .unwrap()
-        .write_all(b"1 + 2\nx := 40\nx + 2\nfn d(n: int) int { return n * 2 }\nd(5)\n")
+        .write_all(b"1 + 2\nx := 40\nx + 2\nfn d(n int) int { return n * 2 }\nd(5)\n")
         .unwrap();
     let out = child.wait_with_output().unwrap();
     let stdout = String::from_utf8_lossy(&out.stdout);

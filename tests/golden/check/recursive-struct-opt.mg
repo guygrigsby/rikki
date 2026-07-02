@@ -1,6 +1,6 @@
 struct Node {
-    val: int
-    next: Node?
+    val int
+    next Node?
 }
 fn main() {
     tail := Node{val: 2, next: none}

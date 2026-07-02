@@ -1,6 +1,6 @@
 struct User {
-    name: str
-    age: int
+    name str
+    age int
 }
 fn main() {
     u := User{name: "guy"}

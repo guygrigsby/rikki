@@ -3,11 +3,11 @@
 import py "sentence_transformers"
 
 struct Hit {
-    text: str
-    score: float
+    text str
+    score float
 }
 
-fn rank(query: str, corpus: list[str]) (list[Hit], error?) {
+fn rank(query str, corpus list[str]) (list[Hit], error?) {
     model := check sentence_transformers.SentenceTransformer("all-MiniLM-L6-v2")
     q := check model.encode([query])
     c := check model.encode(corpus)

@@ -161,7 +161,9 @@ impl Parser {
                 let mut fields = vec![];
                 while self.peek() != Some(&Token::RBrace) {
                     let f = self.ident("field name")?;
-                    self.expect(&Token::Colon, ":")?;
+                    if self.peek() == Some(&Token::Colon) {
+                        return Err(self.err_here("fields are declared Go style: name type, no colon"));
+                    }
                     let ty = self.type_expr()?;
                     fields.push((f, ty));
                     if !self.eat(&Token::Comma) && self.peek() != Some(&Token::Newline) {
@@ -202,10 +204,13 @@ impl Parser {
         let mut out = vec![];
         while self.peek() != Some(&Token::RParen) {
             let name = self.ident("parameter name")?;
-            let ty = if self.eat(&Token::Colon) {
-                Some(self.type_expr()?)
-            } else {
-                None
+            if self.peek() == Some(&Token::Colon) {
+                return Err(self.err_here("parameters are declared Go style: name type, no colon"));
+            }
+            // a type follows directly, or nothing (untyped lambda param)
+            let ty = match self.peek() {
+                Some(Token::Comma) | Some(Token::RParen) => None,
+                _ => Some(self.type_expr()?),
             };
             out.push(Param { name, ty });
             if !self.eat(&Token::Comma) {
@@ -883,7 +888,7 @@ mod tests {
             }
             k => panic!("{k:?}"),
         }
-        let e = expr("fn(x: int) int { return x * 2 }");
+        let e = expr("fn(x int) int { return x * 2 }");
         match e.kind {
             E::Lambda { params, ret, .. } => {
                 assert_eq!(params[0].ty, Some(TypeExpr::Named("int".into())));
@@ -910,7 +915,7 @@ mod tests {
 
     #[test]
     fn fn_decl_multi_return() {
-        let f = one_fn("fn fetch(url: str) (str, error?) {\n    return \"\", none\n}\n");
+        let f = one_fn("fn fetch(url str) (str, error?) {\n    return \"\", none\n}\n");
         assert_eq!(f.name, "fetch");
         assert_eq!(
             f.ret,
@@ -983,7 +988,7 @@ mod tests {
 
     #[test]
     fn struct_decl_and_literal() {
-        let src = "struct User {\n    name: str\n    age: int\n}\nfn main() {\n    u := User{name: \"guy\", age: 44}\n    print(u.name)\n}\n";
+        let src = "struct User {\n    name str\n    age int\n}\nfn main() {\n    u := User{name: \"guy\", age: 44}\n    print(u.name)\n}\n";
         let p = parse(src).unwrap();
         assert!(matches!(&p.decls[0], Decl::Struct { fields, .. } if fields.len() == 2));
     }

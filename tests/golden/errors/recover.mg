@@ -1,4 +1,4 @@
-fn parse_age(s: str) (int, error?) {
+fn parse_age(s str) (int, error?) {
     n, err := int(s)
     if err != none {
         return 0, error.wrap(err, "bad age")

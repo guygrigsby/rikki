@@ -1,5 +1,5 @@
 struct User {
-    name: str
+    name str
 }
 fn main() {
     printf("%v %v %v %v\n", 1, 2.5, true, "s")

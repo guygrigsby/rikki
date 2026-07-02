@@ -5,7 +5,7 @@ fn main() {
     print(xs.append(9))
     print(xs)
     print(xs.contains(3))
-    ["b", "a"].each(fn(s: str) {
+    ["b", "a"].each(fn(s str) {
         print(s)
     })
     print(["x", "y"].join("-"))
