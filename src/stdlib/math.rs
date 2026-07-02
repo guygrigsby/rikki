@@ -1,0 +1,22 @@
+use crate::interp::{Fault, Interp};
+use crate::value::Value;
+
+pub fn call(interp: &mut Interp, name: &str, args: Vec<Value>) -> Result<Value, Fault> {
+    use Value::{Float, Int};
+    let v = match (name, args.as_slice()) {
+        ("abs", [Int(i)]) => Int(i.abs()),
+        ("abs", [Float(f)]) => Float(f.abs()),
+        ("min", [Int(a), Int(b)]) => Int(*a.min(b)),
+        ("min", [Float(a), Float(b)]) => Float(a.min(*b)),
+        ("max", [Int(a), Int(b)]) => Int(*a.max(b)),
+        ("max", [Float(a), Float(b)]) => Float(a.max(*b)),
+        ("sqrt", [Float(f)]) => Float(f.sqrt()),
+        ("pow", [Float(a), Float(b)]) => Float(a.powf(*b)),
+        ("floor", [Float(f)]) => Int(f.floor() as i64),
+        ("ceil", [Float(f)]) => Int(f.ceil() as i64),
+        // half-away-from-zero, like Go and Python's round-half-even is NOT
+        ("round", [Float(f)]) => Int(f.round() as i64),
+        _ => return Err(interp.fault(format!("math.{name}: bad arguments"))),
+    };
+    Ok(v)
+}

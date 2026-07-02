@@ -1,0 +1,14 @@
+import "math"
+
+fn main() {
+    print(math.abs(-3))
+    print(math.abs(-2.5))
+    print(math.min(3, 7))
+    print(math.max(3.0, 7.5))
+    print(math.sqrt(16.0))
+    print(math.pow(2.0, 10.0))
+    print(math.floor(2.7))
+    print(math.ceil(2.1))
+    print(math.round(2.5))
+    printf("%.5f\n", math.pi)
+}

@@ -4,6 +4,7 @@ pub mod diag;
 pub mod interp;
 pub mod lexer;
 pub mod parser;
+pub mod stdlib;
 pub mod token;
 pub mod typecheck;
 pub mod types;

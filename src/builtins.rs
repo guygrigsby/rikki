@@ -270,13 +270,15 @@ impl Interp<'_> {
         &mut self,
         module: &str,
         name: &str,
-        _args: Vec<Value>,
+        args: Vec<Value>,
     ) -> Result<Value, Fault> {
-        Err(self.fault(format!("{module}.{name} is not implemented yet")))
+        let module = module.to_string();
+        crate::stdlib::call(self, &module, name, args)
     }
 
     pub(crate) fn module_const(&mut self, module: &str, name: &str) -> Result<Value, Fault> {
-        Err(self.fault(format!("{module}.{name} is not implemented yet")))
+        let module = module.to_string();
+        crate::stdlib::constant(self, &module, name)
     }
 
     fn format(&self, fmt: String, args: &[Value]) -> Result<String, Fault> {
