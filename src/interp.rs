@@ -177,7 +177,7 @@ impl<'p> Interp<'p> {
         for (p, a) in c.params.iter().zip(args) {
             scope.insert(p.name.clone(), a);
         }
-        self.enter("fn".into(), vec![c.captured.clone(), scope], vec![]);
+        self.enter("fn".into(), vec![c.captured.clone(), scope], c.ret.clone());
         // expression body: a lone expression statement yields its value
         let flow = if c.body.len() == 1 {
             if let StmtKind::Expr(e) = &c.body[0].kind {
@@ -708,7 +708,7 @@ impl<'p> Interp<'p> {
                 let hi = val!(self.eval(hi));
                 self.slice(r, lo, hi).map(Ev::V)
             }
-            K::Lambda { params, body, .. } => {
+            K::Lambda { params, ret, body } => {
                 // capture by value: flatten visible scopes, inner shadows outer
                 let mut captured = HashMap::new();
                 for s in &self.scopes {
@@ -718,6 +718,7 @@ impl<'p> Interp<'p> {
                 }
                 ok(Value::Fn(FnRef::Closure(Rc::new(ClosureData {
                     params: params.clone(),
+                    ret: ret.clone().unwrap_or_default(),
                     body: body.clone(),
                     captured,
                 }))))

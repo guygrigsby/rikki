@@ -1,7 +1,7 @@
 use indexmap::IndexMap;
 use std::rc::Rc;
 
-use crate::ast::{Block, Param};
+use crate::ast::{Block, Param, TypeExpr};
 
 /// Runtime value. `Clone` is a deep copy (value semantics); the future `py`
 /// variant is the documented reference exception.
@@ -75,6 +75,8 @@ pub enum FnRef {
 #[derive(Debug)]
 pub struct ClosureData {
     pub params: Vec<Param>,
+    /// Declared return types, for zero-filling `check` early returns.
+    pub ret: Vec<TypeExpr>,
     pub body: Block,
     /// Captured-by-value snapshot of the visible scope, flattened.
     pub captured: std::collections::HashMap<String, Value>,
