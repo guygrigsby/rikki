@@ -1,0 +1,2 @@
+# goldens waiting on unimplemented features, one relative path per line
+smoke/print.mg
