@@ -1,0 +1,19 @@
+fn main() {
+    n, err := int("42")
+    if err == none {
+        print(n)
+    }
+    m, err2 := int("x")
+    if err2 != none {
+        print(err2.msg)
+        print(m)
+    }
+    t, _ := int(3.9)
+    print(t)
+    f, _ := float("2.5")
+    print(f)
+    s, _ := str(123)
+    print(s + "!")
+    b, _ := bool("true")
+    print(b)
+}

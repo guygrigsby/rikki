@@ -1,0 +1,16 @@
+struct User {
+    name: str
+}
+fn main() {
+    printf("%v %v %v %v\n", 1, 2.5, true, "s")
+    printf("%v\n", [1, 2, 3])
+    printf("%v\n", map[str, int]{"a": 1})
+    printf("%v\n", User{name: "guy"})
+    x := none
+    printf("%v\n", x)
+    printf("%d|%s|%t|%q|%%\n", 42, "hi", false, "quo\"ted")
+    printf("%.2f\n", 3.14159)
+    printf("%f\n", 1.5)
+    s := sprintf("%d-%d", 1, 2)
+    print(s)
+}
