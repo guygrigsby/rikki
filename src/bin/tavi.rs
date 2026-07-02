@@ -1,5 +1,5 @@
-//! `mg` is the runner (python parity): `mg file.mg` runs a program,
-//! bare `mg` starts the REPL. Toolchain work lives in `mongoose`.
+//! `tavi` is the runner (python parity): `tavi file.mg` runs a program,
+//! bare `tavi` starts the REPL. Toolchain work lives in `mongoose`.
 use std::process::ExitCode;
 
 fn main() -> ExitCode {

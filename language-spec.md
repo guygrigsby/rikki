@@ -92,7 +92,7 @@ lexer. The line feed itself is retained for line counting, so diagnostics on
 subsequent lines report true line numbers. This permits executable scripts:
 
 ```
-#!/usr/bin/env mg
+#!/usr/bin/env tavi
 fn main() {
     print("hello")
 }
@@ -1792,7 +1792,7 @@ never terminate by crashing the host process.
   `mongoose new <name>` scaffolds a project; `mongoose py add <pkg>` declares
   a Python dependency and syncs the environment; `mongoose repl` starts the
   REPL.
-- `mg` is the runner: `mg file.mg` typechecks and runs the file; bare `mg`
+- `tavi` is the runner: `tavi file.mg` typechecks and runs the file; bare `tavi`
   starts the REPL.
 
 Bare `mongoose run` and `mongoose check` outside any project fail with a
@@ -1829,7 +1829,7 @@ dependencies provisions the environment automatically before execution;
 
 ### 17.6 The REPL
 
-Bare `mg` (or `mongoose repl`) starts an interactive session. The v1 REPL is
+Bare `tavi` (or `mongoose repl`) starts an interactive session. The v1 REPL is
 unchecked: input goes to the evaluator without typechecking, and faults are
 reported and survived rather than ending the session. A line whose first
 word is `fn`, `struct`, or `import` is treated as a declaration and

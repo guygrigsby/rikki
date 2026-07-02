@@ -14,7 +14,7 @@ lint:
 	cargo clippy --all-targets -- -D warnings
 	cargo fmt --check
 
-# puts mongoose and mg on PATH via ~/.cargo/bin
+# puts mongoose and tavi on PATH via ~/.cargo/bin
 install:
 	cargo install --path . --locked
 

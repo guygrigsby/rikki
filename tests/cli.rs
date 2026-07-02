@@ -6,8 +6,8 @@ fn bin() -> &'static str {
     env!("CARGO_BIN_EXE_mongoose")
 }
 
-fn mg() -> &'static str {
-    env!("CARGO_BIN_EXE_mg")
+fn tavi() -> &'static str {
+    env!("CARGO_BIN_EXE_tavi")
 }
 
 fn tempdir(tag: &str) -> PathBuf {
@@ -146,22 +146,22 @@ fn bare_run_outside_project_errors() {
 }
 
 #[test]
-fn mg_runs_file() {
-    let d = tempdir("mg-file");
+fn tavi_runs_file() {
+    let d = tempdir("tavi-file");
     let f = d.join("hi.mg");
-    std::fs::write(&f, "fn main() {\n    print(\"hi from mg\")\n}\n").unwrap();
-    let out = Command::new(mg()).arg(&f).output().unwrap();
+    std::fs::write(&f, "fn main() {\n    print(\"hi from tavi\")\n}\n").unwrap();
+    let out = Command::new(tavi()).arg(&f).output().unwrap();
     assert!(
         out.status.success(),
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    assert_eq!(String::from_utf8_lossy(&out.stdout), "hi from mg\n");
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "hi from tavi\n");
 }
 
 #[test]
-fn mg_bare_is_repl() {
-    let mut child = Command::new(mg())
+fn tavi_bare_is_repl() {
+    let mut child = Command::new(tavi())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -180,15 +180,15 @@ fn mg_bare_is_repl() {
 }
 
 #[test]
-fn mg_shebang_script_executes_directly() {
+fn tavi_shebang_script_executes_directly() {
     use std::os::unix::fs::PermissionsExt;
-    let d = tempdir("mg-shebang");
+    let d = tempdir("tavi-shebang");
     let script = d.join("greet");
     std::fs::write(
         &script,
         format!(
             "#!{}\nfn main() {{\n    print(\"hi from script\")\n}}\n",
-            mg()
+            tavi()
         ),
     )
     .unwrap();
