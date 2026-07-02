@@ -6,6 +6,10 @@ fn bin() -> &'static str {
     env!("CARGO_BIN_EXE_mongoose")
 }
 
+fn mg() -> &'static str {
+    env!("CARGO_BIN_EXE_mg")
+}
+
 fn tempdir(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("mongoose-cli-{}-{tag}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
@@ -93,6 +97,31 @@ fn bare_run_outside_project_errors() {
         let err = String::from_utf8_lossy(&out.stderr);
         assert!(err.contains("no file given and no mongoose project found"), "{cmd}: {err}");
     }
+}
+
+#[test]
+fn mg_runs_file() {
+    let d = tempdir("mg-file");
+    let f = d.join("hi.mg");
+    std::fs::write(&f, "fn main() {\n    print(\"hi from mg\")\n}\n").unwrap();
+    let out = Command::new(mg()).arg(&f).output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "hi from mg\n");
+}
+
+#[test]
+fn mg_bare_is_repl() {
+    let mut child = Command::new(mg())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    child.stdin.as_mut().unwrap().write_all(b"1 + 2\nx := 40\nx + 2\n").unwrap();
+    let out = child.wait_with_output().unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("3\n"), "{stdout}");
+    assert!(stdout.contains("42\n"), "{stdout}");
 }
 
 #[test]

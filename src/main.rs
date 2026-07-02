@@ -35,8 +35,8 @@ enum PyCmd {
 fn main() -> ExitCode {
     let cli = Cli::parse();
     match cli.cmd {
-        Cmd::Run { file } => with_entry(file, |f| report(mongoose::run_source(f))),
-        Cmd::Check { file } => with_entry(file, |f| report(mongoose::check_source(f))),
+        Cmd::Run { file } => with_entry(file, |f| mongoose::report(mongoose::run_source(f))),
+        Cmd::Check { file } => with_entry(file, |f| mongoose::report(mongoose::check_source(f))),
         Cmd::Py { cmd: PyCmd::Add { package } } => py_add(&package),
         Cmd::New { name } => new_project(&name),
         Cmd::Repl => {
@@ -87,17 +87,6 @@ fn new_project(name: &str) -> ExitCode {
         }
         Err(e) => {
             eprintln!("error: {e}");
-            ExitCode::FAILURE
-        }
-    }
-}
-
-fn report(res: mongoose::RunResult) -> ExitCode {
-    print!("{}", res.stdout);
-    match res.exit {
-        mongoose::ExitKind::Ok => ExitCode::SUCCESS,
-        mongoose::ExitKind::CompileError(m) | mongoose::ExitKind::RuntimeError(m) => {
-            eprintln!("error: {m}");
             ExitCode::FAILURE
         }
     }

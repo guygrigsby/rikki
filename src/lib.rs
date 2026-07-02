@@ -32,6 +32,18 @@ pub fn run_source(path: &Path) -> RunResult {
     compile_and(path, true)
 }
 
+/// Print a run's output and map its exit kind to a process exit code.
+pub fn report(res: RunResult) -> std::process::ExitCode {
+    print!("{}", res.stdout);
+    match res.exit {
+        ExitKind::Ok => std::process::ExitCode::SUCCESS,
+        ExitKind::CompileError(m) | ExitKind::RuntimeError(m) => {
+            eprintln!("error: {m}");
+            std::process::ExitCode::FAILURE
+        }
+    }
+}
+
 /// Resolve the file a CLI command should operate on: the explicit arg if
 /// given, otherwise the enclosing project's src/main.mg.
 pub fn resolve_entry(file: Option<std::path::PathBuf>) -> Result<std::path::PathBuf, String> {
