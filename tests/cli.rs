@@ -358,9 +358,18 @@ fn main() (error?) {
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("200\n"), "{stdout}");
-    assert!(stdout.contains("GET /one HTTP/1.1 hdr=false body=false\n"), "{stdout}");
-    assert!(stdout.contains("POST /two HTTP/1.1 hdr=false body=true\n"), "{stdout}");
-    assert!(stdout.contains("PUT /three HTTP/1.1 hdr=true body=true\n"), "{stdout}");
+    assert!(
+        stdout.contains("GET /one HTTP/1.1 hdr=false body=false\n"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("POST /two HTTP/1.1 hdr=false body=true\n"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("PUT /three HTTP/1.1 hdr=true body=true\n"),
+        "{stdout}"
+    );
 }
 
 #[test]

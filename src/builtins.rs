@@ -385,9 +385,7 @@ impl Interp<'_> {
                     // panic net cannot catch a silly size; fault first.
                     const MAX_REPEAT_BYTES: usize = 1 << 30;
                     match s.len().checked_mul(n as usize) {
-                        Some(b) if b <= MAX_REPEAT_BYTES => {
-                            Ok(Value::Str(s.repeat(n as usize)))
-                        }
+                        Some(b) if b <= MAX_REPEAT_BYTES => Ok(Value::Str(s.repeat(n as usize))),
                         _ => Err(self.fault("repeat result too large")),
                     }
                 }
