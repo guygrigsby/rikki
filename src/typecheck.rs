@@ -616,9 +616,13 @@ impl Checker {
                 let it = self.expr_one(iter, None);
                 self.push_scope();
                 match (&it, names.len()) {
-                    (Type::Int | Type::List(_) | Type::Map(..), 0) => {}
+                    (Type::Int | Type::List(_) | Type::Map(..) | Type::Str, 0) => {}
                     (Type::Int, 1) => self.declare(&names[0], Type::Int, line, col),
-                    (Type::List(_), 1) => self.declare(&names[0], Type::Int, line, col),
+                    (Type::List(_) | Type::Str, 1) => self.declare(&names[0], Type::Int, line, col),
+                    (Type::Str, 2) => {
+                        self.declare(&names[0], Type::Int, line, col);
+                        self.declare(&names[1], Type::Str, line, col);
+                    }
                     (Type::List(t), 2) => {
                         self.declare(&names[0], Type::Int, line, col);
                         self.declare(&names[1], (**t).clone(), line, col);
@@ -635,7 +639,10 @@ impl Checker {
                     }
                     (_, 0) => self.diag(line, col, format!("cannot range over {it}")),
                     _ => {
-                        let msg = if matches!(it, Type::Int | Type::List(_) | Type::Map(..)) {
+                        let msg = if matches!(
+                            it,
+                            Type::Int | Type::List(_) | Type::Map(..) | Type::Str
+                        ) {
                             format!("cannot range over {it} with {} names", names.len())
                         } else {
                             format!("cannot range over {it}")
@@ -1140,6 +1147,28 @@ impl Checker {
                             Type::Unit
                         });
                     }
+                    "ord" => {
+                        if args.len() != 1 {
+                            self.diag(line, col, "ord takes one argument");
+                        } else {
+                            let t = self.expr_one(&args[0], Some(&Type::Str));
+                            if !matches!(t, Type::Str | Type::Unknown) {
+                                self.diag(line, col, format!("ord needs str, got {t}"));
+                            }
+                        }
+                        return ExprTy::One(Type::Int);
+                    }
+                    "chr" => {
+                        if args.len() != 1 {
+                            self.diag(line, col, "chr takes one argument");
+                        } else {
+                            let t = self.expr_one(&args[0], Some(&Type::Int));
+                            if !matches!(t, Type::Int | Type::Unknown) {
+                                self.diag(line, col, format!("chr needs int, got {t}"));
+                            }
+                        }
+                        return ExprTy::One(Type::Str);
+                    }
                     "len" => {
                         if args.len() != 1 {
                             self.diag(line, col, "len takes one argument");
@@ -1431,6 +1460,22 @@ impl Checker {
             }
             (Str, "replace") => {
                 self.check_args(&[Str, Str], args, line, col);
+                one(Str)
+            }
+            (Str, "find") => {
+                self.check_args(&[Str], args, line, col);
+                one(Opt(Box::new(Int)))
+            }
+            (Str, "fields" | "lines" | "chars") => {
+                self.check_args(&[], args, line, col);
+                one(List(Box::new(Str)))
+            }
+            (Str, "trim_prefix" | "trim_suffix") => {
+                self.check_args(&[Str], args, line, col);
+                one(Str)
+            }
+            (Str, "repeat") => {
+                self.check_args(&[Int], args, line, col);
                 one(Str)
             }
             (List(elem), "map") => {

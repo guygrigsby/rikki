@@ -473,6 +473,14 @@ impl<'p> Interp<'p> {
                             .map(|(i, v)| vec![Value::Int(i as i64), v]),
                     ),
                     Value::Map(m) => Box::new(m.into_iter().map(|(k, v)| vec![k.to_value(), v])),
+                    Value::Str(s) => {
+                        let chars: Vec<char> = s.chars().collect();
+                        Box::new(
+                            chars.into_iter().enumerate().map(|(i, c)| {
+                                vec![Value::Int(i as i64), Value::Str(c.to_string())]
+                            }),
+                        )
+                    }
                     _ => return Err(self.fault("cannot range over this value")),
                 };
                 for round in rounds {

@@ -1,0 +1,16 @@
+import "file"
+
+fn main() error? {
+  name := "data.txt"
+  s, err := file.read(name)
+  if err != none {
+    printf("can't read file %s", name)
+    return err
+  }
+  l := []int{}
+  for i, c := range s {
+    l[i] = int(c)
+  }
+  printf("%v", l)
+  return none
+}

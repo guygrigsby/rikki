@@ -1,0 +1,31 @@
+fn main() {
+    s := "héllo"
+    // two variables: code-point index and 1-char str, matching s[i]
+    for i, c := range s {
+        printf("%d:%s ", i, c)
+    }
+    printf("\n")
+    // one variable: the index
+    for i := range s {
+        printf("%d", i)
+    }
+    printf("\n")
+    // bare: once per character
+    n := 0
+    for range s {
+        n = n + 1
+    }
+    print(n)
+    // ord and chr
+    print(ord("A"))
+    print(ord("é"))
+    print(chr(65))
+    print(chr(233))
+    print(chr(ord("Ω")))
+    // build codepoints from a file-like string
+    l := []int{}
+    for _, c := range "hi" {
+        l = l.append(ord(c))
+    }
+    print(l)
+}

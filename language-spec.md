@@ -192,7 +192,7 @@ always denote a conversion (section 7.7), and `map [` in expression position
 always begins a map literal. Slice types and slice conversions are written
 with the `[]` prefix (`[]int`, `[]float(x)`; sections 5.9, 7.7) and involve
 no reserved name. Builtin function names (`print`, `printf`, `sprintf`,
-`len`, `args`, `input`) are also not reserved; a variable or
+`len`, `ord`, `chr`, `args`, `input`) are also not reserved; a variable or
 function declaration with the same name shadows the builtin.
 
 ### 4.5 Operators and punctuation
@@ -736,7 +736,7 @@ parameter type. A call of a non-function is a compile-time error
 ("not callable").
 
 `x.m(a1, ..., an)` is a method call. Methods exist only on strings, slices,
-and maps (section 14.7), on `Ctx` (section 15.4), on modules
+and maps (section 14.9), on `Ctx` (section 15.4), on modules
 (where `mod.f(...)` calls the module function), on `error` as the receiver of
 the builtin constructors `error.new` and `error.wrap` (section 15.1), and on
 `py` values (chapter 13). User struct types have no methods in v1.
@@ -1183,11 +1183,14 @@ Rikki has one loop keyword with three forms, as in Go:
   | `int` `n` | `i: int`, values `0` through `n-1` | compile-time error |
   | `[]T` | index `i: int` | index `i: int`, element `v: T` |
   | `map[K]V` | key `k: K` | key `k: K`, value `v: V` |
+  | `str` | index `i: int` | index `i: int`, character `c: str` |
 
   An `int` operand of `n <= 0` runs zero iterations. Lists range in element
-  order, maps in insertion order. The variables and `:=` may be omitted
+  order, maps in insertion order. Strings range by code point: the index is
+  the code-point index (the same index `s[i]` uses, section 7.5) and the
+  character is a one-character `str`. The variables and `:=` may be omitted
   (`for range e { ... }`) to run the body once per element. Ranging over any
-  other type (including `str` and `py`), or with more variables than the
+  other type (including `py`), or with more variables than the
   operand admits, is a compile-time error. The iteration variables are fresh
   copies each round; mutating them does not affect the container.
 
@@ -1628,7 +1631,26 @@ terminator. End of input and read failures are error values, not faults
 (`eof` on end of input). When a program runs through the CLI runner its
 output is streamed unbuffered, so a prompt is visible before input blocks.
 
-### 14.7 Methods on builtin types
+### 14.7 ord
+
+```
+ord(c str) int
+```
+
+The Unicode code point of `c`, which must be exactly one character
+(one code point); any other argument value is a runtime fault.
+
+### 14.8 chr
+
+```
+chr(n int) str
+```
+
+The one-character string for code point `n`. A value that is not a valid
+Unicode scalar (negative, greater than 0x10FFFF, or a surrogate) is a
+runtime fault. `chr(ord(c)) == c` for every one-character `c`.
+
+### 14.9 Methods on builtin types
 
 All receivers are unchanged; results are new values.
 
@@ -1644,6 +1666,13 @@ String methods (receiver `str`):
 | `starts_with` | `(prefix str) bool` | prefix test |
 | `ends_with` | `(suffix str) bool` | suffix test |
 | `replace` | `(from str, to str) str` | replace all occurrences |
+| `find` | `(sub str) int?` | code-point index of the first occurrence, `none` if absent |
+| `fields` | `() []str` | split on runs of white space; no empty fields |
+| `lines` | `() []str` | split on line feeds; a trailing line feed adds no empty line |
+| `trim_prefix` | `(p str) str` | remove leading `p` if present, else unchanged |
+| `trim_suffix` | `(p str) str` | remove trailing `p` if present, else unchanged |
+| `chars` | `() []str` | the characters as one-character strings |
+| `repeat` | `(n int) str` | the string tiled `n` times; negative `n` faults |
 
 List methods (receiver `[]T`):
 

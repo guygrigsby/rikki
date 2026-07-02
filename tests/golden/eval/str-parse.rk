@@ -1,0 +1,19 @@
+fn main() {
+    // find: code-point index or none
+    i := "héllo".find("llo")
+    if i != none {
+        print(i)
+    }
+    print("abc".find("zz"))
+    // fields and lines
+    print("  a\tb  c ".fields())
+    print("one\ntwo\nthree\n".lines())
+    // trim_prefix / trim_suffix: unchanged when absent
+    print("data.txt".trim_suffix(".txt"))
+    print("data.txt".trim_suffix(".csv"))
+    print("v1.2".trim_prefix("v"))
+    // chars and repeat
+    print("héllo".chars())
+    print("ab".repeat(3))
+    print("x".repeat(0))
+}

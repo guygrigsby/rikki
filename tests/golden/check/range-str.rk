@@ -1,5 +1,0 @@
-fn main() {
-    for c := range "abc" {
-        print(c)
-    }
-}

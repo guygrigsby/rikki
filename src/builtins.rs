@@ -29,6 +29,24 @@ impl Interp<'_> {
                 Some(Value::Map(m)) => Ok(Value::Int(m.len() as i64)),
                 _ => Err(self.fault("len needs str, list, or map")),
             },
+            "ord" => match args.first() {
+                Some(Value::Str(s)) => {
+                    let mut it = s.chars();
+                    match (it.next(), it.next()) {
+                        (Some(c), None) => Ok(Value::Int(c as i64)),
+                        _ => Err(self.fault("ord needs a single character")),
+                    }
+                }
+                _ => Err(self.fault("ord needs a str")),
+            },
+            "chr" => match args.first() {
+                Some(Value::Int(n)) => u32::try_from(*n)
+                    .ok()
+                    .and_then(char::from_u32)
+                    .map(|c| Value::Str(c.to_string()))
+                    .ok_or_else(|| self.fault(format!("chr: invalid code point {n}"))),
+                _ => Err(self.fault("chr needs an int")),
+            },
             "args" => Ok(Value::List(
                 self.prog_args.iter().cloned().map(Value::Str).collect(),
             )),
@@ -326,6 +344,37 @@ impl Interp<'_> {
                 let from = one_str(self, &mut args)?;
                 Ok(Value::Str(s.replace(&from, &to)))
             }
+            "find" => {
+                let needle = one_str(self, &mut args)?;
+                Ok(match s.find(&needle) {
+                    Some(byte) => Value::Int(s[..byte].chars().count() as i64),
+                    None => Value::NoneV,
+                })
+            }
+            "fields" => Ok(Value::List(
+                s.split_whitespace()
+                    .map(|p| Value::Str(p.to_string()))
+                    .collect(),
+            )),
+            "lines" => Ok(Value::List(
+                s.lines().map(|p| Value::Str(p.to_string())).collect(),
+            )),
+            "trim_prefix" => {
+                let p = one_str(self, &mut args)?;
+                Ok(Value::Str(s.strip_prefix(&p).unwrap_or(s).to_string()))
+            }
+            "trim_suffix" => {
+                let p = one_str(self, &mut args)?;
+                Ok(Value::Str(s.strip_suffix(&p).unwrap_or(s).to_string()))
+            }
+            "chars" => Ok(Value::List(
+                s.chars().map(|c| Value::Str(c.to_string())).collect(),
+            )),
+            "repeat" => match args.pop() {
+                Some(Value::Int(n)) if n >= 0 => Ok(Value::Str(s.repeat(n as usize))),
+                Some(Value::Int(_)) => Err(self.fault("repeat needs a nonnegative count")),
+                _ => Err(self.fault("repeat needs an int argument")),
+            },
             _ => Err(self.fault(format!("str has no method {name}"))),
         }
     }
