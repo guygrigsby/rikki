@@ -710,6 +710,13 @@ impl Checker {
                     Some(Type::List(t)) => Some((**t).clone()),
                     _ => None,
                 };
+                if items.is_empty() && expected_elem.is_none() {
+                    self.diag(
+                        line,
+                        col,
+                        "cannot infer element type of []; use it where a list type is expected",
+                    );
+                }
                 let mut elem = expected_elem.unwrap_or(Type::Unknown);
                 for it in items {
                     let t = self.expr_one(it, Some(&elem));
