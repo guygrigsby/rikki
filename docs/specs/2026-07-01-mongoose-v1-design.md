@@ -153,6 +153,18 @@ Stdlib modules import by bare name (`import "http"`); project files import by pa
 
 No `bytes` type in the v1 zoo, so `file` and `http` bodies are utf-8 `str` and binary I/O is out until v1.1. Adding bytes touches literals, indexing and conversions; nothing in the day-one workload needs it (tensors live on the Python side as `py` values).
 
+## Surface details
+
+The mundane stuff, pinned so the implementation plan has exact answers.
+
+- Comments: `//`.
+- Control flow: `if` / `else if` / `else`, conditions strictly `bool`. One loop keyword: `for x in xs`, `for k, v in m`, `for cond { }`, bare `for { }` infinite. `break` and `continue`. `range(n)` and `range(a, b)` are builtins returning `list[int]`.
+- Operators: `+ - * / %` on `int`; `+ - * /` on `float`; `+` concatenates `str` and `list`; `== !=` on comparable values; `< <= > >=` on `int`, `float`, `str`; `&& || !` on `bool`. No mixed `int`/`float` arithmetic.
+- Structs: `struct User { name: str, age: int }`, literal `User{name: "guy", age: 44}`, dot access. No methods on user structs in v1.
+- Indexing: `xs[i]` (fault if out of bounds), `xs[i] = v`, slices `xs[a:b]`. Map read `m[k]` returns `V?` (missing key is `none`, flow typing applies); `m[k] = v` inserts or updates. Map iteration and `keys()` follow insertion order.
+- String methods: `split`, `trim`, `contains`, `replace`, `upper`, `lower`, `starts_with`, `ends_with`. List methods: `map`, `filter`, `each`, `sum`, `sorted`, `sorted_by`, `append`, `contains`, `join` (on `list[str]`). Map methods: `keys`, `values`, `has`, `delete`.
+- Runtime faults (division by zero, index out of bounds): not catchable in v1. The interpreter stops the program and reports the fault with a mongoose stack trace, exiting nonzero. Still never a process crash or a Rust panic.
+
 ## Deliberately out of v1
 
 - Concurrency. Sequential only; the bridge module is the single place GIL work will land when it comes.
