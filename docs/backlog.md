@@ -6,7 +6,7 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
 
 - `bytes` type. Unblocks binary file and http bodies. Touches literals,
   indexing, conversions.
-- `mongoose fmt`. One true style, needs a lossless formatter.
+- `rikki fmt`. One true style, needs a lossless formatter.
 - Repl typechecking (currently unchecked).
 - Nested py chains as call arguments require an inner `check`
   (`f(check g())`); pervasive in torch code. Consider letting an enclosing py
