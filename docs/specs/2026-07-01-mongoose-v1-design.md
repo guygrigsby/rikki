@@ -167,7 +167,14 @@ The mundane stuff, pinned so the implementation plan has exact answers.
 - Structs: `struct User { name: str, age: int }`, literal `User{name: "guy", age: 44}`, dot access. No methods on user structs in v1.
 - Indexing: `xs[i]` (fault if out of bounds), `xs[i] = v`, slices `xs[a:b]`. Map read `m[k]` returns `V?` (missing key is `none`, flow typing applies); `m[k] = v` inserts or updates. Map iteration and `keys()` follow insertion order.
 - String methods: `split`, `trim`, `contains`, `replace`, `upper`, `lower`, `starts_with`, `ends_with`. List methods: `map`, `filter`, `each`, `sum`, `sorted`, `sorted_by`, `append`, `contains`, `join` (on `list[str]`). Map methods: `keys`, `values`, `has`, `delete`.
-- Runtime faults (division by zero, index out of bounds): not catchable in v1. The interpreter stops the program and reports the fault with a mongoose stack trace, exiting nonzero. Still never a process crash or a Rust panic.
+- Runtime faults (division by zero, integer overflow, index out of bounds, recursion past 1000 frames): not catchable in v1. The interpreter stops the program and reports the fault with a mongoose stack trace, exiting nonzero. Still never a process crash or a Rust panic. The parser likewise bounds expression nesting (256 levels) rather than crash on hostile input.
+- Recursive structs must break the cycle with an option (`next: Node?`), list, or map; a by-value cycle is a compile error (such a value could never be constructed).
+- A bare `[]` with no surrounding type context is a compile error; in a typed position (argument, return, field, assignment to a declared list) it infers fine.
+- Concatenating `list[T] + list[T?]` widens to `list[T?]`, never the reverse.
+- `contains` compares structurally (lists, structs, maps, recursively). The `==` operator stays scalar-only in v1.
+- `printf`/`sprintf` with a literal format string are verb-checked at compile time (`%d` on a str is a compile error); dynamic formats check at runtime.
+- The zero value of `py` (what a failed `check` destructure leaves behind) is Python's `None`, so touching it yields a normal Python error value, not a fault.
+- The repl (`mg` with no file) is unchecked in v1: lines go straight to the evaluator, faults are reported and survived.
 
 ## Deliberately out of v1
 
