@@ -416,7 +416,7 @@ impl Interp<'_> {
         name: &str,
         args: Vec<Value>,
     ) -> Result<Value, Fault> {
-        let mangled = format!("{module}.{name}");
+        let mangled = crate::loader::qualified(module, name);
         if self.has_fn(&mangled) {
             return self.call_fn_by_name(&mangled, args);
         }

@@ -181,7 +181,7 @@ impl Checker {
                 if STD_MODULES.contains(&path.as_str()) {
                     continue;
                 }
-                let prefix = format!("{path}.");
+                let prefix = crate::loader::qualified(path, "");
                 let has_symbols = self.fns.keys().any(|k| k.starts_with(&prefix))
                     || self.structs.keys().any(|k| k.starts_with(&prefix));
                 if has_symbols {

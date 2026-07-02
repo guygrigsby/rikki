@@ -652,7 +652,7 @@ impl Checker {
         }
         match &rt {
             Type::Module(m) if matches!(self.imports.get(m), Some(ImportKind::File(_))) => {
-                let mangled = format!("{m}.{name}");
+                let mangled = crate::loader::qualified(m, name);
                 match self.fns.get(&mangled).cloned() {
                     Some((params, rets)) => {
                         self.check_args(&params, args, line, col);
@@ -787,7 +787,7 @@ impl Checker {
                 }
             },
             Type::Module(m) if matches!(self.imports.get(m), Some(ImportKind::File(_))) => {
-                match self.fns.get(&format!("{m}.{name}")) {
+                match self.fns.get(&crate::loader::qualified(m, name)) {
                     Some(_) => {
                         self.diag(
                             line,

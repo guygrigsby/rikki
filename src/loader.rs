@@ -153,6 +153,12 @@ fn rename_module(prog: &mut Program, stem: &str) {
     }
 }
 
+/// Qualified name of a file-module member: the single mangling scheme the
+/// loader applies at import and the checker and runtime look members up by.
+pub fn qualified(module: &str, name: &str) -> String {
+    format!("{module}.{name}")
+}
+
 struct Renamer {
     decls: HashSet<String>,
     prefix: String,
@@ -161,7 +167,7 @@ struct Renamer {
 
 impl Renamer {
     fn mangled(&self, name: &str) -> String {
-        format!("{}.{name}", self.prefix)
+        qualified(&self.prefix, name)
     }
 
     fn hit(&self, name: &str) -> bool {
