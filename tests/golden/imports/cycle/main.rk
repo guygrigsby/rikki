@@ -1,4 +1,4 @@
-import "a.mg"
+import "a.rk"
 
 fn main() {
     print(a.fa())

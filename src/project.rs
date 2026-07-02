@@ -1,6 +1,6 @@
-//! mongoose.toml + mongoose.lock + the hidden .mongoose/ venv, provisioned by
+//! rikki.toml + rikki.lock + the hidden .rikki/ venv, provisioned by
 //! driving uv. The toml and lock fully determine the Python environment;
-//! .mongoose/ is disposable and regenerates.
+//! .rikki/ is disposable and regenerates.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -14,7 +14,7 @@ pub struct Project {
 }
 
 impl Project {
-    /// Walk up from `start` to the nearest directory holding mongoose.toml.
+    /// Walk up from `start` to the nearest directory holding rikki.toml.
     pub fn find(start: &Path) -> Option<PathBuf> {
         let mut dir = if start.is_dir() {
             start
@@ -23,7 +23,7 @@ impl Project {
         }
         .to_path_buf();
         loop {
-            if dir.join("mongoose.toml").exists() {
+            if dir.join("rikki.toml").exists() {
                 return Some(dir);
             }
             if !dir.pop() {
@@ -33,7 +33,7 @@ impl Project {
     }
 
     pub fn load(root: &Path) -> Result<Project, String> {
-        let path = root.join("mongoose.toml");
+        let path = root.join("rikki.toml");
         let src = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
         let doc: toml::Table =
             toml::from_str(&src).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -74,16 +74,16 @@ impl Project {
                 out.push_str(&format!("{k} = {v:?}\n"));
             }
         }
-        std::fs::write(self.root.join("mongoose.toml"), out)
-            .map_err(|e| format!("write mongoose.toml: {e}"))
+        std::fs::write(self.root.join("rikki.toml"), out)
+            .map_err(|e| format!("write rikki.toml: {e}"))
     }
 
     pub fn venv(&self) -> PathBuf {
-        self.root.join(".mongoose").join("venv")
+        self.root.join(".rikki").join("venv")
     }
 
     fn lock_path(&self) -> PathBuf {
-        self.root.join("mongoose.lock")
+        self.root.join("rikki.lock")
     }
 
     fn requirement_lines(&self) -> String {
@@ -131,7 +131,7 @@ impl Project {
         Ok(String::from_utf8_lossy(&out.stdout).to_string())
     }
 
-    /// Regenerate mongoose.lock from the declared deps.
+    /// Regenerate rikki.lock from the declared deps.
     pub fn compile_lock(&self, uv_bin: &str) -> Result<(), String> {
         if self.py_deps.is_empty() {
             let _ = std::fs::remove_file(self.lock_path());
@@ -161,15 +161,15 @@ impl Project {
             if !self.venv().exists() {
                 self.uv(
                     uv_bin,
-                    &["venv", ".mongoose/venv", "--python", &self.python],
+                    &["venv", ".rikki/venv", "--python", &self.python],
                     None,
                 )?;
             }
             return Ok(());
         }
         let lock = std::fs::read_to_string(self.lock_path())
-            .map_err(|_| "mongoose.lock missing; run: mongoose py add <pkg>".to_string())?;
-        let marker = self.root.join(".mongoose").join("synced");
+            .map_err(|_| "rikki.lock missing; run: rikki py add <pkg>".to_string())?;
+        let marker = self.root.join(".rikki").join("synced");
         let stamp = format!("{}:{}", self.python, cheap_hash(&lock));
         if self.venv().exists() {
             if let Ok(prev) = std::fs::read_to_string(&marker) {
@@ -180,7 +180,7 @@ impl Project {
         } else {
             self.uv(
                 uv_bin,
-                &["venv", ".mongoose/venv", "--python", &self.python],
+                &["venv", ".rikki/venv", "--python", &self.python],
                 None,
             )?;
         }
@@ -192,7 +192,7 @@ impl Project {
                 "sync",
                 "--python",
                 &py.to_string_lossy(),
-                "mongoose.lock",
+                "rikki.lock",
             ],
             None,
         )?;
@@ -223,7 +223,7 @@ mod tests {
     use super::*;
 
     fn tempdir(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("mongoose-proj-{}-{tag}", std::process::id()));
+        let d = std::env::temp_dir().join(format!("rikki-proj-{}-{tag}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
@@ -234,7 +234,7 @@ mod tests {
         let bin = dir.join("uv");
         std::fs::write(
             &bin,
-            "#!/bin/sh\necho \"$@\" >> uv-calls.log\nif [ \"$1\" = pip ] && [ \"$2\" = compile ]; then cat > /dev/null; echo 'torch==2.9.0'; fi\nif [ \"$1\" = venv ]; then mkdir -p .mongoose/venv/bin; fi\n",
+            "#!/bin/sh\necho \"$@\" >> uv-calls.log\nif [ \"$1\" = pip ] && [ \"$2\" = compile ]; then cat > /dev/null; echo 'torch==2.9.0'; fi\nif [ \"$1\" = venv ]; then mkdir -p .rikki/venv/bin; fi\n",
         )
         .unwrap();
         use std::os::unix::fs::PermissionsExt;
@@ -261,11 +261,11 @@ mod tests {
     #[test]
     fn find_walks_up() {
         let d = tempdir("find");
-        std::fs::write(d.join("mongoose.toml"), "[project]\nname = \"x\"\n").unwrap();
+        std::fs::write(d.join("rikki.toml"), "[project]\nname = \"x\"\n").unwrap();
         let deep = d.join("src").join("nested");
         std::fs::create_dir_all(&deep).unwrap();
         assert_eq!(Project::find(&deep).unwrap(), d);
-        assert_eq!(Project::find(&d.join("src/nested/main.mg")).unwrap(), d);
+        assert_eq!(Project::find(&d.join("src/nested/main.rk")).unwrap(), d);
     }
 
     #[test]
@@ -280,11 +280,11 @@ mod tests {
         };
         p.save().unwrap();
         p.py_add("torch", &uv).unwrap();
-        let lock = std::fs::read_to_string(d.join("mongoose.lock")).unwrap();
+        let lock = std::fs::read_to_string(d.join("rikki.lock")).unwrap();
         assert!(lock.contains("torch==2.9.0"));
         let log = std::fs::read_to_string(d.join("uv-calls.log")).unwrap();
         assert!(log.contains("pip compile --python-version 3.12"), "{log}");
-        assert!(log.contains("venv .mongoose/venv --python 3.12"), "{log}");
+        assert!(log.contains("venv .rikki/venv --python 3.12"), "{log}");
         assert!(log.contains("pip sync"), "{log}");
         // second ensure_env is a no-op thanks to the sync marker
         std::fs::write(d.join("uv-calls.log"), "").unwrap();

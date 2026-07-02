@@ -1,5 +1,5 @@
 //! The only module that names pyo3. The evaluator sees `PyHandle` values and
-//! operations returning mongoose values or mongoose error values; Python
+//! operations returning rikki values or rikki error values; Python
 //! exceptions never cross this boundary as anything but `ErrVal`.
 
 use std::path::Path;
@@ -11,7 +11,7 @@ use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyList, PyString, PyTuple};
 use crate::ast::BinOp;
 use crate::value::{ErrVal, Value};
 
-/// Arc so mongoose's deep-copy Clone never needs the GIL; py values are
+/// Arc so rikki's deep-copy Clone never needs the GIL; py values are
 /// shared references by design.
 #[derive(Debug, Clone)]
 pub struct PyHandle(Arc<Py<PyAny>>);
@@ -186,7 +186,7 @@ pub fn binop(op: BinOp, l: &Value, r: &Value) -> Result<Value, ErrVal> {
     })
 }
 
-/// mongoose → Python for arguments and indexes.
+/// rikki → Python for arguments and indexes.
 fn to_py(py: Python<'_>, v: &Value) -> Result<Py<PyAny>, ErrVal> {
     let obj: Py<PyAny> = match v {
         Value::Int(i) => PyInt::new(py, *i).into_any().unbind(),
@@ -222,7 +222,7 @@ fn to_py(py: Python<'_>, v: &Value) -> Result<Py<PyAny>, ErrVal> {
     Ok(obj)
 }
 
-/// Python → mongoose extraction for the fallible conversions.
+/// Python → rikki extraction for the fallible conversions.
 /// `target` is "int" | "float" | "bool" | "str" | "list:<elem>".
 pub fn extract(target: &str, h: &PyHandle) -> Result<Value, ErrVal> {
     Python::attach(|py| {
@@ -299,7 +299,7 @@ pub fn display(h: &PyHandle) -> String {
 }
 
 /// Is `name` a Python standard-library module? Used by the manifest check:
-/// stdlib imports need no declaration in mongoose.toml.
+/// stdlib imports need no declaration in rikki.toml.
 pub fn is_stdlib(name: &str) -> bool {
     init(None);
     Python::attach(|py| {

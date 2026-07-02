@@ -1,5 +1,5 @@
-//! `tk` is the runner (python parity): `tk file.mg` runs a program,
-//! bare `tk` starts the REPL. Toolchain work lives in `mongoose`.
+//! `tk` is the runner (python parity): `tk file.rk` runs a program,
+//! bare `tk` starts the REPL. Toolchain work lives in `rikki`.
 use std::process::ExitCode;
 
 fn main() -> ExitCode {

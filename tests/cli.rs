@@ -11,7 +11,7 @@ fn tk() -> &'static str {
 }
 
 fn tempdir(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("mongoose-cli-{}-{tag}", std::process::id()));
+    let d = std::env::temp_dir().join(format!("rikki-cli-{}-{tag}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     d
@@ -30,9 +30,9 @@ fn new_then_run() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    assert!(d.join("hello/mongoose.toml").exists());
+    assert!(d.join("hello/rikki.toml").exists());
     let out = Command::new(bin())
-        .args(["run", "src/main.mg"])
+        .args(["run", "src/main.rk"])
         .current_dir(d.join("hello"))
         .output()
         .unwrap();
@@ -41,13 +41,13 @@ fn new_then_run() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    assert_eq!(String::from_utf8_lossy(&out.stdout), "hello, mongoose\n");
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "hello, rikki\n");
 }
 
 #[test]
 fn check_reports_and_fails() {
     let d = tempdir("check");
-    let bad = d.join("bad.mg");
+    let bad = d.join("bad.rk");
     std::fs::write(
         &bad,
         "fn main() {\n    if 1 {\n        print(\"x\")\n    }\n}\n",
@@ -62,7 +62,7 @@ fn check_reports_and_fails() {
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.contains("condition must be bool"), "{err}");
     // check never runs the program
-    let ok = d.join("ok.mg");
+    let ok = d.join("ok.rk");
     std::fs::write(&ok, "fn main() {\n    print(\"ran\")\n}\n").unwrap();
     let out = Command::new(bin())
         .args(["check"])
@@ -97,8 +97,8 @@ fn bare_run_resolves_project_main() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    assert_eq!(String::from_utf8_lossy(&out.stdout), "hello, mongoose\n");
-    // and from a subdirectory, walking up to mongoose.toml
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "hello, rikki\n");
+    // and from a subdirectory, walking up to rikki.toml
     let out = Command::new(bin())
         .args(["run"])
         .current_dir(d.join("hello/src"))
@@ -109,7 +109,7 @@ fn bare_run_resolves_project_main() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    assert_eq!(String::from_utf8_lossy(&out.stdout), "hello, mongoose\n");
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "hello, rikki\n");
     // bare check works the same way and runs nothing
     let out = Command::new(bin())
         .args(["check"])
@@ -139,7 +139,7 @@ fn bare_run_outside_project_errors() {
         );
         let err = String::from_utf8_lossy(&out.stderr);
         assert!(
-            err.contains("no file given and no mongoose project found"),
+            err.contains("no file given and no rikki project found"),
             "{cmd}: {err}"
         );
     }
@@ -148,7 +148,7 @@ fn bare_run_outside_project_errors() {
 #[test]
 fn tk_runs_file() {
     let d = tempdir("tk-file");
-    let f = d.join("hi.mg");
+    let f = d.join("hi.rk");
     std::fs::write(&f, "fn main() {\n    print(\"hi from tk\")\n}\n").unwrap();
     let out = Command::new(tk()).arg(&f).output().unwrap();
     assert!(
@@ -227,7 +227,7 @@ fn repl_evaluates() {
 #[test]
 fn program_args_and_input() {
     let d = tempdir("argsin");
-    let f = d.join("echo.mg");
+    let f = d.join("echo.rk");
     std::fs::write(
         &f,
         "fn main() {\n    for a in args() {\n        print(a)\n    }\n    for {\n        line, err := input(\"> \")\n        if err != none {\n            break\n        }\n        print(\"got: \" + line)\n    }\n}\n",
@@ -270,7 +270,7 @@ fn http_stream_lines_reach_handler() {
         }
     });
     let d = tempdir("stream");
-    let f = d.join("s.mg");
+    let f = d.join("s.rk");
     std::fs::write(
         &f,
         "import \"http\"\nimport \"ctx\"\n\nfn main() (error?) {\n    resp := check http.stream(ctx.background(), args()[0], \"{}\", fn(line str) {\n        if line.starts_with(\"data: \") {\n            print(\"got \" + line[6:len(line)])\n        }\n    })\n    print(resp.status)\n    return none\n}\n",

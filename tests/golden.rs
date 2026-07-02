@@ -1,8 +1,8 @@
 use std::{fs, path::Path, path::PathBuf};
 
 fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
-    // a directory with a main.mg is one multi-file case; siblings are modules
-    let main = dir.join("main.mg");
+    // a directory with a main.rk is one multi-file case; siblings are modules
+    let main = dir.join("main.rk");
     if main.exists() {
         out.push(main);
         return;
@@ -11,7 +11,7 @@ fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
         let p = e.unwrap().path();
         if p.is_dir() {
             collect(&p, out);
-        } else if p.extension().is_some_and(|x| x == "mg") {
+        } else if p.extension().is_some_and(|x| x == "rk") {
             out.push(p);
         }
     }
@@ -39,8 +39,8 @@ fn golden() {
     cases.sort();
     let mut failures = vec![];
     let mut ran = 0;
-    for mg in &cases {
-        let rel = mg
+    for rk in &cases {
+        let rel = rk
             .strip_prefix(&root)
             .unwrap()
             .to_string_lossy()
@@ -48,13 +48,13 @@ fn golden() {
         if skip.contains(&rel) {
             continue;
         }
-        if rel.starts_with("py/") && std::env::var("MONGOOSE_TEST_PY").is_err() {
+        if rel.starts_with("py/") && std::env::var("RIKKI_TEST_PY").is_err() {
             continue;
         }
         ran += 1;
-        let res = rikki::run_source(mg);
-        let out_f = mg.with_extension("out");
-        let err_f = mg.with_extension("err");
+        let res = rikki::run_source(rk);
+        let out_f = rk.with_extension("out");
+        let err_f = rk.with_extension("err");
         let ok = if out_f.exists() {
             let want = fs::read_to_string(&out_f).unwrap();
             matches!(res.exit, rikki::ExitKind::Ok) && res.stdout == want

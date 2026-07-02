@@ -1,4 +1,4 @@
-import "util.mg"
+import "util.rk"
 
 fn main() {
     print(util.double(21))

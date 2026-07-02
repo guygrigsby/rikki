@@ -17,7 +17,7 @@ pub fn run() {
     interp.repl_init();
     let stdin = std::io::stdin();
     let mut out = std::io::stdout();
-    eprintln!("mongoose repl (v1: unchecked). ctrl-d to exit.");
+    eprintln!("rikki repl (v1: unchecked). ctrl-d to exit.");
     loop {
         eprint!("> ");
         let mut line = String::new();

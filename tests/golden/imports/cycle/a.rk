@@ -1,4 +1,4 @@
-import "b.mg"
+import "b.rk"
 
 fn fa() int {
     return b.fb()

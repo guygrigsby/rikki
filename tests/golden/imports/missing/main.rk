@@ -1,4 +1,4 @@
-import "nowhere.mg"
+import "nowhere.rk"
 
 fn main() {
     print("hi")

@@ -176,8 +176,8 @@ impl<'p> Interp<'p> {
         })
     }
 
-    /// Mongoose call-stack depth cap: past this the call faults instead of
-    /// overflowing the Rust stack (each mongoose frame is several Rust
+    /// Rikki call-stack depth cap: past this the call faults instead of
+    /// overflowing the Rust stack (each rikki frame is several Rust
     /// frames deep through eval, so the cap must leave real-stack headroom
     /// even in debug builds).
     const RECURSION_LIMIT: usize = 1000;

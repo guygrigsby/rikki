@@ -35,12 +35,12 @@ pub fn run_source(path: &Path) -> RunResult {
 /// Run with program arguments; `stream` writes stdout live (interactive CLI)
 /// instead of buffering into RunResult.
 pub fn run_with(path: &Path, args: Vec<String>, stream: bool) -> RunResult {
-    // the interpreter's recursion cap (1000 mongoose frames, several Rust
+    // the interpreter's recursion cap (1000 rikki frames, several Rust
     // frames each) needs more stack than a default thread has in debug
     // builds; run on a dedicated big-stack thread.
     let path = path.to_path_buf();
     std::thread::Builder::new()
-        .name("mongoose-interp".into())
+        .name("rikki-interp".into())
         .stack_size(64 * 1024 * 1024)
         .spawn(move || compile_and(&path, true, args, stream))
         .expect("spawn interpreter thread")
@@ -64,7 +64,7 @@ pub fn report(res: RunResult) -> std::process::ExitCode {
 }
 
 /// Resolve the file a CLI command should operate on: the explicit arg if
-/// given, otherwise the enclosing project's src/main.mg.
+/// given, otherwise the enclosing project's src/main.rk.
 pub fn resolve_entry(file: Option<std::path::PathBuf>) -> Result<std::path::PathBuf, String> {
     if let Some(f) = file {
         return Ok(f);
@@ -72,11 +72,11 @@ pub fn resolve_entry(file: Option<std::path::PathBuf>) -> Result<std::path::Path
     let cwd = std::env::current_dir().map_err(|e| format!("cannot read cwd: {e}"))?;
     let Some(root) = project::Project::find(&cwd) else {
         return Err(
-            "no file given and no mongoose project found (no mongoose.toml in this or any parent directory)"
+            "no file given and no rikki project found (no rikki.toml in this or any parent directory)"
                 .into(),
         );
     };
-    let main = root.join("src").join("main.mg");
+    let main = root.join("src").join("main.rk");
     if !main.exists() {
         return Err(format!(
             "no file given and project entrypoint {} is missing",
@@ -124,12 +124,12 @@ fn compile_and(path: &Path, run: bool, args: Vec<String>, stream: bool) -> RunRe
             let embedded = bridge::embedded_python();
             if proj.python != embedded {
                 return compile_err(format!(
-                    "project pins python {} but this mongoose embeds {embedded}; set python = {embedded:?} in mongoose.toml and rerun mongoose py add",
+                    "project pins python {} but this rikki embeds {embedded}; set python = {embedded:?} in rikki.toml and rerun rikki py add",
                     proj.python
                 ));
             }
             let provision =
-                run && (!proj.py_deps.is_empty() || root.join("mongoose.lock").exists());
+                run && (!proj.py_deps.is_empty() || root.join("rikki.lock").exists());
             if provision {
                 if let Err(e) = proj.ensure_env("uv") {
                     return compile_err(e);
@@ -140,7 +140,7 @@ fn compile_and(path: &Path, run: bool, args: Vec<String>, stream: bool) -> RunRe
                 let top = m.split('.').next().unwrap_or(m);
                 if !dep_declared(&proj, top) && !bridge::is_stdlib(top) {
                     return compile_err(format!(
-                        "import py {m:?}: not declared in mongoose.toml; run: mongoose py add {top}"
+                        "import py {m:?}: not declared in rikki.toml; run: rikki py add {top}"
                     ));
                 }
             }
