@@ -230,7 +230,7 @@ fn program_args_and_input() {
     let f = d.join("echo.rk");
     std::fs::write(
         &f,
-        "fn main() {\n    for a in args() {\n        print(a)\n    }\n    for {\n        line, err := input(\"> \")\n        if err != none {\n            break\n        }\n        print(\"got: \" + line)\n    }\n}\n",
+        "fn main() {\n    for _, a := range args() {\n        print(a)\n    }\n    for {\n        line, err := input(\"> \")\n        if err != none {\n            break\n        }\n        print(\"got: \" + line)\n    }\n}\n",
     )
     .unwrap();
     let mut child = Command::new(tk())

@@ -133,7 +133,7 @@ pub enum StmtKind {
         elifs: Vec<(Expr, Block)>,
         els: Option<Block>,
     },
-    ForIn {
+    ForRange {
         names: Vec<String>,
         iter: Expr,
         body: Block,

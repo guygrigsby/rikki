@@ -462,12 +462,18 @@ impl<'p> Interp<'p> {
                 }
                 Ok(Flow::Normal)
             }
-            StmtKind::ForIn { names, iter, body } => {
+            StmtKind::ForRange { names, iter, body } => {
                 let it = sval!(self.eval(iter));
-                let rounds: Vec<Vec<Value>> = match it {
-                    Value::List(items) => items.into_iter().map(|v| vec![v]).collect(),
-                    Value::Map(m) => m.into_iter().map(|(k, v)| vec![k.to_value(), v]).collect(),
-                    _ => return Err(self.fault("cannot iterate this value")),
+                let rounds: Box<dyn Iterator<Item = Vec<Value>>> = match it {
+                    Value::Int(n) => Box::new((0..n.max(0)).map(|i| vec![Value::Int(i)])),
+                    Value::List(items) => Box::new(
+                        items
+                            .into_iter()
+                            .enumerate()
+                            .map(|(i, v)| vec![Value::Int(i as i64), v]),
+                    ),
+                    Value::Map(m) => Box::new(m.into_iter().map(|(k, v)| vec![k.to_value(), v])),
+                    _ => return Err(self.fault("cannot range over this value")),
                 };
                 for round in rounds {
                     self.scopes.push(HashMap::new());

@@ -310,9 +310,8 @@ impl Parser {
                     "map" => {
                         self.expect(&Token::LBracket, "[")?;
                         let k = self.type_expr()?;
-                        self.expect(&Token::Comma, ",")?;
-                        let v = self.type_expr()?;
                         self.expect(&Token::RBracket, "]")?;
+                        let v = self.type_expr()?;
                         TypeExpr::Map(Box::new(k), Box::new(v))
                     }
                     _ => {
@@ -482,10 +481,20 @@ impl Parser {
             let body = self.block()?;
             return Ok(StmtKind::ForCond { cond: None, body });
         }
-        if let Some(names) = self.try_name_list(&Token::In) {
+        if self.eat(&Token::Range) {
             let iter = self.expr(false)?;
             let body = self.block()?;
-            return Ok(StmtKind::ForIn { names, iter, body });
+            return Ok(StmtKind::ForRange {
+                names: vec![],
+                iter,
+                body,
+            });
+        }
+        if let Some(names) = self.try_name_list(&Token::ColonEq) {
+            self.expect(&Token::Range, "range")?;
+            let iter = self.expr(false)?;
+            let body = self.block()?;
+            return Ok(StmtKind::ForRange { names, iter, body });
         }
         let cond = self.expr(false)?;
         let body = self.block()?;
@@ -980,10 +989,10 @@ mod tests {
 
     #[test]
     fn for_forms() {
-        let src = "fn main() {\n    for x in xs {\n        p(x)\n    }\n    for k, v in m {\n        p(k)\n    }\n    for a < 3 {\n        q()\n    }\n    for {\n        break\n    }\n}\n";
+        let src = "fn main() {\n    for x := range xs {\n        p(x)\n    }\n    for k, v := range m {\n        p(k)\n    }\n    for a < 3 {\n        q()\n    }\n    for {\n        break\n    }\n}\n";
         let f = one_fn(src);
-        assert!(matches!(f.body[0].kind, StmtKind::ForIn { ref names, .. } if names.len() == 1));
-        assert!(matches!(f.body[1].kind, StmtKind::ForIn { ref names, .. } if names.len() == 2));
+        assert!(matches!(f.body[0].kind, StmtKind::ForRange { ref names, .. } if names.len() == 1));
+        assert!(matches!(f.body[1].kind, StmtKind::ForRange { ref names, .. } if names.len() == 2));
         assert!(matches!(
             f.body[2].kind,
             StmtKind::ForCond { cond: Some(_), .. }
@@ -1032,7 +1041,7 @@ mod tests {
 
     #[test]
     fn map_literal() {
-        let e = expr("map[str, int]{\"a\": 1, \"b\": 2}");
+        let e = expr("map[str]int{\"a\": 1, \"b\": 2}");
         match e.kind {
             E::MapLit { entries, .. } => assert_eq!(entries.len(), 2),
             k => panic!("{k:?}"),

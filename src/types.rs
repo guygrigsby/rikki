@@ -25,7 +25,7 @@ impl std::fmt::Display for Type {
             Type::Bool => write!(f, "bool"),
             Type::Str => write!(f, "str"),
             Type::List(t) => write!(f, "[]{t}"),
-            Type::Map(k, v) => write!(f, "map[{k}, {v}]"),
+            Type::Map(k, v) => write!(f, "map[{k}]{v}"),
             Type::Opt(t) => write!(f, "{t}?"),
             Type::Fn(args, rets) => {
                 write!(f, "fn(")?;

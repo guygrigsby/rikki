@@ -228,7 +228,7 @@ impl Renamer {
                     self.block(b);
                 }
             }
-            StmtKind::ForIn { names, iter, body } => {
+            StmtKind::ForRange { names, iter, body } => {
                 self.expr(iter);
                 self.locals.push(names.iter().cloned().collect());
                 self.block(body);

@@ -612,11 +612,18 @@ impl Checker {
                 }
                 all_div && els_div
             }
-            StmtKind::ForIn { names, iter, body } => {
+            StmtKind::ForRange { names, iter, body } => {
                 let it = self.expr_one(iter, None);
                 self.push_scope();
                 match (&it, names.len()) {
-                    (Type::List(t), 1) => self.declare(&names[0], (**t).clone(), line, col),
+                    (Type::Int | Type::List(_) | Type::Map(..), 0) => {}
+                    (Type::Int, 1) => self.declare(&names[0], Type::Int, line, col),
+                    (Type::List(_), 1) => self.declare(&names[0], Type::Int, line, col),
+                    (Type::List(t), 2) => {
+                        self.declare(&names[0], Type::Int, line, col);
+                        self.declare(&names[1], (**t).clone(), line, col);
+                    }
+                    (Type::Map(k, _), 1) => self.declare(&names[0], (**k).clone(), line, col),
                     (Type::Map(k, v), 2) => {
                         self.declare(&names[0], (**k).clone(), line, col);
                         self.declare(&names[1], (**v).clone(), line, col);
@@ -626,12 +633,14 @@ impl Checker {
                             self.declare(n, Type::Unknown, line, col);
                         }
                     }
+                    (_, 0) => self.diag(line, col, format!("cannot range over {it}")),
                     _ => {
-                        self.diag(
-                            line,
-                            col,
-                            format!("cannot iterate {it} with {} names", names.len()),
-                        );
+                        let msg = if matches!(it, Type::Int | Type::List(_) | Type::Map(..)) {
+                            format!("cannot range over {it} with {} names", names.len())
+                        } else {
+                            format!("cannot range over {it}")
+                        };
+                        self.diag(line, col, msg);
                         for n in names {
                             self.declare(n, Type::Unknown, line, col);
                         }
@@ -1155,18 +1164,6 @@ impl Checker {
                             }
                         }
                         return ExprTy::Multi(vec![Type::Str, err_opt()]);
-                    }
-                    "range" => {
-                        if args.is_empty() || args.len() > 2 {
-                            self.diag(line, col, "range takes one or two arguments");
-                        }
-                        for a in args {
-                            let t = self.expr_one(a, Some(&Type::Int));
-                            if !matches!(t, Type::Int | Type::Unknown) {
-                                self.diag(a.line, a.col, format!("range needs int, got {t}"));
-                            }
-                        }
-                        return ExprTy::One(Type::List(Box::new(Type::Int)));
                     }
                     _ => {}
                 }
@@ -1705,7 +1702,7 @@ fn assigned_idents(b: &Block, out: &mut Vec<String>) {
                     assigned_idents(b, out);
                 }
             }
-            StmtKind::ForIn { body, .. } | StmtKind::ForCond { body, .. } => {
+            StmtKind::ForRange { body, .. } | StmtKind::ForCond { body, .. } => {
                 assigned_idents(body, out);
             }
             _ => {}

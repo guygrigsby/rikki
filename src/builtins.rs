@@ -29,14 +29,6 @@ impl Interp<'_> {
                 Some(Value::Map(m)) => Ok(Value::Int(m.len() as i64)),
                 _ => Err(self.fault("len needs str, list, or map")),
             },
-            "range" => {
-                let (lo, hi) = match args.as_slice() {
-                    [Value::Int(n)] => (0, *n),
-                    [Value::Int(a), Value::Int(b)] => (*a, *b),
-                    _ => return Err(self.fault("range needs int arguments")),
-                };
-                Ok(Value::List((lo..hi.max(lo)).map(Value::Int).collect()))
-            }
             "args" => Ok(Value::List(
                 self.prog_args.iter().cloned().map(Value::Str).collect(),
             )),

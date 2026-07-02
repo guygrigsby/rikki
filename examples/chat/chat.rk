@@ -54,7 +54,7 @@ fn ask(c Ctx, base str, model str, history str) (str, error?) {
     // the handler displayed the tokens live; rebuild the full reply from the
     // accumulated body for the conversation history
     reply := ""
-    for line in resp.body.split("\n") {
+    for _, line := range resp.body.split("\n") {
         reply = reply + delta(line)
     }
     print("")
@@ -73,7 +73,7 @@ fn main() (error?) {
         model = a[1]
     }
     root := ctx.interrupt(ctx.background())
-    history := [map[str, str]{"role": "system", "content": "You are concise."}]
+    history := [map[str]str{"role": "system", "content": "You are concise."}]
     printf("chatting with %s (model %s); ctrl-d to quit\n", base, model)
 
     fails := 0
@@ -86,7 +86,7 @@ fn main() (error?) {
         if line == "" {
             continue
         }
-        history = history.append(map[str, str]{"role": "user", "content": line})
+        history = history.append(map[str]str{"role": "user", "content": line})
         hjson, jerr := str(json.dumps(history))
         if jerr != none {
             // our own state failed to encode: that is a bug, die loudly
@@ -109,7 +109,7 @@ fn main() (error?) {
             continue
         }
         fails = 0
-        history = history.append(map[str, str]{"role": "assistant", "content": reply})
+        history = history.append(map[str]str{"role": "assistant", "content": reply})
     }
     print("bye")
     return none

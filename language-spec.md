@@ -178,7 +178,7 @@ The following identifiers are reserved and must not be used as names:
 
 ```
 break     check     continue  else      false     fn
-for       if        import    in        none      py
+for       if        import    none      py        range
 return    struct    true
 ```
 
@@ -192,7 +192,7 @@ always denote a conversion (section 7.7), and `map [` in expression position
 always begins a map literal. Slice types and slice conversions are written
 with the `[]` prefix (`[]int`, `[]float(x)`; sections 5.9, 7.7) and involve
 no reserved name. Builtin function names (`print`, `printf`, `sprintf`,
-`len`, `range`, `args`, `input`) are also not reserved; a variable or
+`len`, `args`, `input`) are also not reserved; a variable or
 function declaration with the same name shadows the builtin.
 
 ### 4.5 Operators and punctuation
@@ -266,7 +266,7 @@ The complete set of v1 types is:
 
 ```
 int   float   bool   str
-[]T   map[K, V]   T?
+[]T   map[K]V   T?
 fn(...) ...   struct types   error   py
 ```
 
@@ -296,7 +296,7 @@ value semantics (chapter 11): assignment copies the whole list.
 
 ### 5.3 Map types
 
-`map[K, V]` maps keys of type `K` to values of type `V`. The key type `K`
+`map[K]V` maps keys of type `K` to values of type `V`. The key type `K`
 must be `int`, `str`, or `bool`; any other key type is a compile-time error.
 Maps preserve insertion order: iteration, `keys()`, and `values()` visit
 entries in the order the keys were first inserted, and `delete` preserves the
@@ -398,7 +398,7 @@ Type      = BaseType [ "?" ] .
 BaseType  = TypeName | SliceType | MapType | FnType | "py" .
 TypeName  = identifier [ "." identifier ] .
 SliceType = "[" "]" Type .
-MapType   = "map" "[" Type "," Type "]" .
+MapType   = "map" "[" Type "]" Type .
 FnType    = "fn" "(" [ TypeList ] ")" [ FnResult ] .
 FnResult  = "(" [ TypeList ] ")" | Type .
 TypeList  = Type { "," Type } .
@@ -419,7 +419,7 @@ element, return slot) of type `T` when:
 - `T` is `T0?` and `V` is assignable to `T0`, or `V` is `V0?` and `V0` is
   assignable to `T0` (widening into options, applied recursively); or
 - `T` is `[]A`, `V` is `[]B`, and `B` is assignable to `A`; or
-- `T` is `map[AK, AV]`, `V` is `map[BK, BV]`, and `BK`, `BV` are assignable
+- `T` is `map[AK]AV`, `V` is `map[BK]BV`, and `BK`, `BV` are assignable
   to `AK`, `AV` respectively; or
 - either side's type could not be determined because of a prior compile
   error (assignability then does not produce a second error).
@@ -441,7 +441,7 @@ of failed conversions and stdlib calls:
 | `bool` | `false` |
 | `str` | `""` |
 | `[]T` | `[]` |
-| `map[K, V]` | empty map |
+| `map[K]V` | empty map |
 | `T?` | `none` |
 | struct | struct with every field set to its zero value, recursively |
 | `error` (bare, non-option) | `none` |
@@ -544,8 +544,8 @@ Each block introduces a new scope. A short variable declaration (section 8.2)
 declares its names in the innermost enclosing scope; declaring a name twice
 in the same scope is a compile-time error, while an inner scope may shadow an
 outer name. Function parameters are declared in the function's outermost
-scope. `for x in xs` declares its iteration variables in a scope enclosing
-the loop body, fresh on each iteration.
+scope. `for x := range xs` declares its iteration variables in a scope
+enclosing the loop body, fresh on each iteration.
 
 Name resolution inside a function proceeds from the innermost scope outward,
 then to top-level functions, then to imported module names, then to builtins.
@@ -557,7 +557,7 @@ which shadows a module name, which shadows a builtin.
 The blank identifier `_` discards a value. It may appear:
 
 - as a name in a short variable declaration: `_, err := f()` or `_ := f()`;
-- as an iteration variable: `for _, v in m { ... }`.
+- as an iteration variable: `for _, v := range m { ... }`.
 
 `_` is never declared: it cannot be read, and it is not a valid assignment
 target (`_ = f()` is a compile-time error, "undefined: _"). Binding an error
@@ -613,7 +613,7 @@ print(total([]))     // ok: parameter supplies []int
 #### 7.2.2 Map literals
 
 ```
-MapLit   = "map" "[" Type "," Type "]" "{" { newline } [ MapEntryList [ "," ] ] { newline } "}" .
+MapLit   = "map" "[" Type "]" Type "{" { newline } [ MapEntryList [ "," ] ] { newline } "}" .
 MapEntryList = MapEntry { "," { newline } MapEntry } .
 MapEntry = Expression ":" Expression .
 ```
@@ -624,7 +624,7 @@ restriction (section 5.3). Entries are inserted left to right; a repeated key
 overwrites, keeping the original insertion position.
 
 ```
-m := map[str, int]{"a": 1, "b": 2}
+m := map[str]int{"a": 1, "b": 2}
 ```
 
 #### 7.2.3 Struct literals
@@ -642,7 +642,7 @@ literal is free; the constructed value's field order follows the declaration.
 
 Struct literals are suppressed in control-flow headers: in the condition of
 an `if` or `else if`, and in the header expression of a `for` statement
-(both the condition form and the iterable of `for ... in`), an identifier
+(both the condition form and the operand of `range`), an identifier
 followed by `{` is not parsed as a struct literal, so the `{` opens the
 statement's block. To use a struct literal in a header, parenthesize it.
 Struct literals remain available inside any parenthesized or bracketed
@@ -728,7 +728,7 @@ parameter type. A call of a non-function is a compile-time error
 ("not callable").
 
 `x.m(a1, ..., an)` is a method call. Methods exist only on strings, slices,
-and maps (section 14.8), on `Ctx` (section 15.4), on modules
+and maps (section 14.7), on `Ctx` (section 15.4), on modules
 (where `mod.f(...)` calls the module function), on `error` as the receiver of
 the builtin constructors `error.new` and `error.wrap` (section 15.1), and on
 `py` values (chapter 13). User struct types have no methods in v1.
@@ -756,7 +756,7 @@ For `a[i]`:
 - If `a` has type `str`, `i` must be `int` and the result is a `str` holding
   the single code point at position `i` (positions count code points).
   Out of range is a runtime fault.
-- If `a` has type `map[K, V]`, `i` must be assignable to `K` and the result
+- If `a` has type `map[K]V`, `i` must be assignable to `K` and the result
   is `V?`; a missing key yields `none`. Reading a map never faults.
 - If `a` has type `py`, indexing is a Python subscript operation
   (chapter 13).
@@ -764,7 +764,7 @@ For `a[i]`:
 Indexing any other type is a compile-time error.
 
 ```
-m := map[str, int]{"k": 1}
+m := map[str]int{"k": 1}
 v := m["missing"]     // v: int?, none here
 if v != none {
     print(v + 1)
@@ -1158,22 +1158,30 @@ option-typed variables inside the branches (chapter 9).
 
 ```
 ForStmt = "for" Block
-        | "for" IdentifierList "in" Condition Block
+        | "for" [ IdentifierList ":=" ] "range" Condition Block
         | "for" Condition Block .
 ```
 
-Rikki has one loop keyword with three forms:
+Rikki has one loop keyword with three forms, as in Go:
 
 - `for { ... }` loops forever; only `break` or `return` leaves it.
 - `for cond { ... }` evaluates `cond` (a `bool`) before each iteration and
   stops when it is false.
-- `for x in xs { ... }` iterates a `[]T`, binding `x: T` for each
-  element in order. `for k, v in m { ... }` iterates a `map[K, V]` in
-  insertion order, binding `k: K`, `v: V`. The name count must match the
-  iterated type: one name for a list, two for a map; anything else, or
-  iterating any other type (including `str` and `py`), is a compile-time
-  error. The iteration variables are fresh copies each round; mutating them
-  does not affect the container.
+- `for x := range e { ... }` ranges over `e`. The range operand and the
+  bindings follow Go:
+
+  | operand type | one variable | two variables |
+  |--------------|--------------|---------------|
+  | `int` `n` | `i: int`, values `0` through `n-1` | compile-time error |
+  | `[]T` | index `i: int` | index `i: int`, element `v: T` |
+  | `map[K]V` | key `k: K` | key `k: K`, value `v: V` |
+
+  An `int` operand of `n <= 0` runs zero iterations. Lists range in element
+  order, maps in insertion order. The variables and `:=` may be omitted
+  (`for range e { ... }`) to run the body once per element. Ranging over any
+  other type (including `str` and `py`), or with more variables than the
+  operand admits, is a compile-time error. The iteration variables are fresh
+  copies each round; mutating them does not affect the container.
 
 Struct literals are suppressed in the loop header (section 7.2.3).
 
@@ -1279,7 +1287,7 @@ if x != none {
 ```
 x := maybe()
 if x != none {
-    for i in range(2) {
+    for i := range 2 {
         y := x + 1   // compile error: x assigned below in this body
         x = none
     }
@@ -1451,7 +1459,7 @@ A `py` value supports:
   rikki `bool`).
 
 `&& ||` reject `py` operands; unary `!` and `-` are not defined on `py`;
-`py` values cannot be sliced, iterated with `for ... in`, used as conditions,
+`py` values cannot be sliced, ranged over with `for`, used as conditions,
 or assigned into (`x.attr = v`, `x[i] = v` are compile-time errors).
 
 ### 13.3 Fallibility
@@ -1485,7 +1493,7 @@ list elements and map entries:
 | `str` | `str` |
 | `none` | `None` |
 | `[]T` | `list` |
-| `map[K, V]` | `dict` |
+| `map[K]V` | `dict` |
 | `py` | the referenced object itself |
 
 Passing any other type (a struct, function, error, Ctx, or module) is not a
@@ -1589,17 +1597,7 @@ len(x) int
 For `str`, the number of Unicode code points; for `list`, the element count;
 for `map`, the entry count. Any other argument type is a compile-time error.
 
-### 14.5 range
-
-```
-range(n) []int        // 0, 1, ..., n-1
-range(a, b) []int     // a, a+1, ..., b-1
-```
-
-Returns a freshly built list. If `b <= a` (or `n <= 0`), the result is the
-empty list; `range` never faults.
-
-### 14.6 args
+### 14.5 args
 
 ```
 args() []str
@@ -1610,7 +1608,7 @@ command line (`tk prog.rk a b` and `rikki run prog.rk a b` both yield
 `["a", "b"]`). Takes no arguments. In contexts with no command line (tests,
 embedding) the list is empty.
 
-### 14.7 input
+### 14.6 input
 
 ```
 input(prompt str) (str, error?)
@@ -1622,7 +1620,7 @@ terminator. End of input and read failures are error values, not faults
 (`eof` on end of input). When a program runs through the CLI runner its
 output is streamed unbuffered, so a prompt is visible before input blocks.
 
-### 14.8 Methods on builtin types
+### 14.7 Methods on builtin types
 
 All receivers are unchanged; results are new values.
 
@@ -1653,14 +1651,14 @@ List methods (receiver `[]T`):
 | `contains` | `(v T) bool` | structural membership (section 11.2) |
 | `join` | `(sep str) str` | `T` must be `str`; concatenation with separator |
 
-Map methods (receiver `map[K, V]`):
+Map methods (receiver `map[K]V`):
 
 | Method | Signature | Behavior |
 |--------|-----------|----------|
 | `keys` | `() []K` | keys in insertion order |
 | `values` | `() []V` | values in insertion order |
 | `has` | `(k K) bool` | key presence |
-| `delete` | `(k K) map[K, V]` | copy without `k`; remaining order preserved |
+| `delete` | `(k K) map[K]V` | copy without `k`; remaining order preserved |
 
 ## 15. Standard library
 
@@ -1737,8 +1735,8 @@ Methods on `Ctx`:
 Importing `"http"` also declares two struct types:
 
 ```
-struct Request  { method str, url str, body str, headers map[str, str] }
-struct Response { status int, body str, headers map[str, str] }
+struct Request  { method str, url str, body str, headers map[str]str }
+struct Response { status int, body str, headers map[str]str }
 ```
 
 | Function | Signature |
@@ -1828,7 +1826,7 @@ Before `main` runs, all `import py` modules are imported; a failing Python
 import terminates the program as a runtime error.
 
 Program arguments follow the file on the runner command line and are exposed
-through the `args()` builtin (section 14.6).
+through the `args()` builtin (section 14.5).
 
 ### 17.2 Termination and exit status
 

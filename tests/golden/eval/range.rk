@@ -1,0 +1,32 @@
+fn main() {
+    // int: 0 through n-1; n <= 0 runs zero times
+    for i := range 2 {
+        print(i)
+    }
+    for i := range -3 {
+        print(i)
+    }
+    // list: index, or index and element
+    xs := ["a", "b", "c"]
+    for i := range xs {
+        print(i)
+    }
+    for i, v := range xs {
+        printf("%d:%s\n", i, v)
+    }
+    // map: key, or key and value, insertion order
+    m := map[str]int{"x": 1, "y": 2}
+    for k := range m {
+        print(k)
+    }
+    // bare range: run the body len(xs) times
+    n := 0
+    for range xs {
+        n = n + 1
+    }
+    print(n)
+    // range over a call result
+    for i := range len("ab") {
+        print(i)
+    }
+}

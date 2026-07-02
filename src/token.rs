@@ -13,7 +13,7 @@ pub enum Token {
     If,
     Else,
     For,
-    In,
+    Range,
     Break,
     Continue,
     Check,

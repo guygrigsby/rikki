@@ -13,7 +13,12 @@ fn rank(query str, corpus []str) ([]Hit, error?) {
     c := check model.encode(corpus)
     sims := check sentence_transformers.util.cos_sim(q, c)
     scores := check []float(sims[0].tolist())
-    hits := range(len(corpus)).map(fn(i) { Hit{text: corpus[i], score: scores[i]} })
+    hits := [Hit{text: corpus[0], score: scores[0]}]
+    for i, text := range corpus {
+        if i > 0 {
+            hits = hits.append(Hit{text: text, score: scores[i]})
+        }
+    }
     return hits.sorted_by(fn(a, b) { a.score > b.score }), none
 }
 
@@ -29,7 +34,7 @@ fn main() (error?) {
     query := "an animal that kills cobras"
     hits := check rank(query, corpus)
     printf("query: %s\n\n", query)
-    for h in hits {
+    for _, h := range hits {
         printf("%.3f  %s\n", h.score, h.text)
     }
     return none

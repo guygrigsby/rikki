@@ -10,7 +10,7 @@ fn main() {
     })
     print(["x", "y"].join("-"))
     print([1.5, 2.5].sum())
-    m := map[str, int]{"b": 2, "a": 1}
+    m := map[str]int{"b": 2, "a": 1}
     print(m.keys())
     print(m.values())
     print(m.has("a"))

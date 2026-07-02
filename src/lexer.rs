@@ -164,7 +164,7 @@ impl<'a> Lexer<'a> {
                         "if" => Token::If,
                         "else" => Token::Else,
                         "for" => Token::For,
-                        "in" => Token::In,
+                        "range" => Token::Range,
                         "break" => Token::Break,
                         "continue" => Token::Continue,
                         "check" => Token::Check,

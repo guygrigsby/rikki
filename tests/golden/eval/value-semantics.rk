@@ -9,7 +9,7 @@ fn main() {
     print(b[0])
     mutate(a)
     print(a[0])
-    m := map[str, int]{"k": 1}
+    m := map[str]int{"k": 1}
     n := m
     n["k"] = 5
     v := m["k"]
