@@ -600,7 +600,10 @@ impl<'p> Interp<'p> {
                 let v = val!(self.eval(rhs));
                 match (op, v) {
                     (UnOp::Not, Value::Bool(b)) => ok(Value::Bool(!b)),
-                    (UnOp::Neg, Value::Int(i)) => ok(Value::Int(-i)),
+                    (UnOp::Neg, Value::Int(i)) => match i.checked_neg() {
+                        Some(n) => ok(Value::Int(n)),
+                        None => Err(self.fault("integer overflow")),
+                    },
                     (UnOp::Neg, Value::Float(f)) => ok(Value::Float(-f)),
                     _ => Err(self.fault("bad operand")),
                 }
@@ -781,21 +784,25 @@ impl<'p> Interp<'p> {
     fn binop(&mut self, op: BinOp, l: Value, r: Value) -> Result<Value, Fault> {
         use BinOp::*;
         use Value::*;
+        let overflow = |x: Option<i64>| match x {
+            Some(n) => Ok(Int(n)),
+            None => Result::Err(self.fault("integer overflow")),
+        };
         let v = match (op, &l, &r) {
-            (Add, Int(a), Int(b)) => Int(a + b),
-            (Sub, Int(a), Int(b)) => Int(a - b),
-            (Mul, Int(a), Int(b)) => Int(a * b),
+            (Add, Int(a), Int(b)) => overflow(a.checked_add(*b))?,
+            (Sub, Int(a), Int(b)) => overflow(a.checked_sub(*b))?,
+            (Mul, Int(a), Int(b)) => overflow(a.checked_mul(*b))?,
             (Div, Int(a), Int(b)) => {
                 if *b == 0 {
                     return Result::Err(self.fault("division by zero"));
                 }
-                Int(a / b)
+                overflow(a.checked_div(*b))?
             }
             (Rem, Int(a), Int(b)) => {
                 if *b == 0 {
                     return Result::Err(self.fault("division by zero"));
                 }
-                Int(a % b)
+                overflow(a.checked_rem(*b))?
             }
             (Add, Float(a), Float(b)) => Float(a + b),
             (Sub, Float(a), Float(b)) => Float(a - b),
