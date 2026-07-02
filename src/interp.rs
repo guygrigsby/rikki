@@ -149,7 +149,34 @@ impl<'p> Interp<'p> {
         })
     }
 
+    /// Mongoose call-stack depth cap: past this the call faults instead of
+    /// overflowing the Rust stack (each mongoose frame is several Rust
+    /// frames deep through eval, so the cap must leave real-stack headroom
+    /// even in debug builds).
+    const RECURSION_LIMIT: usize = 1000;
+
+    fn depth_check(&self) -> Result<(), Fault> {
+        if self.call_stack.len() < Self::RECURSION_LIMIT {
+            return Ok(());
+        }
+        // truncated stack: outermost few, a marker, innermost few
+        let n = self.call_stack.len();
+        let stack = if n > 30 {
+            let mut s: Vec<String> = self.call_stack[..5].to_vec();
+            s.push(format!("... ({} frames elided)", n - 30));
+            s.extend(self.call_stack[n - 25..].iter().cloned());
+            s
+        } else {
+            self.call_stack.clone()
+        };
+        Err(Fault {
+            msg: format!("recursion limit exceeded ({})", Self::RECURSION_LIMIT),
+            stack,
+        })
+    }
+
     fn call_named(&mut self, name: &str, args: Vec<Value>) -> Result<Value, Fault> {
+        self.depth_check()?;
         let Some(f) = self.fns.get(name).copied() else {
             return Err(self.fault(format!("unknown function: {name}")));
         };
@@ -170,6 +197,7 @@ impl<'p> Interp<'p> {
     }
 
     fn call_closure(&mut self, c: &ClosureData, args: Vec<Value>) -> Result<Value, Fault> {
+        self.depth_check()?;
         if args.len() != c.params.len() {
             return Err(self.fault("function value: wrong argument count"));
         }
@@ -177,7 +205,7 @@ impl<'p> Interp<'p> {
         for (p, a) in c.params.iter().zip(args) {
             scope.insert(p.name.clone(), a);
         }
-        self.enter("fn".into(), vec![c.captured.clone(), scope], vec![]);
+        self.enter("fn".into(), vec![c.captured.clone(), scope], c.ret.clone());
         // expression body: a lone expression statement yields its value
         let flow = if c.body.len() == 1 {
             if let StmtKind::Expr(e) = &c.body[0].kind {
@@ -315,8 +343,13 @@ impl<'p> Interp<'p> {
                     Ev::V(v) => v,
                     Ev::Ret(r) => return Ok(Flow::Return(r)),
                     Ev::PyErr(e) => {
-                        // py chain destructured: zero-fill values, bind error
-                        let mut parts = vec![Value::NoneV; names.len().saturating_sub(1)];
+                        // py chain destructured: zero-fill values, bind error;
+                        // the value slots of a py chain are always py-typed,
+                        // so their zero is a Python None handle
+                        let mut parts = vec![
+                            Value::Py(crate::bridge::py_none());
+                            names.len().saturating_sub(1)
+                        ];
                         parts.push(Value::Err(e));
                         for (n, p) in names.iter().zip(parts) {
                             if n != "_" {
@@ -600,7 +633,10 @@ impl<'p> Interp<'p> {
                 let v = val!(self.eval(rhs));
                 match (op, v) {
                     (UnOp::Not, Value::Bool(b)) => ok(Value::Bool(!b)),
-                    (UnOp::Neg, Value::Int(i)) => ok(Value::Int(-i)),
+                    (UnOp::Neg, Value::Int(i)) => match i.checked_neg() {
+                        Some(n) => ok(Value::Int(n)),
+                        None => Err(self.fault("integer overflow")),
+                    },
                     (UnOp::Neg, Value::Float(f)) => ok(Value::Float(-f)),
                     _ => Err(self.fault("bad operand")),
                 }
@@ -708,7 +744,7 @@ impl<'p> Interp<'p> {
                 let hi = val!(self.eval(hi));
                 self.slice(r, lo, hi).map(Ev::V)
             }
-            K::Lambda { params, body, .. } => {
+            K::Lambda { params, ret, body } => {
                 // capture by value: flatten visible scopes, inner shadows outer
                 let mut captured = HashMap::new();
                 for s in &self.scopes {
@@ -718,6 +754,7 @@ impl<'p> Interp<'p> {
                 }
                 ok(Value::Fn(FnRef::Closure(Rc::new(ClosureData {
                     params: params.clone(),
+                    ret: ret.clone().unwrap_or_default(),
                     body: body.clone(),
                     captured,
                 }))))
@@ -780,21 +817,25 @@ impl<'p> Interp<'p> {
     fn binop(&mut self, op: BinOp, l: Value, r: Value) -> Result<Value, Fault> {
         use BinOp::*;
         use Value::*;
+        let overflow = |x: Option<i64>| match x {
+            Some(n) => Ok(Int(n)),
+            None => Result::Err(self.fault("integer overflow")),
+        };
         let v = match (op, &l, &r) {
-            (Add, Int(a), Int(b)) => Int(a + b),
-            (Sub, Int(a), Int(b)) => Int(a - b),
-            (Mul, Int(a), Int(b)) => Int(a * b),
+            (Add, Int(a), Int(b)) => overflow(a.checked_add(*b))?,
+            (Sub, Int(a), Int(b)) => overflow(a.checked_sub(*b))?,
+            (Mul, Int(a), Int(b)) => overflow(a.checked_mul(*b))?,
             (Div, Int(a), Int(b)) => {
                 if *b == 0 {
                     return Result::Err(self.fault("division by zero"));
                 }
-                Int(a / b)
+                overflow(a.checked_div(*b))?
             }
             (Rem, Int(a), Int(b)) => {
                 if *b == 0 {
                     return Result::Err(self.fault("division by zero"));
                 }
-                Int(a % b)
+                overflow(a.checked_rem(*b))?
             }
             (Add, Float(a), Float(b)) => Float(a + b),
             (Sub, Float(a), Float(b)) => Float(a - b),
@@ -928,7 +969,7 @@ impl<'p> Interp<'p> {
                 "bool" => Value::Bool(false),
                 "str" => Value::Str(String::new()),
                 "error" => Value::NoneV,
-                "py" => Value::NoneV, // placeholder until the bridge lands
+                "py" => Value::Py(crate::bridge::py_none()),
                 s => match self.structs.get(s) {
                     Some(fields) => {
                         let mut out = IndexMap::new();

@@ -68,6 +68,13 @@ fn errval(py: Python<'_>, e: PyErr) -> ErrVal {
     ErrVal { msg: format!("{pytype}: {}", e.value(py)), cause: None, pytype, traceback }
 }
 
+/// The zero value of type `py`: a handle to Python's None. Operations on it
+/// raise proper Python errors instead of faulting the interpreter.
+pub fn py_none() -> PyHandle {
+    init(None);
+    Python::attach(|py| PyHandle::new(py.None()))
+}
+
 pub fn import(name: &str) -> Result<PyHandle, ErrVal> {
     init(None);
     Python::attach(|py| match py.import(name) {

@@ -1,0 +1,16 @@
+struct Point {
+    x: int
+    y: int
+}
+
+fn main() {
+    xs := [[1, 2], [3]]
+    print(xs.contains([1, 2]))
+    print(xs.contains([1]))
+    ps := [Point{x: 1, y: 2}, Point{x: 3, y: 4}]
+    print(ps.contains(Point{x: 3, y: 4}))
+    print(ps.contains(Point{x: 3, y: 5}))
+    ms := [map[str, int]{"a": 1}, map[str, int]{"b": 2}]
+    print(ms.contains(map[str, int]{"b": 2}))
+    print(ms.contains(map[str, int]{"b": 3}))
+}

@@ -1,7 +1,7 @@
 use indexmap::IndexMap;
 use std::rc::Rc;
 
-use crate::ast::{Block, Param};
+use crate::ast::{Block, Param, TypeExpr};
 
 /// Runtime value. `Clone` is a deep copy (value semantics); the future `py`
 /// variant is the documented reference exception.
@@ -75,6 +75,8 @@ pub enum FnRef {
 #[derive(Debug)]
 pub struct ClosureData {
     pub params: Vec<Param>,
+    /// Declared return types, for zero-filling `check` early returns.
+    pub ret: Vec<TypeExpr>,
     pub body: Block,
     /// Captured-by-value snapshot of the visible scope, flattened.
     pub captured: std::collections::HashMap<String, Value>,
@@ -85,7 +87,9 @@ impl Value {
         matches!(self, Value::NoneV)
     }
 
-    /// Equality per the language: comparable scalars, none, options.
+    /// Equality per the language: scalars, none, options, and structural
+    /// (recursive) equality for lists, structs, maps, and tuples. Py, fn,
+    /// ctx, and module values never compare equal.
     pub fn eq_value(&self, other: &Value) -> bool {
         match (self, other) {
             (Value::Int(a), Value::Int(b)) => a == b,
@@ -94,6 +98,26 @@ impl Value {
             (Value::Str(a), Value::Str(b)) => a == b,
             (Value::NoneV, Value::NoneV) => true,
             (Value::NoneV, _) | (_, Value::NoneV) => false,
+            (Value::List(a), Value::List(b)) | (Value::Tuple(a), Value::Tuple(b)) => {
+                a.len() == b.len()
+                    && a.iter().zip(b).all(|(x, y)| x.eq_value(y))
+            }
+            (
+                Value::Struct { name: an, fields: af },
+                Value::Struct { name: bn, fields: bf },
+            ) => {
+                an == bn
+                    && af.len() == bf.len()
+                    && af.iter().all(|(k, v)| {
+                        bf.get(k).is_some_and(|w| v.eq_value(w))
+                    })
+            }
+            (Value::Map(a), Value::Map(b)) => {
+                a.len() == b.len()
+                    && a.iter().all(|(k, v)| {
+                        b.get(k).is_some_and(|w| v.eq_value(w))
+                    })
+            }
             _ => false,
         }
     }

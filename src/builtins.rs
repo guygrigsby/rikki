@@ -351,8 +351,10 @@ impl Interp<'_> {
                 }
             };
             let w: usize = width.parse().unwrap_or(0);
-            if rendered.len() < w {
-                out.push_str(&" ".repeat(w - rendered.len()));
+            // pad by character count, not byte length
+            let n = rendered.chars().count();
+            if n < w {
+                out.push_str(&" ".repeat(w - n));
             }
             out.push_str(&rendered);
         }
