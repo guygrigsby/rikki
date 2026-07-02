@@ -273,6 +273,15 @@ impl Checker {
         self.scopes.last_mut().unwrap().refits.insert(name.to_string(), ty);
     }
 
+    /// Drops every refinement of `name`, in all scopes. Assignments can
+    /// happen in a nested scope, so the whole stack must forget; losing a
+    /// refinement is always sound.
+    fn invalidate(&mut self, name: &str) {
+        for s in &mut self.scopes {
+            s.refits.remove(name);
+        }
+    }
+
     // ---------- program ----------
 
     fn check_program(&mut self, prog: &Program) {
@@ -360,7 +369,7 @@ impl Checker {
                     ExprKind::Ident(n) => match self.declared(n) {
                         Some(t) => {
                             // assignment invalidates any narrowing
-                            self.refine(n, t.clone());
+                            self.invalidate(n);
                             t
                         }
                         None => {
@@ -514,6 +523,7 @@ impl Checker {
                         }
                     }
                 }
+                self.invalidate_loop_assigns(body);
                 self.loop_depth += 1;
                 self.check_block_inline(body);
                 self.loop_depth -= 1;
@@ -524,6 +534,7 @@ impl Checker {
                 if let Some(c) = cond {
                     self.check_cond(c);
                 }
+                self.invalidate_loop_assigns(body);
                 self.loop_depth += 1;
                 let _ = self.check_block(body);
                 self.loop_depth -= 1;
@@ -536,6 +547,16 @@ impl Checker {
                 }
                 true
             }
+        }
+    }
+
+    /// A loop body runs more than once: an assignment anywhere in it kills
+    /// narrowing for the whole body, not just the statements after it.
+    fn invalidate_loop_assigns(&mut self, body: &Block) {
+        let mut names = vec![];
+        assigned_idents(body, &mut names);
+        for n in &names {
+            self.invalidate(n);
         }
     }
 
@@ -1353,6 +1374,32 @@ fn rets_ty(rets: Vec<Type>) -> ExprTy {
         0 => ExprTy::One(Type::Unit),
         1 => ExprTy::One(rets.into_iter().next().unwrap()),
         _ => ExprTy::Multi(rets),
+    }
+}
+
+/// Every variable name assigned anywhere in the block, nested blocks included.
+fn assigned_idents(b: &Block, out: &mut Vec<String>) {
+    for s in b {
+        match &s.kind {
+            StmtKind::Assign { target, .. } => {
+                if let ExprKind::Ident(n) = &target.kind {
+                    out.push(n.clone());
+                }
+            }
+            StmtKind::If { then, elifs, els, .. } => {
+                assigned_idents(then, out);
+                for (_, b) in elifs {
+                    assigned_idents(b, out);
+                }
+                if let Some(b) = els {
+                    assigned_idents(b, out);
+                }
+            }
+            StmtKind::ForIn { body, .. } | StmtKind::ForCond { body, .. } => {
+                assigned_idents(body, out);
+            }
+            _ => {}
+        }
     }
 }
 
