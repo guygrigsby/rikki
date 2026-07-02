@@ -5,13 +5,13 @@ use crate::token::{Spanned, Token};
 
 pub fn parse(src: &str) -> Result<Program, Diag> {
     let toks = lex(src)?;
-    Parser { toks, pos: 0 }.program()
+    Parser { toks, pos: 0, depth: 0 }.program()
 }
 
 /// Parse a single expression (repl).
 pub fn parse_expr(src: &str) -> Result<Expr, Diag> {
     let toks = lex(src)?;
-    let mut p = Parser { toks, pos: 0 };
+    let mut p = Parser { toks, pos: 0, depth: 0 };
     let e = p.expr(true)?;
     p.skip_nl();
     if !p.at_end() {
@@ -23,9 +23,17 @@ pub fn parse_expr(src: &str) -> Result<Expr, Diag> {
 struct Parser {
     toks: Vec<Spanned<Token>>,
     pos: usize,
+    /// Current recursive-descent nesting depth (expressions, blocks, types).
+    depth: usize,
 }
 
 const CONV_NAMES: &[&str] = &["int", "float", "str", "bool"];
+
+/// Cap on recursive-descent nesting. Chosen empirically: at this limit a
+/// debug build peaks under 4 MiB of stack (worst case, paren nesting), well
+/// inside the 8 MiB main-thread stack the CLI parses on. Note plain 2 MiB
+/// worker threads fit only ~160; parse on the main thread or a bigger stack.
+const MAX_DEPTH: usize = 256;
 
 impl Parser {
     fn at_end(&self) -> bool {
@@ -50,6 +58,19 @@ impl Parser {
     fn err_here(&self, msg: &str) -> Diag {
         let (line, col) = self.here();
         Diag { msg: msg.into(), line, col }
+    }
+
+    fn enter(&mut self) -> Result<(), Diag> {
+        self.depth += 1;
+        if self.depth > MAX_DEPTH {
+            Err(self.err_here("expression too deeply nested"))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn exit(&mut self) {
+        self.depth -= 1;
     }
 
     fn bump(&mut self) -> Option<Token> {
@@ -194,6 +215,13 @@ impl Parser {
     }
 
     fn type_expr(&mut self) -> Result<TypeExpr, Diag> {
+        self.enter()?;
+        let r = self.type_expr_inner();
+        self.exit();
+        r
+    }
+
+    fn type_expr_inner(&mut self) -> Result<TypeExpr, Diag> {
         let base = match self.peek().cloned() {
             Some(Token::Py) => {
                 self.bump();
@@ -270,6 +298,13 @@ impl Parser {
     // ---------- statements ----------
 
     fn block(&mut self) -> Result<Block, Diag> {
+        self.enter()?;
+        let r = self.block_inner();
+        self.exit();
+        r
+    }
+
+    fn block_inner(&mut self) -> Result<Block, Diag> {
         self.expect(&Token::LBrace, "{")?;
         self.skip_nl();
         let mut out = vec![];
@@ -405,7 +440,10 @@ impl Parser {
 
     /// `struct_ok` is false in if/for headers where `Name{` would swallow the block.
     fn expr(&mut self, struct_ok: bool) -> Result<Expr, Diag> {
-        self.binary(0, struct_ok)
+        self.enter()?;
+        let r = self.binary(0, struct_ok);
+        self.exit();
+        r
     }
 
     fn binary(&mut self, min_prec: u8, struct_ok: bool) -> Result<Expr, Diag> {
@@ -444,6 +482,13 @@ impl Parser {
     }
 
     fn unary(&mut self, struct_ok: bool) -> Result<Expr, Diag> {
+        self.enter()?;
+        let r = self.unary_inner(struct_ok);
+        self.exit();
+        r
+    }
+
+    fn unary_inner(&mut self, struct_ok: bool) -> Result<Expr, Diag> {
         let (line, col) = self.here();
         match self.peek() {
             Some(Token::Check) => {
@@ -839,5 +884,51 @@ mod tests {
     fn index_and_slice() {
         assert!(matches!(expr("xs[1]").kind, E::Index { .. }));
         assert!(matches!(expr("xs[1:3]").kind, E::Slice { .. }));
+    }
+
+    /// Run `f` on a thread with the 8 MiB stack the CLI's main thread gets;
+    /// libtest worker threads only get 2 MiB, which MAX_DEPTH does not target.
+    fn on_main_sized_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
+        std::thread::Builder::new()
+            .stack_size(8 << 20)
+            .spawn(f)
+            .unwrap()
+            .join()
+            .unwrap()
+    }
+
+    #[test]
+    fn deep_paren_nesting_errors_not_crashes() {
+        let err = on_main_sized_stack(|| {
+            let n = 50_000;
+            let src = format!("fn main() {{\n    x := {}1{}\n}}\n", "(".repeat(n), ")".repeat(n));
+            parse(&src).unwrap_err()
+        });
+        assert!(err.msg.contains("too deeply nested"), "{}", err.msg);
+    }
+
+    #[test]
+    fn reasonable_paren_nesting_parses() {
+        let n = 64;
+        let src = format!("{}1{}", "(".repeat(n), ")".repeat(n));
+        assert!(parse_expr(&src).is_ok());
+    }
+
+    #[test]
+    fn deep_block_nesting_errors_not_crashes() {
+        let err = on_main_sized_stack(|| {
+            let n = 5_000;
+            let mut src = String::from("fn main() {\n");
+            for _ in 0..n {
+                src.push_str("if true {\n");
+            }
+            src.push_str("x := 1\n");
+            for _ in 0..n {
+                src.push_str("}\n");
+            }
+            src.push_str("}\n");
+            parse(&src).unwrap_err()
+        });
+        assert!(err.msg.contains("too deeply nested"), "{}", err.msg);
     }
 }
