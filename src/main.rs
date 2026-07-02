@@ -11,10 +11,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Typecheck and run a program
-    Run { file: PathBuf },
-    /// Typecheck only
-    Check { file: PathBuf },
+    /// Typecheck and run a program (defaults to the project's src/main.mg)
+    Run { file: Option<PathBuf> },
+    /// Typecheck only (defaults to the project's src/main.mg)
+    Check { file: Option<PathBuf> },
     /// Scaffold a new project
     New { name: String },
     /// Interactive session
@@ -35,13 +35,25 @@ enum PyCmd {
 fn main() -> ExitCode {
     let cli = Cli::parse();
     match cli.cmd {
-        Cmd::Run { file } => report(mongoose::run_source(&file)),
-        Cmd::Check { file } => report(mongoose::check_source(&file)),
+        Cmd::Run { file } => with_entry(file, |f| report(mongoose::run_source(f))),
+        Cmd::Check { file } => with_entry(file, |f| report(mongoose::check_source(f))),
         Cmd::Py { cmd: PyCmd::Add { package } } => py_add(&package),
         Cmd::New { name } => new_project(&name),
         Cmd::Repl => {
             mongoose::repl::run();
             ExitCode::SUCCESS
+        }
+    }
+}
+
+/// Resolve the file to operate on: the explicit arg if given, otherwise the
+/// enclosing project's src/main.mg; then run `f` on it.
+fn with_entry(file: Option<PathBuf>, f: impl FnOnce(&std::path::Path) -> ExitCode) -> ExitCode {
+    match mongoose::resolve_entry(file) {
+        Ok(path) => f(&path),
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::FAILURE
         }
     }
 }

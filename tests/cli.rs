@@ -50,6 +50,52 @@ fn check_reports_and_fails() {
 }
 
 #[test]
+fn bare_run_resolves_project_main() {
+    let d = tempdir("bare-run");
+    let out = Command::new(bin())
+        .args(["new", "hello"])
+        .current_dir(&d)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    // from the project root
+    let out = Command::new(bin())
+        .args(["run"])
+        .current_dir(d.join("hello"))
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "hello, mongoose\n");
+    // and from a subdirectory, walking up to mongoose.toml
+    let out = Command::new(bin())
+        .args(["run"])
+        .current_dir(d.join("hello/src"))
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "hello, mongoose\n");
+    // bare check works the same way and runs nothing
+    let out = Command::new(bin())
+        .args(["check"])
+        .current_dir(d.join("hello"))
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "");
+}
+
+#[test]
+fn bare_run_outside_project_errors() {
+    let d = tempdir("bare-none");
+    for cmd in ["run", "check"] {
+        let out = Command::new(bin()).args([cmd]).current_dir(&d).output().unwrap();
+        assert!(!out.status.success(), "bare {cmd} should fail outside a project");
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(err.contains("no file given and no mongoose project found"), "{cmd}: {err}");
+    }
+}
+
+#[test]
 fn repl_evaluates() {
     let mut child = Command::new(bin())
         .arg("repl")
