@@ -1,4 +1,6 @@
 pub mod diag;
+pub mod lexer;
+pub mod token;
 
 use std::path::Path;
 
