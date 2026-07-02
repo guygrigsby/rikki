@@ -20,7 +20,7 @@ fn main() {
     print(s.trim())
     print(s.trim().split(","))
     print(s.contains("World"))
-    print(s.replace("World", "Mongoose").trim())
+    print(s.replace("World", "Rikki").trim())
     print("aBc".upper())
     print("aBc".lower())
     print("hello".starts_with("he"))
