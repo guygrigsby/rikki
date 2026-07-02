@@ -29,7 +29,20 @@ pub struct RunResult {
 }
 
 pub fn run_source(path: &Path) -> RunResult {
-    compile_and(path, true)
+    // the interpreter's recursion cap (1000 mongoose frames, several Rust
+    // frames each) needs more stack than a default thread has in debug
+    // builds; run on a dedicated big-stack thread.
+    let path = path.to_path_buf();
+    std::thread::Builder::new()
+        .name("mongoose-interp".into())
+        .stack_size(64 * 1024 * 1024)
+        .spawn(move || compile_and(&path, true))
+        .expect("spawn interpreter thread")
+        .join()
+        .unwrap_or_else(|_| RunResult {
+            stdout: String::new(),
+            exit: ExitKind::RuntimeError("internal interpreter panic".into()),
+        })
 }
 
 /// Typecheck only; never provisions an environment or runs code.

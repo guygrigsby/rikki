@@ -149,7 +149,34 @@ impl<'p> Interp<'p> {
         })
     }
 
+    /// Mongoose call-stack depth cap: past this the call faults instead of
+    /// overflowing the Rust stack (each mongoose frame is several Rust
+    /// frames deep through eval, so the cap must leave real-stack headroom
+    /// even in debug builds).
+    const RECURSION_LIMIT: usize = 1000;
+
+    fn depth_check(&self) -> Result<(), Fault> {
+        if self.call_stack.len() < Self::RECURSION_LIMIT {
+            return Ok(());
+        }
+        // truncated stack: outermost few, a marker, innermost few
+        let n = self.call_stack.len();
+        let stack = if n > 30 {
+            let mut s: Vec<String> = self.call_stack[..5].to_vec();
+            s.push(format!("... ({} frames elided)", n - 30));
+            s.extend(self.call_stack[n - 25..].iter().cloned());
+            s
+        } else {
+            self.call_stack.clone()
+        };
+        Err(Fault {
+            msg: format!("recursion limit exceeded ({})", Self::RECURSION_LIMIT),
+            stack,
+        })
+    }
+
     fn call_named(&mut self, name: &str, args: Vec<Value>) -> Result<Value, Fault> {
+        self.depth_check()?;
         let Some(f) = self.fns.get(name).copied() else {
             return Err(self.fault(format!("unknown function: {name}")));
         };
@@ -170,6 +197,7 @@ impl<'p> Interp<'p> {
     }
 
     fn call_closure(&mut self, c: &ClosureData, args: Vec<Value>) -> Result<Value, Fault> {
+        self.depth_check()?;
         if args.len() != c.params.len() {
             return Err(self.fault("function value: wrong argument count"));
         }
