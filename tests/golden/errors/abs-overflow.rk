@@ -1,0 +1,6 @@
+import "math"
+
+fn main() {
+    n := -9223372036854775807 - 1
+    print(math.abs(n))
+}

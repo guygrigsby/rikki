@@ -236,7 +236,11 @@ impl Interp<'_> {
                 let mut is_float = false;
                 for it in &items {
                     match it {
-                        Value::Int(i) => ints += i,
+                        Value::Int(i) => {
+                            ints = ints
+                                .checked_add(*i)
+                                .ok_or_else(|| self.fault("integer overflow"))?;
+                        }
                         Value::Float(f) => {
                             is_float = true;
                             floats += f;

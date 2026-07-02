@@ -4,7 +4,9 @@ use crate::value::Value;
 pub fn call(interp: &mut Interp, name: &str, args: Vec<Value>) -> Result<Value, Fault> {
     use Value::{Float, Int};
     let v = match (name, args.as_slice()) {
-        ("abs", [Int(i)]) => Int(i.abs()),
+        ("abs", [Int(i)]) => Int(i
+            .checked_abs()
+            .ok_or_else(|| interp.fault("integer overflow"))?),
         ("abs", [Float(f)]) => Float(f.abs()),
         ("min", [Int(a), Int(b)]) => Int(*a.min(b)),
         ("min", [Float(a), Float(b)]) => Float(a.min(*b)),

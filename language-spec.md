@@ -1434,7 +1434,8 @@ The complete set of fault conditions reachable from checked programs:
 
 - integer division or remainder by zero;
 - integer overflow in `+`, `-`, `*`, `/`, `%`, or unary `-` on `int`
-  (including `-9223372036854775808 / -1`);
+  (including `-9223372036854775808 / -1`), in `sum` over `[]int`, or in
+  `math.abs` of `-9223372036854775808`;
 - list or string index out of bounds;
 - slice bounds out of range (`lo < 0`, `hi < lo`, or `hi > len`);
 - assignment into a string index (`s[i] = v`);
@@ -1700,7 +1701,7 @@ List methods (receiver `[]T`):
 | `map` | `(f fn(T) U) []U` | apply `f` to each element |
 | `filter` | `(f fn(T) bool) []T` | keep elements where `f` is true |
 | `each` | `(f fn(T))` | call `f` on each element; no result |
-| `sum` | `() T` | `T` must be `int` or `float`; sum of elements. Summing an empty `[]int` yields 0; the result of summing an empty `[]float` is unspecified in v1 (the reference implementation yields a value that faults on later float use) |
+| `sum` | `() T` | `T` must be `int` or `float`; sum of elements. Integer overflow faults (chapter 12). Summing an empty `[]int` yields 0; the result of summing an empty `[]float` is unspecified in v1 (the reference implementation yields a value that faults on later float use) |
 | `sorted` | `() []T` | `T` must be `int`, `float`, or `str`; ascending copy |
 | `sorted_by` | `(before fn(T, T) bool) []T` | sorted copy per comparator; stable |
 | `contains` | `(v T) bool` | structural membership (section 11.2) |
@@ -1741,7 +1742,7 @@ Error fields are specified in section 5.7.
 
 | Member | Signature | Behavior |
 |--------|-----------|----------|
-| `abs` | `(int) int` or `(float) float` | absolute value (polymorphic over the two numeric types) |
+| `abs` | `(int) int` or `(float) float` | absolute value (polymorphic over the two numeric types); `abs(-9223372036854775808)` faults with integer overflow |
 | `min`, `max` | `(int, int) int` or `(float, float) float` | both arguments the same numeric type |
 | `sqrt` | `(float) float` | square root |
 | `cos`, `sin`, `tan` | `(float) float` | trigonometry, radians |
