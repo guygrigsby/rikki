@@ -98,7 +98,7 @@ impl Interp<'_> {
         let ok = |v| Ok(Value::Tuple(vec![v, Value::NoneV]));
         let fail = |this: &Self, t: &TypeExpr, msg: String| {
             Ok(Value::Tuple(vec![
-                this.zero(t),
+                this.zero(t)?,
                 Value::Err(ErrVal {
                     msg,
                     ..Default::default()
@@ -122,7 +122,7 @@ impl Interp<'_> {
             };
             return Ok(match crate::bridge::extract(&spec, h) {
                 Ok(val) => Value::Tuple(vec![val, Value::NoneV]),
-                Err(e) => Value::Tuple(vec![self.zero(target), Value::Err(e)]),
+                Err(e) => Value::Tuple(vec![self.zero(target)?, Value::Err(e)]),
             });
         }
         // infallible pairs return the value bare; str sources keep the

@@ -143,6 +143,19 @@ impl<'p> Interp<'p> {
         self.fault(format!("unhandled python error: {}", e.msg))
     }
 
+    /// Bind a name in the innermost scope. Every path into user code seeds
+    /// the stack (enter, repl_init); an empty stack here is an interpreter
+    /// bug, reported as a fault rather than a panic.
+    fn bind(&mut self, name: String, v: Value) -> Result<(), Fault> {
+        match self.scopes.last_mut() {
+            Some(s) => {
+                s.insert(name, v);
+                Ok(())
+            }
+            None => Err(self.fault("internal: no scope to bind into")),
+        }
+    }
+
     /// Run fn main. Returns main's error value if it returned one.
     pub fn run_main(&mut self) -> Result<Option<ErrVal>, Fault> {
         for m in self.py_imports.clone() {
@@ -368,7 +381,7 @@ impl<'p> Interp<'p> {
                         parts.push(Value::Err(e));
                         for (n, p) in names.iter().zip(parts) {
                             if n != "_" {
-                                self.scopes.last_mut().unwrap().insert(n.clone(), p);
+                                self.bind(n.clone(), p)?;
                             }
                         }
                         return Ok(Flow::Normal);
@@ -392,7 +405,7 @@ impl<'p> Interp<'p> {
                 }
                 for (n, p) in names.iter().zip(parts) {
                     if n != "_" {
-                        self.scopes.last_mut().unwrap().insert(n.clone(), p);
+                        self.bind(n.clone(), p)?;
                     }
                 }
                 Ok(Flow::Normal)
@@ -465,7 +478,7 @@ impl<'p> Interp<'p> {
                     self.scopes.push(HashMap::new());
                     for (n, v) in names.iter().zip(round) {
                         if n != "_" {
-                            self.scopes.last_mut().unwrap().insert(n.clone(), v);
+                            self.bind(n.clone(), v)?;
                         }
                     }
                     let flow = self.exec_block_no_scope(body);
@@ -838,7 +851,7 @@ impl<'p> Interp<'p> {
                             .iter()
                             .take(rets.len().saturating_sub(1))
                             .map(|t| self.zero(t))
-                            .collect();
+                            .collect::<Result<_, _>>()?;
                         out.push(Value::Err(e));
                         let rv = if out.len() == 1 {
                             out.into_iter().next().unwrap()
@@ -859,7 +872,7 @@ impl<'p> Interp<'p> {
                     Ev::V(v) => v,
                     r @ Ev::Ret(_) => return Ok(r),
                     Ev::PyErr(e) => {
-                        return Ok(Ev::V(Value::Tuple(vec![self.zero(target), Value::Err(e)])))
+                        return Ok(Ev::V(Value::Tuple(vec![self.zero(target)?, Value::Err(e)])))
                     }
                 };
                 self.convert(target, v).map(Ev::V)
@@ -1018,8 +1031,10 @@ impl<'p> Interp<'p> {
     }
 
     /// Zero value for a return type, used when `check` fails out early.
-    pub(crate) fn zero(&self, t: &TypeExpr) -> Value {
-        match t {
+    /// An unknown named type here means the checker let something through;
+    /// that is an interpreter bug reported loudly, never a silent Unit.
+    pub(crate) fn zero(&self, t: &TypeExpr) -> Result<Value, Fault> {
+        Ok(match t {
             TypeExpr::Named(n) => match n.as_str() {
                 "int" => Value::Int(0),
                 "float" => Value::Float(0.0),
@@ -1031,21 +1046,25 @@ impl<'p> Interp<'p> {
                     Some(fields) => {
                         let mut out = IndexMap::new();
                         for (f, ft) in fields {
-                            out.insert(f.clone(), self.zero(ft));
+                            out.insert(f.clone(), self.zero(ft)?);
                         }
                         Value::Struct {
                             name: s.to_string(),
                             fields: out,
                         }
                     }
-                    None => Value::Unit,
+                    None => {
+                        return Err(
+                            self.fault(format!("internal: no zero value for unknown type {s}"))
+                        )
+                    }
                 },
             },
             TypeExpr::List(_) => Value::List(vec![]),
             TypeExpr::Map(..) => Value::Map(IndexMap::new()),
             TypeExpr::Opt(_) => Value::NoneV,
             TypeExpr::Fn(..) => Value::Fn(FnRef::Zero),
-        }
+        })
     }
 }
 

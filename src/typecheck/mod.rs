@@ -284,26 +284,28 @@ impl Checker {
         None
     }
 
+    /// The innermost scope. Every checking path pushes one first; self-heal
+    /// with a fresh scope rather than panic if a future path forgets.
+    fn top(&mut self) -> &mut Scope {
+        if self.scopes.is_empty() {
+            self.scopes.push(Scope::default());
+        }
+        let i = self.scopes.len() - 1;
+        &mut self.scopes[i]
+    }
+
     fn declare(&mut self, name: &str, ty: Type, line: u32, col: u32) {
         if name == "_" {
             return;
         }
-        if self.scopes.last().unwrap().vars.contains_key(name) {
+        if self.top().vars.contains_key(name) {
             self.diag(line, col, format!("already declared: {name}"));
         }
-        self.scopes
-            .last_mut()
-            .unwrap()
-            .vars
-            .insert(name.to_string(), ty);
+        self.top().vars.insert(name.to_string(), ty);
     }
 
     fn refine(&mut self, name: &str, ty: Type) {
-        self.scopes
-            .last_mut()
-            .unwrap()
-            .refits
-            .insert(name.to_string(), ty);
+        self.top().refits.insert(name.to_string(), ty);
     }
 
     /// Drops every refinement of `name`, in all scopes. Assignments can
