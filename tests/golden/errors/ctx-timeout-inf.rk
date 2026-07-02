@@ -1,0 +1,6 @@
+import "ctx"
+
+fn main() {
+    c := ctx.timeout(ctx.background(), 1.0 / 0.0)
+    print(c.done())
+}

@@ -71,7 +71,12 @@ pub fn call(interp: &mut Interp, name: &str, args: Vec<Value>) -> Result<Value, 
         })),
         ("timeout", [p, Value::Float(secs)]) => {
             let (deadline, interrupted) = parent(interp, Some(p))?;
-            let new = Instant::now() + Duration::from_secs_f64(secs.max(0.0));
+            // from_secs_f64 panics on inf or seconds past u64::MAX, and
+            // Instant addition can overflow; both are expressible from
+            // user source (1.0 / 0.0 is inf), so both fault.
+            let out_of_range = || interp.fault("ctx.timeout: seconds out of range");
+            let d = Duration::try_from_secs_f64(secs.max(0.0)).map_err(|_| out_of_range())?;
+            let new = Instant::now().checked_add(d).ok_or_else(out_of_range)?;
             let deadline = Some(deadline.map_or(new, |d| d.min(new)));
             Value::Ctx(Arc::new(CtxInner {
                 deadline,
