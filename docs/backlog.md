@@ -13,11 +13,11 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
 
 ## v2
 
-- Matrix operations. First-class operators or a core type for numeric work,
-  so the common tensor/linear-algebra shapes do not have to round-trip
-  through `py` calls one method at a time. Design open: native type vs
-  operator sugar over the bridge (a `py` tensor already supports `+ * @`
-  on the Python side; `@` matmul operator is not in the grammar yet).
+- Matrix operations: operator sugar over `py` (decided, no native matrix
+  type). Add `@` matmul to the grammar (lexer token, binary op at mul
+  precedence, py-only in the checker) and dispatch it through the bridge's
+  binop path like `+ - * /` already do. Result: `y = w @ x + b` on live
+  tensors; objects and speed stay PyTorch's.
 - Concurrency. Bridge module is the single place GIL work lands.
 - Bytecode VM if pure-mongoose loops ever hurt (recorded in ADR 0001).
 - Copy-on-write values if profiling demands (ADR 0004).
