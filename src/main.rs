@@ -15,6 +15,10 @@ enum Cmd {
     Run { file: PathBuf },
     /// Typecheck only
     Check { file: PathBuf },
+    /// Scaffold a new project
+    New { name: String },
+    /// Interactive session
+    Repl,
     /// Python dependency management
     Py {
         #[command(subcommand)]
@@ -34,6 +38,45 @@ fn main() -> ExitCode {
         Cmd::Run { file } => report(mongoose::run_source(&file)),
         Cmd::Check { file } => report(mongoose::check_source(&file)),
         Cmd::Py { cmd: PyCmd::Add { package } } => py_add(&package),
+        Cmd::New { name } => new_project(&name),
+        Cmd::Repl => {
+            mongoose::repl::run();
+            ExitCode::SUCCESS
+        }
+    }
+}
+
+fn new_project(name: &str) -> ExitCode {
+    let root = std::path::Path::new(name);
+    if root.exists() {
+        eprintln!("error: {name} already exists");
+        return ExitCode::FAILURE;
+    }
+    let make = || -> std::io::Result<()> {
+        std::fs::create_dir_all(root.join("src"))?;
+        std::fs::write(
+            root.join("mongoose.toml"),
+            format!(
+                "[project]\nname = {name:?}\npython = {:?}\n",
+                mongoose::project::DEFAULT_PYTHON
+            ),
+        )?;
+        std::fs::write(
+            root.join("src").join("main.mg"),
+            "fn main() {\n    print(\"hello, mongoose\")\n}\n",
+        )?;
+        std::fs::write(root.join(".gitignore"), ".mongoose/\n")?;
+        Ok(())
+    };
+    match make() {
+        Ok(()) => {
+            println!("created {name}/ (mongoose.toml, src/main.mg)");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::FAILURE
+        }
     }
 }
 

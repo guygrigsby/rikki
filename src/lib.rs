@@ -7,6 +7,7 @@ pub mod lexer;
 pub mod loader;
 pub mod parser;
 pub mod project;
+pub mod repl;
 pub mod stdlib;
 pub mod token;
 pub mod typecheck;

@@ -231,6 +231,64 @@ impl<'p> Interp<'p> {
         self.call_stack.pop();
     }
 
+    // ---------- repl support ----------
+
+    /// One persistent top-level scope for repl bindings.
+    pub fn repl_init(&mut self) {
+        if self.scopes.is_empty() {
+            self.scopes.push(HashMap::new());
+        }
+    }
+
+    /// Register a declaration parsed at the repl. Py imports resolve now.
+    pub fn repl_decl(&mut self, d: &'p Decl) -> Result<(), Fault> {
+        match d {
+            Decl::Fn(f) => {
+                self.fns.insert(f.name.clone(), f);
+            }
+            Decl::Struct { name, fields, .. } => {
+                self.structs.insert(name.clone(), fields.clone());
+            }
+            Decl::Import { path, py, .. } => {
+                if *py {
+                    match crate::bridge::import(path) {
+                        Ok(h) => {
+                            self.globals.insert(path.clone(), Value::Py(h));
+                        }
+                        Err(e) => {
+                            return Err(self.fault(format!("import py {path:?}: {}", e.msg)))
+                        }
+                    }
+                } else {
+                    self.globals.insert(path.clone(), Value::Module(path.clone()));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Execute one repl statement; expression statements yield their value.
+    pub fn repl_stmt(&mut self, s: &'p Stmt) -> Result<Option<Value>, Fault> {
+        self.repl_init();
+        if let StmtKind::Expr(e) = &s.kind {
+            return match self.eval(e)? {
+                Ev::V(v) | Ev::Ret(v) => Ok(match v {
+                    Value::Unit => None,
+                    v => Some(v),
+                }),
+                Ev::PyErr(e) => Ok(Some(Value::Err(e))),
+            };
+        }
+        match self.exec_stmt(s)? {
+            Flow::Return(v) if !matches!(v, Value::Unit) => Ok(Some(v)),
+            _ => Ok(None),
+        }
+    }
+
+    pub fn take_out(&mut self) -> String {
+        std::mem::take(&mut self.out)
+    }
+
     // ---------- statements ----------
 
     fn exec_block(&mut self, b: &Block) -> Result<Flow, Fault> {
