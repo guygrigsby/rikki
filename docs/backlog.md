@@ -18,6 +18,13 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
   precedence, py-only in the checker) and dispatch it through the bridge's
   binop path like `+ - * /` already do. Result: `y = w @ x + b` on live
   tensors; objects and speed stay PyTorch's.
+- Branded py types (decided in principle). `pytype tensor = "torch.Tensor"`
+  declares a nominal wrapper over a py reference, verified by isinstance
+  through the bridge. Fallible assertion py to brand (`tensor(y)` returns
+  `(tensor, error?)`), implicit widening brand to py, compile error on brand
+  mismatch in signatures. Brands erode through dynamic ops (`w @ x` is py
+  again); re-assert at function boundaries. Zero copies, reference semantics
+  like py. Composes with the `@` sugar above.
 - Concurrency. Bridge module is the single place GIL work lands.
 - Bytecode VM if pure-mongoose loops ever hurt (recorded in ADR 0001).
 - Copy-on-write values if profiling demands (ADR 0004).
