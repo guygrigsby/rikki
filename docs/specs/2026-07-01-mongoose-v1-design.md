@@ -69,7 +69,7 @@ No exceptions, no panic exposed to user code. A mongoose program cannot crash th
 Functions are values. Anonymous fns close over surrounding variables by value, consistent with value semantics. Param types are inferred when the call site pins them, so chaining stays readable:
 
 ```
-big := nums.map(double).filter(fn(x) { x > 2 }).sum()
+big := nums.map(double).filter(fn(x) { x > 2 }).sum()    // 18
 ```
 
 Chaining comes from built-in methods on `list` and `map` (`map`, `filter`, `each`, `sum`, `sorted`, ...). No pipe operator.

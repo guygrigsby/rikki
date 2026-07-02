@@ -1,0 +1,28 @@
+fn main() {
+    xs := [3, 1, 2]
+    print(xs.sorted())
+    print(xs.sorted_by(fn(a, b) { a > b }))
+    print(xs.append(9))
+    print(xs)
+    print(xs.contains(3))
+    ["b", "a"].each(fn(s: str) {
+        print(s)
+    })
+    print(["x", "y"].join("-"))
+    print([1.5, 2.5].sum())
+    m := map[str, int]{"b": 2, "a": 1}
+    print(m.keys())
+    print(m.values())
+    print(m.has("a"))
+    print(m.delete("a"))
+    print(m)
+    s := " Hello,World "
+    print(s.trim())
+    print(s.trim().split(","))
+    print(s.contains("World"))
+    print(s.replace("World", "Mongoose").trim())
+    print("aBc".upper())
+    print("aBc".lower())
+    print("hello".starts_with("he"))
+    print("hello".ends_with("lo"))
+}
