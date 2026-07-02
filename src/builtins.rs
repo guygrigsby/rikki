@@ -431,11 +431,18 @@ impl Interp<'_> {
                 out.push('%');
                 continue;
             }
-            // width and precision
+            // width and precision, capped: an absurd pad is an allocation
+            // abort the panic net cannot catch, so it faults instead.
+            const MAX_PAD: usize = 1 << 20;
             let mut width = String::new();
             while chars.peek().is_some_and(|d| d.is_ascii_digit()) {
                 width.push(chars.next().unwrap());
             }
+            let w: usize = match width.parse() {
+                _ if width.is_empty() => 0,
+                Ok(w) if w <= MAX_PAD => w,
+                _ => return Err(self.fault("printf: width too large")),
+            };
             let mut prec: Option<usize> = None;
             if chars.peek() == Some(&'.') {
                 chars.next();
@@ -443,7 +450,11 @@ impl Interp<'_> {
                 while chars.peek().is_some_and(|d| d.is_ascii_digit()) {
                     p.push(chars.next().unwrap());
                 }
-                prec = p.parse().ok();
+                prec = match p.parse() {
+                    _ if p.is_empty() => None,
+                    Ok(n) if n <= MAX_PAD => Some(n),
+                    _ => return Err(self.fault("printf: precision too large")),
+                };
             }
             let verb = chars
                 .next()
@@ -466,7 +477,6 @@ impl Interp<'_> {
                     return Err(self.fault(format!("printf: bad argument for %{v}")));
                 }
             };
-            let w: usize = width.parse().unwrap_or(0);
             // pad by character count, not byte length
             let n = rendered.chars().count();
             if n < w {
