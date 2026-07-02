@@ -1249,8 +1249,9 @@ impl Checker {
         }
         let ct = self.expr_pyish(callee, None);
         if ct == Type::Py {
+            // a py chain argument is absorbed into this chain
             for a in args {
-                self.expr_one(a, None);
+                self.expr_pyish(a, None);
             }
             return ExprTy::PyChain;
         }
@@ -1339,9 +1340,13 @@ impl Checker {
         }
         if !matches!(result, ExprTy::PyChain) {
             self.diag(line, col, "named arguments are only for python calls");
+            for (_, v) in kwargs {
+                self.expr_one(v, None);
+            }
+            return;
         }
         for (_, v) in kwargs {
-            self.expr_one(v, None);
+            self.expr_pyish(v, None);
         }
     }
 
@@ -1383,8 +1388,9 @@ impl Checker {
         }
         let rt = self.expr_pyish(recv, None);
         if rt == Type::Py {
+            // a py chain argument is absorbed into this chain
             for a in args {
-                self.expr_one(a, None);
+                self.expr_pyish(a, None);
             }
             return ExprTy::PyChain;
         }

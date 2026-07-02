@@ -8,9 +8,6 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
   indexing, conversions.
 - `rikki fmt`. One true style, needs a lossless formatter.
 - Repl typechecking (currently unchecked).
-- Nested py chains as call arguments require an inner `check`
-  (`f(check g())`); pervasive in torch code. Consider letting an enclosing py
-  call absorb argument-chain fallibility.
 - Infallible conversions typed as fallible: `float(int)` can never fail but
   returns `(float, error?)`, forcing `_, _ :=` boilerplate in numeric code.
   Type conversions by source: infallible pairs return one value.

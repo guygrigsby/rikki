@@ -992,8 +992,10 @@ An expression is a py chain when it applies an operation to a value of type
 `py`: attribute selection, call, method call, indexing, or a binary operator
 with a `py` operand. Within further postfix or binary operations the chain
 continues to act as `py`, so consecutive Python steps need no per-step
-handling; at its point of consumption the chain as a whole has type
-`(py, error?)`:
+handling. A chain appearing as an argument (positional or named) to an
+enclosing py call is absorbed into that chain: `f(g(x))` on py values is one
+fallible unit, not `f(check g(x))`. At its point of consumption the chain as
+a whole has type `(py, error?)`:
 
 ```
 import py "json"
@@ -1006,8 +1008,9 @@ fn main() (error?) {
 }
 ```
 
-The first Python exception raised anywhere in the chain aborts the rest of
-the chain and becomes the chain's error value (section 13.4).
+The first Python exception raised anywhere in the chain, including inside an
+absorbed argument, aborts the rest of the chain and becomes the chain's
+error value (section 13.4).
 
 A py chain must be consumed by one of: a two-name destructure
 (`v, err := chain`), a `check`, or a conversion (which absorbs the

@@ -1,0 +1,17 @@
+import py "json"
+
+fn main() (error?) {
+    // an inner py chain as argument is absorbed by the enclosing py call:
+    // one check at the top, not f(check g())
+    s := check str(json.dumps(json.loads("[1, 2]")))
+    print(s)
+    // nested chain in a kwargs call
+    t := check str(json.dumps(json.loads("{\"b\": 2, \"a\": 1}"), sort_keys: true))
+    print(t)
+    // a failure anywhere in the nest surfaces at the single consumption
+    _, err := json.dumps(json.loads("not json"))
+    if err != none {
+        print("caught")
+    }
+    return none
+}
