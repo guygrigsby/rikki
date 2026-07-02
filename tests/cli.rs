@@ -180,6 +180,29 @@ fn tk_bare_is_repl() {
 }
 
 #[test]
+fn repl_survives_a_failing_line() {
+    // the first line faults (integer overflow); the repl must report it and
+    // keep evaluating, never die. Pins the repl's panic net too: before the
+    // net existed, a panicking builtin killed the whole process here.
+    let mut child = Command::new(bin())
+        .arg("repl")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"[9223372036854775807, 1].sum()\n1 + 2\n")
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("3\n"), "{stdout}");
+}
+
+#[test]
 fn tk_shebang_script_executes_directly() {
     use std::os::unix::fs::PermissionsExt;
     let d = tempdir("tk-shebang");

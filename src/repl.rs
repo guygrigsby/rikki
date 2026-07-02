@@ -29,7 +29,15 @@ pub fn run() {
         if line.is_empty() {
             continue;
         }
-        eval_line(&mut interp, line);
+        // panics are implementation bugs, but they must not kill the repl.
+        // AssertUnwindSafe: a panic mid-eval may leave interp state torn
+        // (e.g. a pushed scope); acceptable for an unchecked repl session.
+        let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            eval_line(&mut interp, line)
+        }));
+        if caught.is_err() {
+            eprintln!("error: internal interpreter panic");
+        }
         print!("{}", interp.take_out());
         out.flush().ok();
     }

@@ -35,20 +35,29 @@ pub fn run_source(path: &Path) -> RunResult {
 /// Run with program arguments; `stream` writes stdout live (interactive CLI)
 /// instead of buffering into RunResult.
 pub fn run_with(path: &Path, args: Vec<String>, stream: bool) -> RunResult {
-    // the interpreter's recursion cap (1000 rikki frames, several Rust
-    // frames each) needs more stack than a default thread has in debug
-    // builds; run on a dedicated big-stack thread.
     let path = path.to_path_buf();
-    std::thread::Builder::new()
+    on_interp_thread(move || compile_and(&path, true, args, stream))
+}
+
+/// Run under the panic net: a dedicated big-stack thread (the interpreter's
+/// recursion cap needs more than a default debug-build stack) whose panic
+/// becomes a RuntimeError instead of aborting the process.
+fn on_interp_thread(f: impl FnOnce() -> RunResult + Send + 'static) -> RunResult {
+    let internal_panic = || RunResult {
+        stdout: String::new(),
+        exit: ExitKind::RuntimeError("internal interpreter panic".into()),
+    };
+    let Ok(handle) = std::thread::Builder::new()
         .name("rikki-interp".into())
         .stack_size(64 * 1024 * 1024)
-        .spawn(move || compile_and(&path, true, args, stream))
-        .expect("spawn interpreter thread")
-        .join()
-        .unwrap_or_else(|_| RunResult {
+        .spawn(f)
+    else {
+        return RunResult {
             stdout: String::new(),
-            exit: ExitKind::RuntimeError("internal interpreter panic".into()),
-        })
+            exit: ExitKind::RuntimeError("cannot spawn interpreter thread".into()),
+        };
+    };
+    handle.join().unwrap_or_else(|_| internal_panic())
 }
 
 /// Print a run's output and map its exit kind to a process exit code.
@@ -88,7 +97,8 @@ pub fn resolve_entry(file: Option<std::path::PathBuf>) -> Result<std::path::Path
 
 /// Typecheck only; never provisions an environment or runs code.
 pub fn check_source(path: &Path) -> RunResult {
-    compile_and(path, false, vec![], false)
+    let path = path.to_path_buf();
+    on_interp_thread(move || compile_and(&path, false, vec![], false))
 }
 
 fn compile_err(msg: impl Into<String>) -> RunResult {
