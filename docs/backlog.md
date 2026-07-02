@@ -8,8 +8,6 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
   indexing, conversions.
 - `rikki fmt`. One true style, needs a lossless formatter.
 - Repl typechecking (currently unchecked).
-- Dotted struct literals: `util.Pair{a: 1}` does not parse; module structs
-  need factory functions today. Parser feature plus spec revert if wanted.
 
 ## v2
 

@@ -1,0 +1,8 @@
+import "util.rk"
+
+fn main() {
+    p := util.Pair{a: 1, b: 2}
+    print(p.a)
+    print(util.sum(p))
+    print([util.Pair{a: 3, b: 4}][0].b)
+}

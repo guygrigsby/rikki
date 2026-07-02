@@ -853,28 +853,47 @@ impl Parser {
                     return Ok(mk(ExprKind::MapLit { key, val, entries }));
                 }
                 self.bump();
-                if struct_ok && self.peek() == Some(&Token::LBrace) {
-                    self.bump();
-                    self.skip_nl();
-                    let mut fields = vec![];
-                    while self.peek() != Some(&Token::RBrace) {
-                        let f = self.ident("field name")?;
-                        self.expect(&Token::Colon, ":")?;
-                        let v = self.expr(true)?;
-                        fields.push((f, v));
-                        self.skip_nl();
-                        if !self.eat(&Token::Comma) {
-                            break;
-                        }
-                        self.skip_nl();
-                    }
-                    self.expect(&Token::RBrace, "}")?;
-                    return Ok(mk(ExprKind::StructLit { name, fields }));
+                // `Name{` or `mod.Name{` opens a struct literal
+                let dotted = self.peek() == Some(&Token::Dot)
+                    && matches!(self.peek2(), Some(Token::Ident(_)))
+                    && matches!(
+                        self.toks.get(self.pos + 2).map(|s| &s.node),
+                        Some(Token::LBrace)
+                    );
+                if struct_ok && (self.peek() == Some(&Token::LBrace) || dotted) {
+                    return Ok(mk(self.struct_lit(name, dotted)?));
                 }
                 Ok(mk(ExprKind::Ident(name)))
             }
             _ => Err(self.err_here("expected expression")),
         }
+    }
+
+    /// Body of a struct literal; kept out of the recursive descent frame
+    /// (unary_inner) so deep expression nesting stays within stack budget.
+    #[inline(never)]
+    fn struct_lit(&mut self, mut name: String, dotted: bool) -> Result<ExprKind, Diag> {
+        if dotted {
+            self.bump();
+            let member = self.ident("struct name")?;
+            name = format!("{name}.{member}");
+        }
+        self.bump();
+        self.skip_nl();
+        let mut fields = vec![];
+        while self.peek() != Some(&Token::RBrace) {
+            let f = self.ident("field name")?;
+            self.expect(&Token::Colon, ":")?;
+            let v = self.expr(true)?;
+            fields.push((f, v));
+            self.skip_nl();
+            if !self.eat(&Token::Comma) {
+                break;
+            }
+            self.skip_nl();
+        }
+        self.expect(&Token::RBrace, "}")?;
+        Ok(ExprKind::StructLit { name, fields })
     }
 }
 

@@ -638,13 +638,15 @@ m := map[str]int{"a": 1, "b": 2}
 #### 7.2.3 Struct literals
 
 ```
-StructLit  = identifier "{" { newline } [ FieldValueList [ "," ] ] { newline } "}" .
+StructLit  = identifier [ "." identifier ] "{" { newline } [ FieldValueList [ "," ] ] { newline } "}" .
 FieldValueList = FieldValue { "," { newline } FieldValue } .
 FieldValue = identifier ":" Expression .
 ```
 
-A struct literal must name a declared struct type and must supply every
-declared field exactly once, each value assignable to the field's type.
+A struct literal must name a declared struct type, either bare (`Pair{...}`)
+or dotted for a struct of an imported file module (`util.Pair{...}`,
+chapter 16), and must supply every declared field exactly once, each value
+assignable to the field's type.
 Missing fields and unknown fields are compile-time errors. Field order in the
 literal is free; the constructed value's field order follows the declaration.
 
@@ -1848,10 +1850,9 @@ fn main() {
 }
 ```
 
-Struct types of a file module are named in type positions with the dotted
-form `util.Pair` (section 5.9). A struct literal names a single identifier
-(section 7.2.3); there is no dotted literal form `util.Pair{...}`, so values
-of a module's struct types are constructed by functions of that module.
+Struct types of a file module are named with the dotted form `util.Pair`,
+in type positions (section 5.9) and in struct literals
+(`util.Pair{a: 1}`, section 7.2.3).
 
 ### 16.2 Semantics
 
