@@ -81,6 +81,9 @@ fn std_member(module: &str, name: &str) -> Option<Member> {
         ("ctx", "interrupt") => Member::Fn(vec![ctx()], vec![ctx()]),
         ("http", "get") => Member::Fn(vec![ctx(), Str], vec![resp(), err_opt()]),
         ("http", "post") => Member::Fn(vec![ctx(), Str, Str], vec![resp(), err_opt()]),
+        ("http", "request") => {
+            Member::Fn(vec![ctx(), Struct("Request".into())], vec![resp(), err_opt()])
+        }
         _ => return None,
     };
     Some(m)
@@ -101,6 +104,18 @@ impl Checker {
                 } else if STD_MODULES.contains(&path.as_str()) {
                     self.imports.insert(path.clone(), ImportKind::Std(path.clone()));
                     if path == "http" {
+                        self.structs.insert(
+                            "Request".into(),
+                            vec![
+                                ("method".into(), Type::Str),
+                                ("url".into(), Type::Str),
+                                ("body".into(), Type::Str),
+                                (
+                                    "headers".into(),
+                                    Type::Map(Box::new(Type::Str), Box::new(Type::Str)),
+                                ),
+                            ],
+                        );
                         self.structs.insert(
                             "Response".into(),
                             vec![

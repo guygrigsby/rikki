@@ -1,4 +1,5 @@
 pub mod ctx;
+pub mod http;
 pub mod file;
 pub mod math;
 
@@ -15,6 +16,7 @@ pub fn call(
         "math" => math::call(interp, name, args),
         "file" => file::call(interp, name, args),
         "ctx" => ctx::call(interp, name, args),
+        "http" => http::call(interp, name, args),
         _ => Err(interp.fault(format!("{module}.{name} is not implemented yet"))),
     }
 }

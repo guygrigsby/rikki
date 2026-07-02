@@ -9,6 +9,7 @@ description = "Interpreted language with Go's discipline and CPython's ecosystem
 clap = { version = "4", features = ["derive"] }
 ctrlc = "3.5.2"
 indexmap = "2"
+ureq = "3.3.0"
 
 [[bin]]
 name = "mongoose"
