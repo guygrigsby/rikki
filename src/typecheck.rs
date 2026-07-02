@@ -89,6 +89,10 @@ fn std_member(module: &str, name: &str) -> Option<Member> {
             vec![ctx(), Struct("Request".into())],
             vec![resp(), err_opt()],
         ),
+        ("http", "stream") => Member::Fn(
+            vec![ctx(), Str, Str, Fn(vec![Str], vec![])],
+            vec![resp(), err_opt()],
+        ),
         _ => return None,
     };
     Some(m)

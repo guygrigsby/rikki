@@ -250,3 +250,41 @@ fn program_args_and_input() {
     assert!(stdout.contains("got: hello\n"), "{stdout}");
     assert!(stdout.contains("got: world\n"), "{stdout}");
 }
+
+#[test]
+fn http_stream_lines_reach_handler() {
+    use std::io::Read;
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    std::thread::spawn(move || {
+        if let Ok((mut sock, _)) = listener.accept() {
+            let mut buf = [0u8; 4096];
+            let _ = sock.read(&mut buf);
+            let body = "data: one\n\ndata: two\n\ndata: [DONE]\n";
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = std::io::Write::write_all(&mut sock, resp.as_bytes());
+        }
+    });
+    let d = tempdir("stream");
+    let f = d.join("s.mg");
+    std::fs::write(
+        &f,
+        "import \"http\"\nimport \"ctx\"\n\nfn main() (error?) {\n    resp := check http.stream(ctx.background(), args()[0], \"{}\", fn(line str) {\n        if line.starts_with(\"data: \") {\n            print(\"got \" + line[6:len(line)])\n        }\n    })\n    print(resp.status)\n    return none\n}\n",
+    )
+    .unwrap();
+    let out = Command::new(tk())
+        .arg(&f)
+        .arg(format!("http://{addr}/"))
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("got one\n"), "{stdout}");
+    assert!(stdout.contains("got two\n"), "{stdout}");
+    assert!(stdout.contains("got [DONE]\n"), "{stdout}");
+    assert!(stdout.contains("200\n"), "{stdout}");
+}

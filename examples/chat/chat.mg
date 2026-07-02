@@ -19,9 +19,28 @@ fn normalize(url str) str {
     return u
 }
 
+// One SSE line -> the token it carries, or "" for anything else
+// (role-only chunks, [DONE], keepalives, non-data lines).
+fn delta(line str) str {
+    if !line.starts_with("data: ") {
+        return ""
+    }
+    obj, e := json.loads(line[6:len(line)])
+    if e != none {
+        return ""
+    }
+    d, de := str(obj["choices"][0]["delta"]["content"])
+    if de != none {
+        return ""
+    }
+    return d
+}
+
 fn ask(c Ctx, base str, model str, history str) (str, error?) {
-    body := sprintf("{\"model\": %q, \"messages\": %s}", model, history)
-    resp, err := http.post(c, base + "/v1/chat/completions", body)
+    body := sprintf("{\"model\": %q, \"stream\": true, \"messages\": %s}", model, history)
+    resp, err := http.stream(c, base + "/v1/chat/completions", body, fn(line str) {
+        printf("%s", delta(line))
+    })
     if err != none {
         return "", error.wrap(err, "request failed")
     }
@@ -32,14 +51,13 @@ fn ask(c Ctx, base str, model str, history str) (str, error?) {
         }
         return "", error.new(sprintf("server returned %d: %s", resp.status, detail))
     }
-    obj, jerr := json.loads(resp.body)
-    if jerr != none {
-        return "", error.wrap(jerr, "server sent invalid json")
+    // the handler displayed the tokens live; rebuild the full reply from the
+    // accumulated body for the conversation history
+    reply := ""
+    for line in resp.body.split("\n") {
+        reply = reply + delta(line)
     }
-    reply, rerr := str(obj["choices"][0]["message"]["content"])
-    if rerr != none {
-        return "", error.wrap(rerr, "unexpected response shape")
-    }
+    print("")
     return reply, none
 }
 
@@ -91,7 +109,6 @@ fn main() (error?) {
             continue
         }
         fails = 0
-        print(reply)
         history = history.append(map[str, str]{"role": "assistant", "content": reply})
     }
     print("bye")

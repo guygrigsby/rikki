@@ -1724,6 +1724,7 @@ struct Response { status int, body str, headers map[str, str] }
 | `http.get` | `(c Ctx, url str) (Response, error?)` |
 | `http.post` | `(c Ctx, url str, body str) (Response, error?)` |
 | `http.request` | `(c Ctx, req Request) (Response, error?)` |
+| `http.stream` | `(c Ctx, url str, body str, f fn(str)) (Response, error?)` |
 
 Behavior:
 
@@ -1738,6 +1739,12 @@ Behavior:
   with the zero `Response` in the value slot.
 - Redirects are followed automatically.
 - For `http.request`, an empty body on a GET request sends no body.
+- `http.stream` POSTs `body` and invokes `f` once per response line as lines
+  arrive, before the response completes (server-sent events are consumed this
+  way). The returned `Response.body` holds the accumulated lines, newline
+  terminated, so the program can reparse the full payload afterward; closures
+  capture by value and therefore cannot accumulate it themselves. Its default
+  deadline, absent a ctx deadline, is 300 seconds rather than 30.
 - Response header names are as received; values that are not valid strings
   read as `""`.
 

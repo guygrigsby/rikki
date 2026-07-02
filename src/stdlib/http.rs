@@ -35,6 +35,9 @@ struct Req {
 }
 
 pub fn call(interp: &mut Interp, name: &str, args: Vec<Value>) -> Result<Value, Fault> {
+    if name == "stream" {
+        return stream(interp, args);
+    }
     let bad = |i: &Interp| Err(i.fault(format!("http.{name}: bad arguments")));
     let (ctx, req) = match (name, args.as_slice()) {
         ("get", [Value::Ctx(c), Value::Str(url)]) => (
@@ -143,6 +146,61 @@ pub fn call(interp: &mut Interp, name: &str, args: Vec<Value>) -> Result<Value, 
             name: "Response".into(),
             fields,
         },
+        Value::NoneV,
+    ]))
+}
+
+/// POST with a per-line callback: the handler sees each response line as it
+/// arrives (SSE-friendly); the returned Response carries the accumulated
+/// body, since capture-by-value closures cannot collect state themselves.
+fn stream(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Fault> {
+    let [Value::Ctx(ctx), Value::Str(url), Value::Str(body), handler @ Value::Fn(_)] =
+        args.as_slice()
+    else {
+        return Err(interp.fault("http.stream: bad arguments"));
+    };
+    if let Some(e) = ctx.err() {
+        return Ok(fail(format!("http.stream {url}: {}", e.msg)));
+    }
+    let timeout = ctx.remaining().unwrap_or(Duration::from_secs(300));
+    let agent: Agent = Agent::config_builder()
+        .timeout_global(Some(timeout))
+        .http_status_as_error(false)
+        .user_agent("mongoose/0.1")
+        .build()
+        .into();
+    let mut resp = match agent.post(url).send(body.as_str()) {
+        Ok(r) => r,
+        Err(e) => return Ok(fail(format!("http.stream {url}: {e}"))),
+    };
+    let status = resp.status().as_u16() as i64;
+    let mut headers = IndexMap::new();
+    for (k, v) in resp.headers() {
+        headers.insert(
+            MapKey::Str(k.as_str().to_string()),
+            Value::Str(v.to_str().unwrap_or("").to_string()),
+        );
+    }
+    let mut full = String::new();
+    {
+        use std::io::BufRead;
+        let reader = std::io::BufReader::new(resp.body_mut().as_reader());
+        for line in reader.lines() {
+            let line = match line {
+                Ok(l) => l,
+                Err(e) => return Ok(fail(format!("http.stream {url}: {e}"))),
+            };
+            interp.call_value(handler, vec![Value::Str(line.clone())])?;
+            full.push_str(&line);
+            full.push('\n');
+        }
+    }
+    let mut fields = IndexMap::new();
+    fields.insert("status".to_string(), Value::Int(status));
+    fields.insert("body".to_string(), Value::Str(full));
+    fields.insert("headers".to_string(), Value::Map(headers));
+    Ok(Value::Tuple(vec![
+        Value::Struct { name: "Response".into(), fields },
         Value::NoneV,
     ]))
 }
