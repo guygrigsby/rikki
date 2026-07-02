@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::ast::*;
 use crate::diag::Diag;
@@ -157,6 +157,27 @@ impl Checker {
                 self.structs.insert(name.clone(), fs);
             }
         }
+        // a by-value field cycle can never be constructed; an option, list,
+        // or map along the way breaks the cycle
+        for d in &prog.decls {
+            if let Decl::Struct { name, line, col, .. } = d {
+                let cycle = self.structs.get(name).into_iter().flatten().find_map(|(f, t)| {
+                    match t {
+                        Type::Struct(s) if s == name || self.reaches_by_value(s, name) => {
+                            Some((f.clone(), s.clone()))
+                        }
+                        _ => None,
+                    }
+                });
+                if let Some((field, fty)) = cycle {
+                    self.diag(
+                        *line,
+                        *col,
+                        format!("recursive struct {name}: use an option ({field}: {fty}?)"),
+                    );
+                }
+            }
+        }
         for d in &prog.decls {
             if let Decl::Fn(f) = d {
                 let mut params = vec![];
@@ -192,6 +213,27 @@ impl Checker {
                 }
             }
         }
+    }
+
+    /// Whether struct `from` holds a `target` by value, transitively through
+    /// struct-typed fields only.
+    fn reaches_by_value(&self, from: &str, target: &str) -> bool {
+        let mut seen = HashSet::new();
+        let mut stack = vec![from.to_string()];
+        while let Some(s) = stack.pop() {
+            if !seen.insert(s.clone()) {
+                continue;
+            }
+            for (_, t) in self.structs.get(&s).into_iter().flatten() {
+                if let Type::Struct(next) = t {
+                    if next == target {
+                        return true;
+                    }
+                    stack.push(next.clone());
+                }
+            }
+        }
+        false
     }
 
     fn resolve(&mut self, t: &TypeExpr, line: u32, col: u32) -> Type {
@@ -271,6 +313,15 @@ impl Checker {
 
     fn refine(&mut self, name: &str, ty: Type) {
         self.scopes.last_mut().unwrap().refits.insert(name.to_string(), ty);
+    }
+
+    /// Drops every refinement of `name`, in all scopes. Assignments can
+    /// happen in a nested scope, so the whole stack must forget; losing a
+    /// refinement is always sound.
+    fn invalidate(&mut self, name: &str) {
+        for s in &mut self.scopes {
+            s.refits.remove(name);
+        }
     }
 
     // ---------- program ----------
@@ -360,7 +411,7 @@ impl Checker {
                     ExprKind::Ident(n) => match self.declared(n) {
                         Some(t) => {
                             // assignment invalidates any narrowing
-                            self.refine(n, t.clone());
+                            self.invalidate(n);
                             t
                         }
                         None => {
@@ -514,6 +565,7 @@ impl Checker {
                         }
                     }
                 }
+                self.invalidate_loop_assigns(body);
                 self.loop_depth += 1;
                 self.check_block_inline(body);
                 self.loop_depth -= 1;
@@ -524,6 +576,7 @@ impl Checker {
                 if let Some(c) = cond {
                     self.check_cond(c);
                 }
+                self.invalidate_loop_assigns(body);
                 self.loop_depth += 1;
                 let _ = self.check_block(body);
                 self.loop_depth -= 1;
@@ -536,6 +589,16 @@ impl Checker {
                 }
                 true
             }
+        }
+    }
+
+    /// A loop body runs more than once: an assignment anywhere in it kills
+    /// narrowing for the whole body, not just the statements after it.
+    fn invalidate_loop_assigns(&mut self, body: &Block) {
+        let mut names = vec![];
+        assigned_idents(body, &mut names);
+        for n in &names {
+            self.invalidate(n);
         }
     }
 
@@ -647,6 +710,13 @@ impl Checker {
                     Some(Type::List(t)) => Some((**t).clone()),
                     _ => None,
                 };
+                if items.is_empty() && expected_elem.is_none() {
+                    self.diag(
+                        line,
+                        col,
+                        "cannot infer element type of []; use it where a list type is expected",
+                    );
+                }
                 let mut elem = expected_elem.unwrap_or(Type::Unknown);
                 for it in items {
                     let t = self.expr_one(it, Some(&elem));
@@ -674,6 +744,12 @@ impl Checker {
                 one(Type::Map(Box::new(kt), Box::new(vt)))
             }
             K::StructLit { name, fields } => {
+                // Ctx is opaque: the checker knows it as a struct, the
+                // interpreter does not; only the ctx module makes one
+                if name == "Ctx" && matches!(self.imports.get("ctx"), Some(ImportKind::Std(_))) {
+                    self.diag(line, col, "Ctx cannot be constructed; use ctx.background()");
+                    return one(Type::Struct(name.clone()));
+                }
                 let Some(def) = self.structs.get(name).cloned() else {
                     self.diag(line, col, format!("unknown struct: {name}"));
                     return one(Type::Unknown);
@@ -854,10 +930,16 @@ impl Checker {
                     (Type::Float, Type::Float, _) => Type::Float,
                     (Type::Str, Type::Str, BinOp::Add) => Type::Str,
                     (Type::List(a), Type::List(b), BinOp::Add) => {
-                        if !a.accepts(b) && !b.accepts(a) {
+                        // the wider element type wins, so an option side
+                        // cannot hide behind a plain one
+                        if a.accepts(b) {
+                            lt.clone()
+                        } else if b.accepts(a) {
+                            rt.clone()
+                        } else {
                             self.diag(line, col, format!("cannot concat list[{a}] and list[{b}]"));
+                            lt.clone()
                         }
-                        lt.clone()
                     }
                     _ => {
                         self.diag(line, col, format!("cannot apply operator to {lt} and {rt}"));
@@ -926,8 +1008,12 @@ impl Checker {
                             if !matches!(t, Type::Str | Type::Unknown) {
                                 self.diag(line, col, format!("{name} format must be str, got {t}"));
                             }
-                            for a in &args[1..] {
-                                self.expr_one(a, None);
+                            let arg_tys: Vec<Type> =
+                                args[1..].iter().map(|a| self.expr_one(a, None)).collect();
+                            // a literal format is verified here; anything
+                            // else stays a runtime check
+                            if let ExprKind::Str(fmt) = &args[0].kind {
+                                self.check_format(name, fmt, &arg_tys, line, col);
                             }
                         }
                         return ExprTy::One(if name == "sprintf" { Type::Str } else { Type::Unit });
@@ -978,6 +1064,70 @@ impl Checker {
             t => {
                 self.diag(line, col, format!("not callable: {t}"));
                 ExprTy::One(Type::Unknown)
+            }
+        }
+    }
+
+    /// Statically checks a literal printf/sprintf format against the
+    /// argument types. Mirrors the runtime verb table.
+    fn check_format(&mut self, name: &str, fmt: &str, arg_tys: &[Type], line: u32, col: u32) {
+        let mut verbs = vec![];
+        let mut chars = fmt.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c != '%' {
+                continue;
+            }
+            if chars.peek() == Some(&'%') {
+                chars.next();
+                continue;
+            }
+            // width and precision
+            while chars.peek().is_some_and(|d| d.is_ascii_digit()) {
+                chars.next();
+            }
+            if chars.peek() == Some(&'.') {
+                chars.next();
+                while chars.peek().is_some_and(|d| d.is_ascii_digit()) {
+                    chars.next();
+                }
+            }
+            match chars.next() {
+                Some(v) => verbs.push(v),
+                None => {
+                    self.diag(line, col, format!("{name}: format ends inside a verb"));
+                    return;
+                }
+            }
+        }
+        if verbs.len() != arg_tys.len() {
+            self.diag(
+                line,
+                col,
+                format!(
+                    "{name}: wrong argument count ({} verbs, {} args)",
+                    verbs.len(),
+                    arg_tys.len()
+                ),
+            );
+            return;
+        }
+        for (v, t) in verbs.iter().zip(arg_tys) {
+            if *t == Type::Unknown {
+                continue;
+            }
+            let want = match v {
+                'v' => continue,
+                'd' => Type::Int,
+                's' | 'q' => Type::Str,
+                't' => Type::Bool,
+                'f' => Type::Float,
+                _ => {
+                    self.diag(line, col, format!("{name}: unknown verb %{v}"));
+                    continue;
+                }
+            };
+            if *t != want {
+                self.diag(line, col, format!("{name}: %{v} needs {want}, got {t}"));
             }
         }
     }
@@ -1353,6 +1503,32 @@ fn rets_ty(rets: Vec<Type>) -> ExprTy {
         0 => ExprTy::One(Type::Unit),
         1 => ExprTy::One(rets.into_iter().next().unwrap()),
         _ => ExprTy::Multi(rets),
+    }
+}
+
+/// Every variable name assigned anywhere in the block, nested blocks included.
+fn assigned_idents(b: &Block, out: &mut Vec<String>) {
+    for s in b {
+        match &s.kind {
+            StmtKind::Assign { target, .. } => {
+                if let ExprKind::Ident(n) = &target.kind {
+                    out.push(n.clone());
+                }
+            }
+            StmtKind::If { then, elifs, els, .. } => {
+                assigned_idents(then, out);
+                for (_, b) in elifs {
+                    assigned_idents(b, out);
+                }
+                if let Some(b) = els {
+                    assigned_idents(b, out);
+                }
+            }
+            StmtKind::ForIn { body, .. } | StmtKind::ForCond { body, .. } => {
+                assigned_idents(body, out);
+            }
+            _ => {}
+        }
     }
 }
 

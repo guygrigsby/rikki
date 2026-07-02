@@ -1,0 +1,1 @@
+recursive struct Node: use an option (next: Node?)
