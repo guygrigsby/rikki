@@ -10,11 +10,11 @@ impl Checker {
         match self.check_expr(e, expected) {
             ExprTy::One(t) => t,
             ExprTy::Multi(_) => {
-                self.diag(e.line, e.col, "multiple values in single-value context");
+                self.diag(e.span, "multiple values in single-value context");
                 Type::Unknown
             }
             ExprTy::PyChain => {
-                self.diag(e.line, e.col, "error result must be handled");
+                self.diag(e.span, "error result must be handled");
                 Type::Py
             }
         }
@@ -26,7 +26,7 @@ impl Checker {
         match self.check_expr(e, expected) {
             ExprTy::One(t) => t,
             ExprTy::Multi(_) => {
-                self.diag(e.line, e.col, "multiple values in single-value context");
+                self.diag(e.span, "multiple values in single-value context");
                 Type::Unknown
             }
             ExprTy::PyChain => Type::Py,
@@ -36,7 +36,7 @@ impl Checker {
     pub(super) fn check_expr(&mut self, e: &Expr, expected: Option<&Type>) -> ExprTy {
         use ExprKind as K;
         let one = ExprTy::One;
-        let (line, col) = (e.line, e.col);
+        let span = e.span;
         match &e.kind {
             K::Int(_) => one(Type::Int),
             K::Float(_) => one(Type::Float),
@@ -56,7 +56,7 @@ impl Checker {
                         ImportKind::Std(m) | ImportKind::File(m) => Type::Module(m.clone()),
                     });
                 }
-                self.diag(line, col, format!("undefined: {n}"));
+                self.diag(span, format!("undefined: {n}"));
                 one(Type::Unknown)
             }
             K::List(items) => {
@@ -66,8 +66,7 @@ impl Checker {
                 };
                 if items.is_empty() && expected_elem.is_none() {
                     self.diag(
-                        line,
-                        col,
+                        span,
                         "cannot infer element type of []; use it where a list type is expected",
                     );
                 }
@@ -77,32 +76,32 @@ impl Checker {
                     if elem == Type::Unknown {
                         elem = t;
                     } else if !elem.accepts(&t) {
-                        self.diag(it.line, it.col, format!("expected {elem}, got {t}"));
+                        self.diag(it.span, format!("expected {elem}, got {t}"));
                     }
                 }
                 one(Type::List(Box::new(elem)))
             }
             K::ListLit { elem, items } => {
-                let et = self.resolve(elem, line, col);
+                let et = self.resolve(elem, span);
                 for it in items {
                     let t = self.expr_one(it, Some(&et));
                     if !et.accepts(&t) {
-                        self.diag(it.line, it.col, format!("expected {et}, got {t}"));
+                        self.diag(it.span, format!("expected {et}, got {t}"));
                     }
                 }
                 one(Type::List(Box::new(et)))
             }
             K::MapLit { key, val, entries } => {
-                let kt = self.resolve(key, line, col);
-                let vt = self.resolve(val, line, col);
+                let kt = self.resolve(key, span);
+                let vt = self.resolve(val, span);
                 for (k, v) in entries {
                     let got_k = self.expr_one(k, Some(&kt));
                     if !kt.accepts(&got_k) {
-                        self.diag(k.line, k.col, format!("expected {kt}, got {got_k}"));
+                        self.diag(k.span, format!("expected {kt}, got {got_k}"));
                     }
                     let got_v = self.expr_one(v, Some(&vt));
                     if !vt.accepts(&got_v) {
-                        self.diag(v.line, v.col, format!("expected {vt}, got {got_v}"));
+                        self.diag(v.span, format!("expected {vt}, got {got_v}"));
                     }
                 }
                 one(Type::Map(Box::new(kt), Box::new(vt)))
@@ -111,11 +110,11 @@ impl Checker {
                 // Ctx is opaque: the checker knows it as a struct, the
                 // interpreter does not; only the ctx module makes one
                 if name == "Ctx" && matches!(self.imports.get("ctx"), Some(ImportKind::Std(_))) {
-                    self.diag(line, col, "Ctx cannot be constructed; use ctx.background()");
+                    self.diag(span, "Ctx cannot be constructed; use ctx.background()");
                     return one(Type::Struct(name.clone()));
                 }
                 let Some(def) = self.structs.get(name).cloned() else {
-                    self.diag(line, col, format!("unknown struct: {name}"));
+                    self.diag(span, format!("unknown struct: {name}"));
                     return one(Type::Unknown);
                 };
                 for (fname, fty) in &def {
@@ -123,15 +122,15 @@ impl Checker {
                         Some((_, v)) => {
                             let t = self.expr_one(v, Some(fty));
                             if !fty.accepts(&t) {
-                                self.diag(v.line, v.col, format!("expected {fty}, got {t}"));
+                                self.diag(v.span, format!("expected {fty}, got {t}"));
                             }
                         }
-                        None => self.diag(line, col, format!("missing field: {fname}")),
+                        None => self.diag(span, format!("missing field: {fname}")),
                     }
                 }
                 for (fname, _) in fields {
                     if !def.iter().any(|(n, _)| n == fname) {
-                        self.diag(line, col, format!("unknown field: {fname}"));
+                        self.diag(span, format!("unknown field: {fname}"));
                     }
                 }
                 one(Type::Struct(name.clone()))
@@ -141,20 +140,20 @@ impl Checker {
                 match op {
                     UnOp::Not => {
                         if !matches!(t, Type::Bool | Type::Unknown) {
-                            self.diag(line, col, format!("! needs bool, got {t}"));
+                            self.diag(span, format!("! needs bool, got {t}"));
                         }
                         one(Type::Bool)
                     }
                     UnOp::Neg => {
                         if !matches!(t, Type::Int | Type::Float | Type::Unknown) {
-                            self.diag(line, col, format!("- needs int or float, got {t}"));
+                            self.diag(span, format!("- needs int or float, got {t}"));
                         }
                         one(t)
                     }
                 }
             }
             K::Binary { op, lhs, rhs } => {
-                let t = self.binary(*op, lhs, rhs, line, col);
+                let t = self.binary(*op, lhs, rhs, span);
                 if t == Type::Py {
                     ExprTy::PyChain
                 } else {
@@ -166,8 +165,8 @@ impl Checker {
                 args,
                 kwargs,
             } => {
-                let ty = self.call(callee, args, line, col);
-                self.check_kwargs(kwargs, &ty, line, col);
+                let ty = self.call(callee, args, span);
+                self.check_kwargs(kwargs, &ty, span);
                 ty
             }
             K::Method {
@@ -176,12 +175,12 @@ impl Checker {
                 args,
                 kwargs,
             } => {
-                let ty = self.method(recv, name, args, line, col);
-                self.check_kwargs(kwargs, &ty, line, col);
+                let ty = self.method(recv, name, args, span);
+                self.check_kwargs(kwargs, &ty, span);
                 ty
             }
             K::Field { recv, name } => {
-                let t = self.field(recv, name, line, col);
+                let t = self.field(recv, name, span);
                 if t == Type::Py {
                     ExprTy::PyChain
                 } else {
@@ -198,27 +197,27 @@ impl Checker {
                     Type::List(t) => {
                         let it = self.expr_one(idx, Some(&Type::Int));
                         if !matches!(it, Type::Int | Type::Unknown) {
-                            self.diag(idx.line, idx.col, format!("index must be int, got {it}"));
+                            self.diag(idx.span, format!("index must be int, got {it}"));
                         }
                         one(*t)
                     }
                     Type::Map(k, v) => {
                         let it = self.expr_one(idx, Some(&k));
                         if !k.accepts(&it) {
-                            self.diag(idx.line, idx.col, format!("expected {k}, got {it}"));
+                            self.diag(idx.span, format!("expected {k}, got {it}"));
                         }
                         one(Type::Opt(v))
                     }
                     Type::Str => {
                         let it = self.expr_one(idx, Some(&Type::Int));
                         if !matches!(it, Type::Int | Type::Unknown) {
-                            self.diag(idx.line, idx.col, format!("index must be int, got {it}"));
+                            self.diag(idx.span, format!("index must be int, got {it}"));
                         }
                         one(Type::Str)
                     }
                     Type::Unknown => one(Type::Unknown),
                     t => {
-                        self.diag(line, col, format!("cannot index {t}"));
+                        self.diag(span, format!("cannot index {t}"));
                         one(Type::Unknown)
                     }
                 }
@@ -228,27 +227,21 @@ impl Checker {
                 for b in [lo, hi] {
                     let t = self.expr_one(b, Some(&Type::Int));
                     if !matches!(t, Type::Int | Type::Unknown) {
-                        self.diag(b.line, b.col, format!("slice bound must be int, got {t}"));
+                        self.diag(b.span, format!("slice bound must be int, got {t}"));
                     }
                 }
                 match rt {
                     Type::List(_) | Type::Str | Type::Unknown => one(rt),
                     t => {
-                        self.diag(line, col, format!("cannot slice {t}"));
+                        self.diag(span, format!("cannot slice {t}"));
                         one(Type::Unknown)
                     }
                 }
             }
-            K::Lambda { params, ret, body } => {
-                one(self.lambda(params, ret, body, expected, line, col))
-            }
+            K::Lambda { params, ret, body } => one(self.lambda(params, ret, body, expected, span)),
             K::Check(inner) => {
                 if self.current_ret.last() != Some(&err_opt()) {
-                    self.diag(
-                        line,
-                        col,
-                        "check requires enclosing function to return error?",
-                    );
+                    self.diag(span, "check requires enclosing function to return error?");
                 }
                 let ty = self.check_expr(inner, None);
                 let parts = match ty {
@@ -257,7 +250,7 @@ impl Checker {
                     ExprTy::PyChain => vec![Type::Py, err_opt()],
                 };
                 if parts.last() != Some(&err_opt()) && parts.last() != Some(&Type::Unknown) {
-                    self.diag(line, col, "check needs a fallible expression");
+                    self.diag(span, "check needs a fallible expression");
                     return one(Type::Unknown);
                 }
                 let rest = &parts[..parts.len().saturating_sub(1)];
@@ -268,7 +261,7 @@ impl Checker {
                 }
             }
             K::Conv { target, arg } => {
-                let t = self.resolve(target, line, col);
+                let t = self.resolve(target, span);
                 let at = self.expr_pyish(arg, None);
                 let ok = matches!(
                     (&t, &at),
@@ -280,7 +273,7 @@ impl Checker {
                         | (Type::List(_), Type::List(_))
                 );
                 if !ok {
-                    self.diag(line, col, format!("cannot convert {at} to {t}"));
+                    self.diag(span, format!("cannot convert {at} to {t}"));
                 }
                 // fallible only from py (bridge) or str (parse); numeric,
                 // identity, str-render, and list pass-through are single-valued
@@ -299,12 +292,12 @@ impl Checker {
         }
     }
 
-    fn binary(&mut self, op: BinOp, lhs: &Expr, rhs: &Expr, line: u32, col: u32) -> Type {
+    fn binary(&mut self, op: BinOp, lhs: &Expr, rhs: &Expr, span: Span) -> Type {
         let lt = self.expr_pyish(lhs, None);
         let rt = self.expr_pyish(rhs, Some(&lt));
         if lt == Type::Py || rt == Type::Py {
             if matches!(op, BinOp::And | BinOp::Or) {
-                self.diag(line, col, "&& and || need bool, got py");
+                self.diag(span, "&& and || need bool, got py");
                 return Type::Unknown;
             }
             return Type::Py;
@@ -317,13 +310,13 @@ impl Checker {
                 }
                 if (lt == Type::Int && rt == Type::Float) || (lt == Type::Float && rt == Type::Int)
                 {
-                    self.diag(line, col, "int and float do not mix");
+                    self.diag(span, "int and float do not mix");
                     return Type::Unknown;
                 }
                 match (&lt, &rt, op) {
                     (Type::Int, Type::Int, _) => Type::Int,
                     (Type::Float, Type::Float, BinOp::Rem) => {
-                        self.diag(line, col, "% needs int operands");
+                        self.diag(span, "% needs int operands");
                         Type::Unknown
                     }
                     (Type::Float, Type::Float, _) => Type::Float,
@@ -336,12 +329,12 @@ impl Checker {
                         } else if b.accepts(a) {
                             rt.clone()
                         } else {
-                            self.diag(line, col, format!("cannot concat list[{a}] and list[{b}]"));
+                            self.diag(span, format!("cannot concat list[{a}] and list[{b}]"));
                             lt.clone()
                         }
                     }
                     _ => {
-                        self.diag(line, col, format!("cannot apply operator to {lt} and {rt}"));
+                        self.diag(span, format!("cannot apply operator to {lt} and {rt}"));
                         Type::Unknown
                     }
                 }
@@ -355,7 +348,7 @@ impl Checker {
                             | (Type::Str, Type::Str)
                     );
                     if !ok {
-                        self.diag(line, col, format!("cannot compare {lt} and {rt}"));
+                        self.diag(span, format!("cannot compare {lt} and {rt}"));
                     }
                 }
                 Type::Bool
@@ -366,13 +359,13 @@ impl Checker {
                 if l_none || r_none {
                     let other = if l_none { &rt } else { &lt };
                     if !matches!(other, Type::Opt(_) | Type::Unknown) {
-                        self.diag(line, col, "none only compares to option types");
+                        self.diag(span, "none only compares to option types");
                     }
                 } else if !unknown {
                     let comparable =
                         matches!(&lt, Type::Int | Type::Float | Type::Str | Type::Bool) && lt == rt;
                     if !comparable {
-                        self.diag(line, col, format!("cannot compare {lt} and {rt}"));
+                        self.diag(span, format!("cannot compare {lt} and {rt}"));
                     }
                 }
                 Type::Bool
@@ -380,7 +373,7 @@ impl Checker {
             BinOp::And | BinOp::Or => {
                 for (t, e) in [(&lt, lhs), (&rt, rhs)] {
                     if !matches!(t, Type::Bool | Type::Unknown) {
-                        self.diag(e.line, e.col, format!("&& and || need bool, got {t}"));
+                        self.diag(e.span, format!("&& and || need bool, got {t}"));
                     }
                 }
                 Type::Bool
@@ -388,7 +381,7 @@ impl Checker {
         }
     }
 
-    fn call(&mut self, callee: &Expr, args: &[Expr], line: u32, col: u32) -> ExprTy {
+    fn call(&mut self, callee: &Expr, args: &[Expr], span: Span) -> ExprTy {
         // builtins by name
         if let ExprKind::Ident(name) = &callee.kind {
             if self.lookup(name).is_none() && !self.fns.contains_key(name) {
@@ -401,18 +394,18 @@ impl Checker {
                     }
                     "printf" | "sprintf" => {
                         if args.is_empty() {
-                            self.diag(line, col, format!("{name} needs a format string"));
+                            self.diag(span, format!("{name} needs a format string"));
                         } else {
                             let t = self.expr_one(&args[0], Some(&Type::Str));
                             if !matches!(t, Type::Str | Type::Unknown) {
-                                self.diag(line, col, format!("{name} format must be str, got {t}"));
+                                self.diag(span, format!("{name} format must be str, got {t}"));
                             }
                             let arg_tys: Vec<Type> =
                                 args[1..].iter().map(|a| self.expr_one(a, None)).collect();
                             // a literal format is verified here; anything
                             // else stays a runtime check
                             if let ExprKind::Str(fmt) = &args[0].kind {
-                                self.check_format(name, fmt, &arg_tys, line, col);
+                                self.check_format(name, fmt, &arg_tys, span);
                             }
                         }
                         return ExprTy::One(if name == "sprintf" {
@@ -423,7 +416,7 @@ impl Checker {
                     }
                     "append" => {
                         if args.is_empty() {
-                            self.diag(line, col, "append takes a list and values");
+                            self.diag(span, "append takes a list and values");
                             return ExprTy::One(Type::Unknown);
                         }
                         let t0 = self.expr_one(&args[0], None);
@@ -432,11 +425,7 @@ impl Checker {
                                 for a in &args[1..] {
                                     let t = self.expr_one(a, Some(&elem));
                                     if !elem.accepts(&t) {
-                                        self.diag(
-                                            a.line,
-                                            a.col,
-                                            format!("expected {elem}, got {t}"),
-                                        );
+                                        self.diag(a.span, format!("expected {elem}, got {t}"));
                                     }
                                 }
                                 ExprTy::One(Type::List(elem))
@@ -448,7 +437,7 @@ impl Checker {
                                 ExprTy::One(Type::Unknown)
                             }
                             _ => {
-                                self.diag(line, col, format!("append needs a list, got {t0}"));
+                                self.diag(span, format!("append needs a list, got {t0}"));
                                 for a in &args[1..] {
                                     self.expr_one(a, None);
                                 }
@@ -458,57 +447,53 @@ impl Checker {
                     }
                     "ord" => {
                         if args.len() != 1 {
-                            self.diag(line, col, "ord takes one argument");
+                            self.diag(span, "ord takes one argument");
                         } else {
                             let t = self.expr_one(&args[0], Some(&Type::Str));
                             if !matches!(t, Type::Str | Type::Unknown) {
-                                self.diag(line, col, format!("ord needs str, got {t}"));
+                                self.diag(span, format!("ord needs str, got {t}"));
                             }
                         }
                         return ExprTy::One(Type::Int);
                     }
                     "chr" => {
                         if args.len() != 1 {
-                            self.diag(line, col, "chr takes one argument");
+                            self.diag(span, "chr takes one argument");
                         } else {
                             let t = self.expr_one(&args[0], Some(&Type::Int));
                             if !matches!(t, Type::Int | Type::Unknown) {
-                                self.diag(line, col, format!("chr needs int, got {t}"));
+                                self.diag(span, format!("chr needs int, got {t}"));
                             }
                         }
                         return ExprTy::One(Type::Str);
                     }
                     "len" => {
                         if args.len() != 1 {
-                            self.diag(line, col, "len takes one argument");
+                            self.diag(span, "len takes one argument");
                         } else {
                             let t = self.expr_one(&args[0], None);
                             if !matches!(
                                 t,
                                 Type::Str | Type::List(_) | Type::Map(..) | Type::Unknown
                             ) {
-                                self.diag(
-                                    line,
-                                    col,
-                                    format!("len needs str, list, or map, got {t}"),
-                                );
+                                self.diag(span, format!("len needs str, list, or map, got {t}"));
                             }
                         }
                         return ExprTy::One(Type::Int);
                     }
                     "args" => {
                         if !args.is_empty() {
-                            self.diag(line, col, "args takes no arguments");
+                            self.diag(span, "args takes no arguments");
                         }
                         return ExprTy::One(Type::List(Box::new(Type::Str)));
                     }
                     "input" => {
                         if args.len() != 1 {
-                            self.diag(line, col, "input takes one str prompt");
+                            self.diag(span, "input takes one str prompt");
                         } else {
                             let t = self.expr_one(&args[0], Some(&Type::Str));
                             if !matches!(t, Type::Str | Type::Unknown) {
-                                self.diag(line, col, format!("input prompt must be str, got {t}"));
+                                self.diag(span, format!("input prompt must be str, got {t}"));
                             }
                         }
                         return ExprTy::Multi(vec![Type::Str, err_opt()]);
@@ -527,12 +512,12 @@ impl Checker {
         }
         match ct {
             Type::Fn(params, rets) => {
-                self.check_args(&params, args, line, col);
+                self.check_args(&params, args, span);
                 rets_ty(rets)
             }
             Type::Unknown => ExprTy::One(Type::Unknown),
             t => {
-                self.diag(line, col, format!("not callable: {t}"));
+                self.diag(span, format!("not callable: {t}"));
                 ExprTy::One(Type::Unknown)
             }
         }
@@ -540,11 +525,11 @@ impl Checker {
 
     /// Statically checks a literal printf/sprintf format against the
     /// argument types. Mirrors the runtime verb table.
-    fn check_format(&mut self, name: &str, fmt: &str, arg_tys: &[Type], line: u32, col: u32) {
+    fn check_format(&mut self, name: &str, fmt: &str, arg_tys: &[Type], span: Span) {
         let pieces = match crate::fmt::parse(fmt) {
             Ok(p) => p,
             Err(e) => {
-                self.diag(line, col, e.msg(name));
+                self.diag(span, e.msg(name));
                 return;
             }
         };
@@ -557,8 +542,7 @@ impl Checker {
             .collect();
         if verbs.len() != arg_tys.len() {
             self.diag(
-                line,
-                col,
+                span,
                 format!(
                     "{name}: wrong argument count ({} verbs, {} args)",
                     verbs.len(),
@@ -578,24 +562,24 @@ impl Checker {
                 't' => Type::Bool,
                 'f' => Type::Float,
                 _ => {
-                    self.diag(line, col, format!("{name}: unknown verb %{v}"));
+                    self.diag(span, format!("{name}: unknown verb %{v}"));
                     continue;
                 }
             };
             if *t != want {
-                self.diag(line, col, format!("{name}: %{v} needs {want}, got {t}"));
+                self.diag(span, format!("{name}: %{v} needs {want}, got {t}"));
             }
         }
     }
 
     /// Named arguments exist only for python calls: the call's result is a
     /// py chain exactly when the callee was py, so gate on that.
-    fn check_kwargs(&mut self, kwargs: &[(String, Expr)], result: &ExprTy, line: u32, col: u32) {
+    fn check_kwargs(&mut self, kwargs: &[(String, Expr)], result: &ExprTy, span: Span) {
         if kwargs.is_empty() {
             return;
         }
         if !matches!(result, ExprTy::PyChain) {
-            self.diag(line, col, "named arguments are only for python calls");
+            self.diag(span, "named arguments are only for python calls");
             for (_, v) in kwargs {
                 self.expr_one(v, None);
             }
@@ -606,37 +590,36 @@ impl Checker {
         }
     }
 
-    pub(super) fn check_args(&mut self, params: &[Type], args: &[Expr], line: u32, col: u32) {
+    pub(super) fn check_args(&mut self, params: &[Type], args: &[Expr], span: Span) {
         if params.len() != args.len() {
             self.diag(
-                line,
-                col,
+                span,
                 format!("expected {} arguments, got {}", params.len(), args.len()),
             );
         }
         for (p, a) in params.iter().zip(args) {
             let t = self.expr_one(a, Some(p));
             if !p.accepts(&t) {
-                self.diag(a.line, a.col, format!("expected {p}, got {t}"));
+                self.diag(a.span, format!("expected {p}, got {t}"));
             }
         }
     }
 
-    fn method(&mut self, recv: &Expr, name: &str, args: &[Expr], line: u32, col: u32) -> ExprTy {
+    fn method(&mut self, recv: &Expr, name: &str, args: &[Expr], span: Span) -> ExprTy {
         // error.new / error.wrap: `error` is a type name acting as a module
         if let ExprKind::Ident(id) = &recv.kind {
             if id == "error" && self.lookup(id).is_none() {
                 return match name {
                     "new" => {
-                        self.check_args(&[Type::Str], args, line, col);
+                        self.check_args(&[Type::Str], args, span);
                         ExprTy::One(Type::Error)
                     }
                     "wrap" => {
-                        self.check_args(&[Type::Error, Type::Str], args, line, col);
+                        self.check_args(&[Type::Error, Type::Str], args, span);
                         ExprTy::One(Type::Error)
                     }
                     _ => {
-                        self.diag(line, col, format!("error has no member {name}"));
+                        self.diag(span, format!("error has no member {name}"));
                         ExprTy::One(Type::Unknown)
                     }
                 };
@@ -655,11 +638,11 @@ impl Checker {
                 let mangled = crate::loader::qualified(m, name);
                 match self.fns.get(&mangled).cloned() {
                     Some((params, rets)) => {
-                        self.check_args(&params, args, line, col);
+                        self.check_args(&params, args, span);
                         rets_ty(rets)
                     }
                     None => {
-                        self.diag(line, col, format!("{m} has no member {name}"));
+                        self.diag(span, format!("{m} has no member {name}"));
                         ExprTy::One(Type::Unknown)
                     }
                 }
@@ -669,99 +652,88 @@ impl Checker {
                 if m == "math" && matches!(name, "abs" | "min" | "max") {
                     let want = if name == "abs" { 1 } else { 2 };
                     if args.len() != want {
-                        self.diag(line, col, format!("math.{name} takes {want} arguments"));
+                        self.diag(span, format!("math.{name} takes {want} arguments"));
                         return ExprTy::One(Type::Unknown);
                     }
                     let t0 = self.expr_one(&args[0], None);
                     if !matches!(t0, Type::Int | Type::Float | Type::Unknown) {
-                        self.diag(
-                            line,
-                            col,
-                            format!("math.{name} needs int or float, got {t0}"),
-                        );
+                        self.diag(span, format!("math.{name} needs int or float, got {t0}"));
                     }
                     for a in &args[1..] {
                         let t = self.expr_one(a, Some(&t0));
                         if !t0.accepts(&t) {
-                            self.diag(a.line, a.col, format!("expected {t0}, got {t}"));
+                            self.diag(a.span, format!("expected {t0}, got {t}"));
                         }
                     }
                     return ExprTy::One(t0);
                 }
                 match std_member(m, name) {
                     Some(Member::Fn(params, rets)) => {
-                        self.check_args(&params, args, line, col);
+                        self.check_args(&params, args, span);
                         rets_ty(rets)
                     }
                     Some(Member::Const(_)) => {
-                        self.diag(line, col, format!("{m}.{name} is not callable"));
+                        self.diag(span, format!("{m}.{name} is not callable"));
                         ExprTy::One(Type::Unknown)
                     }
                     None => {
-                        self.diag(line, col, format!("{m} has no member {name}"));
+                        self.diag(span, format!("{m} has no member {name}"));
                         ExprTy::One(Type::Unknown)
                     }
                 }
             }
             Type::Struct(s) if s == "Ctx" => match name {
                 "done" => {
-                    self.check_args(&[], args, line, col);
+                    self.check_args(&[], args, span);
                     ExprTy::One(Type::Bool)
                 }
                 "err" => {
-                    self.check_args(&[], args, line, col);
+                    self.check_args(&[], args, span);
                     ExprTy::One(err_opt())
                 }
                 _ => {
-                    self.diag(line, col, format!("Ctx has no method {name}"));
+                    self.diag(span, format!("Ctx has no method {name}"));
                     ExprTy::One(Type::Unknown)
                 }
             },
             Type::Str | Type::List(_) | Type::Map(..) => {
-                self.container_method(&rt, name, args, line, col)
+                self.container_method(&rt, name, args, span)
             }
             Type::Opt(_) => {
                 self.diag(
-                    line,
-                    col,
+                    span,
                     format!("value might be none; check it before calling {name}"),
                 );
                 ExprTy::One(Type::Unknown)
             }
             Type::Unknown => ExprTy::One(Type::Unknown),
             t => {
-                self.diag(line, col, format!("{t} has no method {name}"));
+                self.diag(span, format!("{t} has no method {name}"));
                 ExprTy::One(Type::Unknown)
             }
         }
     }
     /// Check args against a single expected fn param; returns the arg's
     /// (possibly inferred) type so callers can read the lambda's return.
-    pub(super) fn args_with_fn(
-        &mut self,
-        f: &Type,
-        args: &[Expr],
-        line: u32,
-        col: u32,
-    ) -> Option<Type> {
+    pub(super) fn args_with_fn(&mut self, f: &Type, args: &[Expr], span: Span) -> Option<Type> {
         if args.len() != 1 {
-            self.diag(line, col, "expected one function argument");
+            self.diag(span, "expected one function argument");
             return None;
         }
         let t = self.expr_one(&args[0], Some(f));
         if let Type::Fn(want, _) = f {
             if let Type::Fn(got, _) = &t {
                 if want.len() != got.len() {
-                    self.diag(line, col, format!("expected {f}, got {t}"));
+                    self.diag(span, format!("expected {f}, got {t}"));
                 }
             } else if t != Type::Unknown {
-                self.diag(line, col, format!("expected {f}, got {t}"));
+                self.diag(span, format!("expected {f}, got {t}"));
             }
         }
         Some(t)
     }
 
-    fn field(&mut self, recv: &Expr, name: &str, line: u32, col: u32) -> Type {
+    fn field(&mut self, recv: &Expr, name: &str, span: Span) -> Type {
         let rt = self.expr_pyish(recv, None);
         if rt == Type::Py {
             return Type::Py;
@@ -774,7 +746,7 @@ impl Checker {
             {
                 Some(t) => t,
                 None => {
-                    self.diag(line, col, format!("{s} has no field {name}"));
+                    self.diag(span, format!("{s} has no field {name}"));
                     Type::Unknown
                 }
             },
@@ -782,7 +754,7 @@ impl Checker {
                 "msg" | "pytype" | "traceback" => Type::Str,
                 "cause" => err_opt(),
                 _ => {
-                    self.diag(line, col, format!("error has no field {name}"));
+                    self.diag(span, format!("error has no field {name}"));
                     Type::Unknown
                 }
             },
@@ -790,14 +762,13 @@ impl Checker {
                 match self.fns.get(&crate::loader::qualified(m, name)) {
                     Some(_) => {
                         self.diag(
-                            line,
-                            col,
+                            span,
                             format!("module functions are not first class in v1; call {m}.{name}(...) directly"),
                         );
                         Type::Unknown
                     }
                     None => {
-                        self.diag(line, col, format!("{m} has no member {name}"));
+                        self.diag(span, format!("{m} has no member {name}"));
                         Type::Unknown
                     }
                 }
@@ -806,28 +777,26 @@ impl Checker {
                 Some(Member::Const(t)) => t,
                 Some(Member::Fn(..)) => {
                     self.diag(
-                        line,
-                        col,
+                        span,
                         format!("module functions are not first class in v1; call {m}.{name}(...) directly"),
                     );
                     Type::Unknown
                 }
                 None => {
-                    self.diag(line, col, format!("{m} has no member {name}"));
+                    self.diag(span, format!("{m} has no member {name}"));
                     Type::Unknown
                 }
             },
             Type::Opt(_) => {
                 self.diag(
-                    line,
-                    col,
+                    span,
                     format!("value might be none; check it before using .{name}"),
                 );
                 Type::Unknown
             }
             Type::Unknown => Type::Unknown,
             t => {
-                self.diag(line, col, format!("{t} has no field {name}"));
+                self.diag(span, format!("{t} has no field {name}"));
                 Type::Unknown
             }
         }
@@ -839,8 +808,7 @@ impl Checker {
         ret: &Option<Vec<TypeExpr>>,
         body: &Block,
         expected: Option<&Type>,
-        line: u32,
-        col: u32,
+        span: Span,
     ) -> Type {
         let expected_fn = match expected {
             Some(Type::Fn(a, r)) => Some((a.clone(), r.clone())),
@@ -849,13 +817,12 @@ impl Checker {
         let mut param_tys = vec![];
         for (i, p) in params.iter().enumerate() {
             let t = match &p.ty {
-                Some(t) => self.resolve(t, line, col),
+                Some(t) => self.resolve(t, span),
                 None => match expected_fn.as_ref().and_then(|(a, _)| a.get(i)) {
                     Some(t) => t.clone(),
                     None => {
                         self.diag(
-                            line,
-                            col,
+                            span,
                             format!("lambda parameter {} needs a type here", p.name),
                         );
                         Type::Unknown
@@ -866,20 +833,20 @@ impl Checker {
         }
         let declared_ret: Option<Vec<Type>> = ret
             .as_ref()
-            .map(|rs| rs.iter().map(|t| self.resolve(t, line, col)).collect());
+            .map(|rs| rs.iter().map(|t| self.resolve(t, span)).collect());
 
         let saved_ret = std::mem::take(&mut self.current_ret);
         let saved_loop = std::mem::replace(&mut self.loop_depth, 0);
         self.push_scope();
         for (p, t) in params.iter().zip(&param_tys) {
-            self.declare(&p.name, t.clone(), line, col);
+            self.declare(&p.name, t.clone(), span);
         }
 
         let ret_tys: Vec<Type> = if let Some(rs) = declared_ret {
             self.current_ret = rs.clone();
             let diverges = self.check_block_inline(body);
             if !rs.is_empty() && !diverges {
-                self.diag(line, col, "missing return in lambda");
+                self.diag(span, "missing return in lambda");
             }
             rs
         } else if body.len() == 1 {

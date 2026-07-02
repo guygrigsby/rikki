@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::ast::*;
-use crate::diag::Diag;
+use crate::diag::{Diag, Span};
 use crate::types::Type;
 
 /// Result of checking an expression: one value or a multi-value (call/conv/check).
@@ -56,11 +56,10 @@ mod sigs;
 use sigs::*;
 
 impl Checker {
-    fn diag(&mut self, line: u32, col: u32, msg: impl Into<String>) {
+    fn diag(&mut self, span: Span, msg: impl Into<String>) {
         self.diags.push(Diag {
             msg: msg.into(),
-            line,
-            col,
+            span: Some(span),
             file: self.current_file.clone(),
         });
     }
@@ -87,12 +86,9 @@ impl Checker {
         }
         for d in &prog.decls {
             self.current_file = d.file().cloned();
-            if let Decl::Struct {
-                name, line, col, ..
-            } = d
-            {
+            if let Decl::Struct { name, span, .. } = d {
                 if self.structs.contains_key(name) {
-                    self.diag(*line, *col, format!("duplicate struct: {name}"));
+                    self.diag(*span, format!("duplicate struct: {name}"));
                     continue;
                 }
                 self.structs.insert(name.clone(), vec![]);
@@ -101,16 +97,12 @@ impl Checker {
         for d in &prog.decls {
             self.current_file = d.file().cloned();
             if let Decl::Struct {
-                name,
-                fields,
-                line,
-                col,
-                ..
+                name, fields, span, ..
             } = d
             {
                 let fs: Vec<(String, Type)> = fields
                     .iter()
-                    .map(|(f, t)| (f.clone(), self.resolve(t, *line, *col)))
+                    .map(|(f, t)| (f.clone(), self.resolve(t, *span)))
                     .collect();
                 self.structs.insert(name.clone(), fs);
             }
@@ -119,10 +111,7 @@ impl Checker {
         // or map along the way breaks the cycle
         for d in &prog.decls {
             self.current_file = d.file().cloned();
-            if let Decl::Struct {
-                name, line, col, ..
-            } = d
-            {
+            if let Decl::Struct { name, span, .. } = d {
                 let cycle =
                     self.structs
                         .get(name)
@@ -136,8 +125,7 @@ impl Checker {
                         });
                 if let Some((field, fty)) = cycle {
                     self.diag(
-                        *line,
-                        *col,
+                        *span,
                         format!("recursive struct {name}: use an option ({field}: {fty}?)"),
                     );
                 }
@@ -149,20 +137,16 @@ impl Checker {
                 let mut params = vec![];
                 for p in &f.params {
                     match &p.ty {
-                        Some(t) => params.push(self.resolve(t, f.line, f.col)),
+                        Some(t) => params.push(self.resolve(t, f.span)),
                         None => {
-                            self.diag(f.line, f.col, format!("parameter {} needs a type", p.name));
+                            self.diag(f.span, format!("parameter {} needs a type", p.name));
                             params.push(Type::Unknown);
                         }
                     }
                 }
-                let rets = f
-                    .ret
-                    .iter()
-                    .map(|t| self.resolve(t, f.line, f.col))
-                    .collect();
+                let rets = f.ret.iter().map(|t| self.resolve(t, f.span)).collect();
                 if self.fns.insert(f.name.clone(), (params, rets)).is_some() {
-                    self.diag(f.line, f.col, format!("duplicate function: {}", f.name));
+                    self.diag(f.span, format!("duplicate function: {}", f.name));
                 }
             }
         }
@@ -173,8 +157,7 @@ impl Checker {
             if let Decl::Import {
                 path,
                 py: false,
-                line,
-                col,
+                span,
                 ..
             } = d
             {
@@ -188,7 +171,7 @@ impl Checker {
                     self.imports
                         .insert(path.clone(), ImportKind::File(path.clone()));
                 } else {
-                    self.diag(*line, *col, format!("unknown module: {path}"));
+                    self.diag(*span, format!("unknown module: {path}"));
                 }
             }
         }
@@ -215,7 +198,7 @@ impl Checker {
         false
     }
 
-    fn resolve(&mut self, t: &TypeExpr, line: u32, col: u32) -> Type {
+    fn resolve(&mut self, t: &TypeExpr, span: Span) -> Type {
         match t {
             TypeExpr::Named(n) => match n.as_str() {
                 "int" => Type::Int,
@@ -228,27 +211,26 @@ impl Checker {
                     if self.structs.contains_key(other) {
                         Type::Struct(other.to_string())
                     } else {
-                        self.diag(line, col, format!("unknown type: {other}"));
+                        self.diag(span, format!("unknown type: {other}"));
                         Type::Unknown
                     }
                 }
             },
-            TypeExpr::List(inner) => Type::List(Box::new(self.resolve(inner, line, col))),
+            TypeExpr::List(inner) => Type::List(Box::new(self.resolve(inner, span))),
             TypeExpr::Map(k, v) => {
-                let kt = self.resolve(k, line, col);
+                let kt = self.resolve(k, span);
                 if !matches!(kt, Type::Int | Type::Str | Type::Bool | Type::Unknown) {
                     self.diag(
-                        line,
-                        col,
+                        span,
                         format!("map key type must be int, str, or bool, got {kt}"),
                     );
                 }
-                Type::Map(Box::new(kt), Box::new(self.resolve(v, line, col)))
+                Type::Map(Box::new(kt), Box::new(self.resolve(v, span)))
             }
-            TypeExpr::Opt(inner) => Type::Opt(Box::new(self.resolve(inner, line, col))),
+            TypeExpr::Opt(inner) => Type::Opt(Box::new(self.resolve(inner, span))),
             TypeExpr::Fn(args, rets) => Type::Fn(
-                args.iter().map(|a| self.resolve(a, line, col)).collect(),
-                rets.iter().map(|r| self.resolve(r, line, col)).collect(),
+                args.iter().map(|a| self.resolve(a, span)).collect(),
+                rets.iter().map(|r| self.resolve(r, span)).collect(),
             ),
         }
     }
@@ -294,12 +276,12 @@ impl Checker {
         &mut self.scopes[i]
     }
 
-    fn declare(&mut self, name: &str, ty: Type, line: u32, col: u32) {
+    fn declare(&mut self, name: &str, ty: Type, span: Span) {
         if name == "_" {
             return;
         }
         if self.top().vars.contains_key(name) {
-            self.diag(line, col, format!("already declared: {name}"));
+            self.diag(span, format!("already declared: {name}"));
         }
         self.top().vars.insert(name.to_string(), ty);
     }
@@ -321,13 +303,12 @@ impl Checker {
 
     fn check_program(&mut self, prog: &Program) {
         match self.fns.get("main") {
-            None => self.diag(1, 1, "missing fn main"),
+            None => self.diag(Span::new(1, 1), "missing fn main"),
             Some((params, rets)) => {
                 let ok = params.is_empty() && (rets.is_empty() || rets == &[err_opt()]);
                 if !ok {
                     self.diag(
-                        1,
-                        1,
+                        Span::new(1, 1),
                         "fn main takes no parameters and returns nothing or (error?)",
                     );
                 }
@@ -354,12 +335,12 @@ impl Checker {
             .map(|(p, _)| p.clone())
             .unwrap_or_default();
         for (p, t) in f.params.iter().zip(param_tys) {
-            self.declare(&p.name, t, f.line, f.col);
+            self.declare(&p.name, t, f.span);
         }
         let diverges = self.check_block(&f.body);
         self.pop_scope();
         if !self.current_ret.is_empty() && !diverges {
-            self.diag(f.line, f.col, format!("missing return in {}", f.name));
+            self.diag(f.span, format!("missing return in {}", f.name));
         }
     }
 
@@ -369,7 +350,7 @@ impl Checker {
         let mut diverges = false;
         for s in b {
             if diverges {
-                self.diag(s.line, s.col, "unreachable code");
+                self.diag(s.span, "unreachable code");
                 break;
             }
             diverges = self.check_stmt(s);
@@ -381,7 +362,7 @@ impl Checker {
     // ---------- statements ----------
 
     fn check_stmt(&mut self, s: &Stmt) -> bool {
-        let (line, col) = (s.line, s.col);
+        let span = s.span;
         match &s.kind {
             StmtKind::Let { names, expr } => {
                 let ty = self.check_expr(expr, None);
@@ -393,20 +374,19 @@ impl Checker {
                 if names.len() == supplied.len() {
                     for (n, t) in names.iter().zip(supplied) {
                         if t == Type::Unit {
-                            self.diag(line, col, format!("{n} would have no value"));
+                            self.diag(span, format!("{n} would have no value"));
                         }
-                        self.declare(n, t, line, col);
+                        self.declare(n, t, span);
                     }
                 } else if names.len() == supplied.len() - 1 && supplied.last() == Some(&err_opt()) {
-                    self.diag(line, col, "error result must be handled");
+                    self.diag(span, "error result must be handled");
                 } else {
                     self.diag(
-                        line,
-                        col,
+                        span,
                         format!("expected {} values, got {}", names.len(), supplied.len()),
                     );
                     for n in names {
-                        self.declare(n, Type::Unknown, line, col);
+                        self.declare(n, Type::Unknown, span);
                     }
                 }
                 false
@@ -420,14 +400,14 @@ impl Checker {
                             t
                         }
                         None => {
-                            self.diag(line, col, format!("undefined: {n}"));
+                            self.diag(span, format!("undefined: {n}"));
                             Type::Unknown
                         }
                     },
                     ExprKind::Index { .. } | ExprKind::Field { .. } => {
                         match self.check_expr(target, None) {
                             ExprTy::PyChain => {
-                                self.diag(line, col, "cannot assign into a py expression");
+                                self.diag(span, "cannot assign into a py expression");
                                 Type::Unknown
                             }
                             ExprTy::One(t) => match (&target.kind, t) {
@@ -442,19 +422,19 @@ impl Checker {
                                 (_, t) => t,
                             },
                             ExprTy::Multi(_) => {
-                                self.diag(line, col, "cannot assign to multiple values");
+                                self.diag(span, "cannot assign to multiple values");
                                 Type::Unknown
                             }
                         }
                     }
                     _ => {
-                        self.diag(line, col, "cannot assign to this expression");
+                        self.diag(span, "cannot assign to this expression");
                         Type::Unknown
                     }
                 };
                 let val = self.expr_one(expr, Some(&target_ty));
                 if !target_ty.accepts(&val) {
-                    self.diag(line, col, format!("expected {target_ty}, got {val}"));
+                    self.diag(span, format!("expected {target_ty}, got {val}"));
                 }
                 false
             }
@@ -462,13 +442,13 @@ impl Checker {
                 let ty = self.check_expr(e, None);
                 match ty {
                     ExprTy::PyChain => {
-                        self.diag(line, col, "error result must be handled");
+                        self.diag(span, "error result must be handled");
                     }
                     ExprTy::Multi(ts) if ts.last() == Some(&err_opt()) => {
-                        self.diag(line, col, "error result must be handled");
+                        self.diag(span, "error result must be handled");
                     }
                     ExprTy::One(t) if t == err_opt() && !matches!(e.kind, ExprKind::Check(_)) => {
-                        self.diag(line, col, "error result must be handled");
+                        self.diag(span, "error result must be handled");
                     }
                     _ => {}
                 }
@@ -478,18 +458,17 @@ impl Checker {
                 let want = self.current_ret.clone();
                 if exprs.is_empty() && !want.is_empty() {
                     // allow bare `return` only when everything has a zero... no: require values
-                    self.diag(line, col, format!("expected {} return values", want.len()));
+                    self.diag(span, format!("expected {} return values", want.len()));
                 } else if exprs.len() != want.len() {
                     self.diag(
-                        line,
-                        col,
+                        span,
                         format!("expected {} return values, got {}", want.len(), exprs.len()),
                     );
                 } else {
                     for (e, w) in exprs.iter().zip(&want) {
                         let t = self.expr_one(e, Some(w));
                         if !w.accepts(&t) {
-                            self.diag(e.line, e.col, format!("expected {w}, got {t}"));
+                            self.diag(e.span, format!("expected {w}, got {t}"));
                         }
                     }
                 }
@@ -555,27 +534,27 @@ impl Checker {
                 self.push_scope();
                 match (&it, names.len()) {
                     (Type::Int | Type::List(_) | Type::Map(..) | Type::Str, 0) => {}
-                    (Type::Int, 1) => self.declare(&names[0], Type::Int, line, col),
-                    (Type::List(_) | Type::Str, 1) => self.declare(&names[0], Type::Int, line, col),
+                    (Type::Int, 1) => self.declare(&names[0], Type::Int, span),
+                    (Type::List(_) | Type::Str, 1) => self.declare(&names[0], Type::Int, span),
                     (Type::Str, 2) => {
-                        self.declare(&names[0], Type::Int, line, col);
-                        self.declare(&names[1], Type::Str, line, col);
+                        self.declare(&names[0], Type::Int, span);
+                        self.declare(&names[1], Type::Str, span);
                     }
                     (Type::List(t), 2) => {
-                        self.declare(&names[0], Type::Int, line, col);
-                        self.declare(&names[1], (**t).clone(), line, col);
+                        self.declare(&names[0], Type::Int, span);
+                        self.declare(&names[1], (**t).clone(), span);
                     }
-                    (Type::Map(k, _), 1) => self.declare(&names[0], (**k).clone(), line, col),
+                    (Type::Map(k, _), 1) => self.declare(&names[0], (**k).clone(), span),
                     (Type::Map(k, v), 2) => {
-                        self.declare(&names[0], (**k).clone(), line, col);
-                        self.declare(&names[1], (**v).clone(), line, col);
+                        self.declare(&names[0], (**k).clone(), span);
+                        self.declare(&names[1], (**v).clone(), span);
                     }
                     (Type::Unknown, _) => {
                         for n in names {
-                            self.declare(n, Type::Unknown, line, col);
+                            self.declare(n, Type::Unknown, span);
                         }
                     }
-                    (_, 0) => self.diag(line, col, format!("cannot range over {it}")),
+                    (_, 0) => self.diag(span, format!("cannot range over {it}")),
                     _ => {
                         let msg = if matches!(
                             it,
@@ -585,9 +564,9 @@ impl Checker {
                         } else {
                             format!("cannot range over {it}")
                         };
-                        self.diag(line, col, msg);
+                        self.diag(span, msg);
                         for n in names {
-                            self.declare(n, Type::Unknown, line, col);
+                            self.declare(n, Type::Unknown, span);
                         }
                     }
                 }
@@ -611,7 +590,7 @@ impl Checker {
             }
             StmtKind::Break | StmtKind::Continue => {
                 if self.loop_depth == 0 {
-                    self.diag(line, col, "break or continue outside loop");
+                    self.diag(span, "break or continue outside loop");
                 }
                 true
             }
@@ -635,7 +614,7 @@ impl Checker {
         let mut diverges = false;
         for s in b {
             if diverges {
-                self.diag(s.line, s.col, "unreachable code");
+                self.diag(s.span, "unreachable code");
                 break;
             }
             diverges = self.check_stmt(s);
@@ -647,11 +626,7 @@ impl Checker {
     fn check_cond(&mut self, cond: &Expr) {
         let t = self.expr_one(cond, Some(&Type::Bool));
         if !matches!(t, Type::Bool | Type::Unknown) {
-            self.diag(
-                cond.line,
-                cond.col,
-                format!("condition must be bool, got {t}"),
-            );
+            self.diag(cond.span, format!("condition must be bool, got {t}"));
         }
     }
 

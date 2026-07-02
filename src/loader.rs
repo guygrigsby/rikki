@@ -22,8 +22,7 @@ pub fn load(path: &Path) -> Result<Program, Diag> {
 fn errd(msg: String) -> Diag {
     Diag {
         msg,
-        line: 1,
-        col: 1,
+        span: None,
         file: None,
     }
 }

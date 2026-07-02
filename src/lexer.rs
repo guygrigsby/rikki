@@ -51,8 +51,7 @@ impl<'a> Lexer<'a> {
     fn err(&self, msg: &str, line: u32, col: u32) -> Diag {
         Diag {
             msg: msg.into(),
-            line,
-            col,
+            span: Some(crate::diag::Span::new(line, col)),
             file: None,
         }
     }
@@ -289,7 +288,7 @@ mod tests {
     fn unterminated_string_has_position() {
         let e = lex("x := \"oops").unwrap_err();
         assert!(e.msg.contains("unterminated"));
-        assert_eq!((e.line, e.col), (1, 6));
+        assert_eq!(e.span, Some(crate::diag::Span::new(1, 6)));
     }
 
     #[test]

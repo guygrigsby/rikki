@@ -1,8 +1,9 @@
+use crate::diag::Span;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Expr {
     pub kind: ExprKind,
-    pub line: u32,
-    pub col: u32,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -115,8 +116,7 @@ pub type Block = Vec<Stmt>;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Stmt {
     pub kind: StmtKind,
-    pub line: u32,
-    pub col: u32,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -156,8 +156,7 @@ pub struct FnDecl {
     pub params: Vec<Param>,
     pub ret: Vec<TypeExpr>,
     pub body: Block,
-    pub line: u32,
-    pub col: u32,
+    pub span: Span,
     pub file: Option<String>,
 }
 
@@ -167,15 +166,13 @@ pub enum Decl {
     Struct {
         name: String,
         fields: Vec<(String, TypeExpr)>,
-        line: u32,
-        col: u32,
+        span: Span,
         file: Option<String>,
     },
     Import {
         path: String,
         py: bool,
-        line: u32,
-        col: u32,
+        span: Span,
         file: Option<String>,
     },
 }

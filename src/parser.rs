@@ -1,5 +1,5 @@
 use crate::ast::*;
-use crate::diag::Diag;
+use crate::diag::{Diag, Span};
 use crate::lexer::lex;
 use crate::token::{Spanned, Token};
 
@@ -57,19 +57,17 @@ impl Parser {
         self.toks.get(self.pos + 1).map(|s| &s.node)
     }
 
-    fn here(&self) -> (u32, u32) {
+    fn here(&self) -> Span {
         self.toks
             .get(self.pos.min(self.toks.len().saturating_sub(1)))
-            .map(|s| (s.line, s.col))
-            .unwrap_or((1, 1))
+            .map(|s| Span::new(s.line, s.col))
+            .unwrap_or(Span::new(1, 1))
     }
 
     fn err_here(&self, msg: &str) -> Diag {
-        let (line, col) = self.here();
         Diag {
             msg: msg.into(),
-            line,
-            col,
+            span: Some(self.here()),
             file: None,
         }
     }
@@ -139,7 +137,7 @@ impl Parser {
     }
 
     fn decl(&mut self) -> Result<Decl, Diag> {
-        let (line, col) = self.here();
+        let span = self.here();
         match self.peek() {
             Some(Token::Import) => {
                 self.bump();
@@ -148,8 +146,7 @@ impl Parser {
                     Some(Token::Str(path)) => Ok(Decl::Import {
                         path,
                         py,
-                        line,
-                        col,
+                        span,
                         file: None,
                     }),
                     _ => Err(self.err_here("expected import path string")),
@@ -179,8 +176,7 @@ impl Parser {
                 Ok(Decl::Struct {
                     name,
                     fields,
-                    line,
-                    col,
+                    span,
                     file: None,
                 })
             }
@@ -195,8 +191,7 @@ impl Parser {
                     params,
                     ret,
                     body,
-                    line,
-                    col,
+                    span,
                     file: None,
                 }))
             }
@@ -370,7 +365,7 @@ impl Parser {
     }
 
     fn stmt(&mut self) -> Result<Stmt, Diag> {
-        let (line, col) = self.here();
+        let span = self.here();
         let kind = match self.peek() {
             Some(Token::Return) => {
                 self.bump();
@@ -425,7 +420,7 @@ impl Parser {
                 }
             }
         };
-        Ok(Stmt { kind, line, col })
+        Ok(Stmt { kind, span })
     }
 
     /// If the upcoming tokens are `ident (, ident)* <marker>`, consume through
@@ -540,7 +535,7 @@ impl Parser {
             if prec < min_prec {
                 break;
             }
-            let (line, col) = self.here();
+            let span = self.here();
             self.bump();
             self.skip_nl();
             let rhs = self.binary(prec + 1, struct_ok)?;
@@ -550,8 +545,7 @@ impl Parser {
                     lhs: Box::new(lhs),
                     rhs: Box::new(rhs),
                 },
-                line,
-                col,
+                span,
             };
         }
         Ok(lhs)
@@ -565,15 +559,14 @@ impl Parser {
     }
 
     fn unary_inner(&mut self, struct_ok: bool) -> Result<Expr, Diag> {
-        let (line, col) = self.here();
+        let span = self.here();
         match self.peek() {
             Some(Token::Check) => {
                 self.bump();
                 let rhs = self.unary(struct_ok)?;
                 Ok(Expr {
                     kind: ExprKind::Check(Box::new(rhs)),
-                    line,
-                    col,
+                    span,
                 })
             }
             Some(Token::Bang) => {
@@ -584,8 +577,7 @@ impl Parser {
                         op: UnOp::Not,
                         rhs: Box::new(rhs),
                     },
-                    line,
-                    col,
+                    span,
                 })
             }
             Some(Token::Minus) => {
@@ -596,8 +588,7 @@ impl Parser {
                         op: UnOp::Neg,
                         rhs: Box::new(rhs),
                     },
-                    line,
-                    col,
+                    span,
                 })
             }
             _ => self.postfix(struct_ok),
@@ -607,7 +598,7 @@ impl Parser {
     fn postfix(&mut self, struct_ok: bool) -> Result<Expr, Diag> {
         let mut e = self.primary(struct_ok)?;
         loop {
-            let (line, col) = self.here();
+            let span = self.here();
             match self.peek() {
                 Some(Token::Dot) => {
                     self.bump();
@@ -621,8 +612,7 @@ impl Parser {
                                 args,
                                 kwargs,
                             },
-                            line,
-                            col,
+                            span,
                         };
                     } else {
                         e = Expr {
@@ -630,8 +620,7 @@ impl Parser {
                                 recv: Box::new(e),
                                 name,
                             },
-                            line,
-                            col,
+                            span,
                         };
                     }
                 }
@@ -643,8 +632,7 @@ impl Parser {
                             args,
                             kwargs,
                         },
-                        line,
-                        col,
+                        span,
                     };
                 }
                 Some(Token::LBracket) => {
@@ -660,8 +648,7 @@ impl Parser {
                                 lo: Box::new(first),
                                 hi: Box::new(hi),
                             },
-                            line,
-                            col,
+                            span,
                         };
                     } else {
                         self.skip_nl();
@@ -671,8 +658,7 @@ impl Parser {
                                 recv: Box::new(e),
                                 idx: Box::new(first),
                             },
-                            line,
-                            col,
+                            span,
                         };
                     }
                 }
@@ -714,8 +700,8 @@ impl Parser {
     }
 
     fn primary(&mut self, struct_ok: bool) -> Result<Expr, Diag> {
-        let (line, col) = self.here();
-        let mk = |kind| Expr { kind, line, col };
+        let span = self.here();
+        let mk = |kind| Expr { kind, span };
         match self.peek().cloned() {
             Some(Token::Int(v)) => {
                 self.bump();
@@ -1054,15 +1040,13 @@ mod tests {
                 Decl::Import {
                     path: "http".into(),
                     py: false,
-                    line: 1,
-                    col: 1,
+                    span: Span::new(1, 1),
                     file: None
                 },
                 Decl::Import {
                     path: "torch".into(),
                     py: true,
-                    line: 2,
-                    col: 1,
+                    span: Span::new(2, 1),
                     file: None
                 },
             ]
