@@ -198,6 +198,7 @@ impl<'a> Lexer<'a> {
                         '-' => Token::Minus,
                         '*' => Token::Star,
                         '%' => Token::Percent,
+                        '@' => Token::At,
                         '?' => Token::Question,
                         ':' => two(&mut self, '=', Token::ColonEq, Token::Colon),
                         '=' => two(&mut self, '=', Token::EqEq, Token::Eq),

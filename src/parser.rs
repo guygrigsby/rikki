@@ -530,6 +530,7 @@ impl Parser {
                 Some(Token::Star) => (BinOp::Mul, 6),
                 Some(Token::Slash) => (BinOp::Div, 6),
                 Some(Token::Percent) => (BinOp::Rem, 6),
+                Some(Token::At) => (BinOp::MatMul, 6),
                 _ => break,
             };
             if prec < min_prec {
@@ -898,6 +899,43 @@ mod tests {
             Decl::Fn(f) => f,
             d => panic!("expected fn, got {d:?}"),
         }
+    }
+
+    #[test]
+    fn matmul_precedence() {
+        // w @ x + b parses as (w @ x) + b; a @ b @ c is left associative
+        let e = expr("w @ x + b");
+        let E::Binary {
+            op: BinOp::Add,
+            lhs,
+            ..
+        } = e.kind
+        else {
+            panic!("expected +, got {:?}", e.kind)
+        };
+        assert!(matches!(
+            lhs.kind,
+            E::Binary {
+                op: BinOp::MatMul,
+                ..
+            }
+        ));
+        let e = expr("a @ b @ c");
+        let E::Binary {
+            op: BinOp::MatMul,
+            lhs,
+            ..
+        } = e.kind
+        else {
+            panic!("expected @, got {:?}", e.kind)
+        };
+        assert!(matches!(
+            lhs.kind,
+            E::Binary {
+                op: BinOp::MatMul,
+                ..
+            }
+        ));
     }
 
     #[test]

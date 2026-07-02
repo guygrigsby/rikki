@@ -339,6 +339,14 @@ impl Checker {
                     }
                 }
             }
+            BinOp::MatMul => {
+                // py operands returned Py above; there is no native meaning
+                if unknown {
+                    return Type::Unknown;
+                }
+                self.diag(span, "@ needs py operands; there is no native matrix type");
+                Type::Unknown
+            }
             BinOp::Lt | BinOp::LtEq | BinOp::Gt | BinOp::GtEq => {
                 if !unknown {
                     let ok = matches!(

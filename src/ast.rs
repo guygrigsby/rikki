@@ -86,6 +86,8 @@ pub enum BinOp {
     Mul,
     Div,
     Rem,
+    /// `@`: matrix multiplication, defined only through the py bridge.
+    MatMul,
     Eq,
     NotEq,
     Lt,

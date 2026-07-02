@@ -896,10 +896,14 @@ Binary operators, in increasing precedence:
 | 3 | `==` `!=` |
 | 4 | `<` `<=` `>` `>=` |
 | 5 | `+` `-` |
-| 6 | `*` `/` `%` |
+| 6 | `*` `/` `%` `@` |
 
 All binary operators are left associative. Unary operators (`!`, `-`,
 `check`) bind tighter than any binary operator.
+
+`@` is matrix multiplication. It is defined only when at least one operand
+is `py` (section 13.2) and is a compile-time error otherwise ("@ needs py
+operands"). There is no native matrix type.
 
 ```
 Expression = UnaryExpr | Expression binary_op Expression .
@@ -1477,10 +1481,12 @@ A `py` value supports:
 - calls `x(args...)` and method calls `x.m(args...)`, yielding `py`.
   Named arguments (`f(x, lr: 0.001)`) pass as Python keyword arguments;
 - subscript `x[i]`, yielding `py`;
-- the binary operators `+ - * / % == != < <= > >=` when either operand is
-  `py`, dispatched to the corresponding Python operation and yielding `py`
-  (comparisons included: the result is a Python bool as a `py` value, not a
-  rikki `bool`).
+- the binary operators `+ - * / % @ == != < <= > >=` when either operand
+  is `py`, dispatched to the corresponding Python operation and yielding
+  `py` (comparisons included: the result is a Python bool as a `py` value,
+  not a rikki `bool`). `@` dispatches to Python matrix multiplication
+  (`__matmul__`/`__rmatmul__`); unlike the arithmetic operators it has no
+  meaning on native operands (section 7.9).
 
 `&& ||` reject `py` operands; unary `!` and `-` are not defined on `py`;
 `py` values cannot be sliced, ranged over with `for`, used as conditions,

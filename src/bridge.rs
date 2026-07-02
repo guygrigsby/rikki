@@ -172,6 +172,7 @@ pub fn binop(op: BinOp, l: &Value, r: &Value) -> Result<Value, ErrVal> {
             BinOp::Mul => a.mul(b),
             BinOp::Div => a.div(b),
             BinOp::Rem => a.rem(b),
+            BinOp::MatMul => a.matmul(b),
             BinOp::Eq => a.rich_compare(b, CompareOp::Eq),
             BinOp::NotEq => a.rich_compare(b, CompareOp::Ne),
             BinOp::Lt => a.rich_compare(b, CompareOp::Lt),
@@ -318,6 +319,34 @@ pub fn is_stdlib(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::value::Value;
+
+    // the test venv has no numpy/torch, so the runtime matmul proof lives
+    // here: a python class defining __matmul__ in the embedded interpreter
+    #[test]
+    fn matmul_dispatches_to_python() {
+        init(None);
+        let h = Python::attach(|py| {
+            let ns = pyo3::types::PyDict::new(py);
+            py.run(
+                std::ffi::CString::new(
+                    "class M:\n    def __matmul__(self, other):\n        return 42",
+                )
+                .unwrap()
+                .as_c_str(),
+                None,
+                Some(&ns),
+            )
+            .unwrap();
+            let m = ns.get_item("M").unwrap().unwrap().call0().unwrap();
+            PyHandle::new(m.unbind())
+        });
+        let out = binop(crate::ast::BinOp::MatMul, &Value::Py(h.clone()), &Value::Py(h)).unwrap();
+        let Value::Py(r) = out else { panic!("{out:?}") };
+        assert_eq!(display(&r), "42");
+    }
+
     #[test]
     fn embedded_python_is_major_minor() {
         let v = super::embedded_python();
