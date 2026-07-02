@@ -1439,6 +1439,7 @@ The complete set of fault conditions reachable from checked programs:
 - list or string index out of bounds;
 - slice bounds out of range (`lo < 0`, `hi < lo`, or `hi > len`);
 - assignment into a string index (`s[i] = v`);
+- `repeat` whose result would exceed the implementation's string size limit;
 - calling the zero value of a function type (section 5.11);
 - exceeding the call-depth limit (chapter 18), diagnostic
   "recursion limit exceeded";
@@ -1692,7 +1693,7 @@ String methods (receiver `str`):
 | `trim_prefix` | `(p str) str` | remove leading `p` if present, else unchanged |
 | `trim_suffix` | `(p str) str` | remove trailing `p` if present, else unchanged |
 | `chars` | `() []str` | the characters as one-character strings |
-| `repeat` | `(n int) str` | the string tiled `n` times; negative `n` faults |
+| `repeat` | `(n int) str` | the string tiled `n` times; negative `n` faults, as does a result exceeding the implementation's size limit (2^30 bytes in the reference implementation) |
 
 List methods (receiver `[]T`):
 

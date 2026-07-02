@@ -380,7 +380,17 @@ impl Interp<'_> {
                 s.chars().map(|c| Value::Str(c.to_string())).collect(),
             )),
             "repeat" => match args.pop() {
-                Some(Value::Int(n)) if n >= 0 => Ok(Value::Str(s.repeat(n as usize))),
+                Some(Value::Int(n)) if n >= 0 => {
+                    // allocation failure aborts without unwinding, so the
+                    // panic net cannot catch a silly size; fault first.
+                    const MAX_REPEAT_BYTES: usize = 1 << 30;
+                    match s.len().checked_mul(n as usize) {
+                        Some(b) if b <= MAX_REPEAT_BYTES => {
+                            Ok(Value::Str(s.repeat(n as usize)))
+                        }
+                        _ => Err(self.fault("repeat result too large")),
+                    }
+                }
                 Some(Value::Int(_)) => Err(self.fault("repeat needs a nonnegative count")),
                 _ => Err(self.fault("repeat needs an int argument")),
             },

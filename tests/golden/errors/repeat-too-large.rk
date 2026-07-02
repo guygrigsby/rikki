@@ -1,0 +1,3 @@
+fn main() {
+    print("abc".repeat(9223372036854775807))
+}
