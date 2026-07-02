@@ -125,6 +125,22 @@ fn mg_bare_is_repl() {
 }
 
 #[test]
+fn mg_shebang_script_executes_directly() {
+    use std::os::unix::fs::PermissionsExt;
+    let d = tempdir("mg-shebang");
+    let script = d.join("greet");
+    std::fs::write(
+        &script,
+        format!("#!{}\nfn main() {{\n    print(\"hi from script\")\n}}\n", mg()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let out = Command::new(&script).output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "hi from script\n");
+}
+
+#[test]
 fn repl_evaluates() {
     let mut child = Command::new(bin())
         .arg("repl")

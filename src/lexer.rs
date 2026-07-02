@@ -14,6 +14,13 @@ struct Lexer<'a> {
 
 impl<'a> Lexer<'a> {
     fn new(src: &'a str) -> Self {
+        // Executable scripts: a `#!...` first line is the interpreter's,
+        // not ours. Skip to its newline (kept, so line numbers stay true).
+        let src = if src.starts_with("#!") {
+            &src[src.find('\n').unwrap_or(src.len())..]
+        } else {
+            src
+        };
         Lexer { chars: src.chars().peekable(), line: 1, col: 1, out: vec![] }
     }
 
@@ -292,6 +299,21 @@ mod tests {
         );
         // leading newlines produce nothing
         assert_eq!(toks("\n\na"), vec![Ident("a".into())]);
+    }
+
+    #[test]
+    fn shebang_skipped_at_file_start() {
+        assert_eq!(
+            toks("#!/usr/bin/env mg\nx := 1"),
+            vec![Ident("x".into()), ColonEq, Int(1)]
+        );
+        // shebang line still counts for line numbers
+        let t = lex("#!/bin/mg\nx := 1").unwrap();
+        assert_eq!(t[0].line, 2);
+        // whole file is just a shebang: no tokens
+        assert_eq!(toks("#!/bin/mg"), vec![]);
+        // only at file start; '#' later is still an error
+        assert!(lex("x := 1\n#!/bin/mg").is_err());
     }
 
     #[test]
