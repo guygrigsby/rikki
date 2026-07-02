@@ -737,6 +737,12 @@ impl Checker {
                 one(Type::Map(Box::new(kt), Box::new(vt)))
             }
             K::StructLit { name, fields } => {
+                // Ctx is opaque: the checker knows it as a struct, the
+                // interpreter does not; only the ctx module makes one
+                if name == "Ctx" && matches!(self.imports.get("ctx"), Some(ImportKind::Std(_))) {
+                    self.diag(line, col, "Ctx cannot be constructed; use ctx.background()");
+                    return one(Type::Struct(name.clone()));
+                }
                 let Some(def) = self.structs.get(name).cloned() else {
                     self.diag(line, col, format!("unknown struct: {name}"));
                     return one(Type::Unknown);
