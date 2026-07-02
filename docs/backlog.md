@@ -18,11 +18,6 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
   Type conversions by source: infallible pairs return one value.
 - Dotted struct literals: `util.Pair{a: 1}` does not parse; module structs
   need factory functions today. Parser feature plus spec revert if wanted.
-- Empty typed list literal `[]T{}`. With `range()` gone (ADR 0008), building
-  a list from nothing has no clean form: `[]` demands a typed context, so
-  build-in-a-loop code seeds element 0 and appends from index 1 (see
-  `examples/similarity`). Go's composite literal syntax fits; would also
-  admit `map[K]V{}` uniformity and nonempty `[]T{a, b}`.
 
 ## v2
 

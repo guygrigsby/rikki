@@ -264,6 +264,12 @@ impl Renamer {
                     self.expr(i);
                 }
             }
+            ExprKind::ListLit { elem, items } => {
+                self.ty(elem);
+                for i in items {
+                    self.expr(i);
+                }
+            }
             ExprKind::MapLit { key, val, entries } => {
                 self.ty(key);
                 self.ty(val);

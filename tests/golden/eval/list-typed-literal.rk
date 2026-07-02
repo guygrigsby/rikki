@@ -1,0 +1,16 @@
+fn main() {
+    // empty typed literal needs no context
+    ids := []int{}
+    print(len(ids))
+    ids = ids.append(7)
+    print(ids)
+    // nonempty typed form
+    names := []str{"a", "b"}
+    print(names)
+    print([]int{1, 2, 3}.sum())
+    // nested element types
+    grid := [][]int{[1], [2, 3]}
+    print(grid)
+    m := []map[str]int{map[str]int{"a": 1}}
+    print(m)
+}

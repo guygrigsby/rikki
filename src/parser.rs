@@ -758,6 +758,25 @@ impl Parser {
                     );
                     if type_follows {
                         let target = self.type_expr()?;
+                        // `[]T{...}` is a typed list literal, `[]T(x)` a conversion
+                        if self.peek() == Some(&Token::LBrace) {
+                            let TypeExpr::List(elem) = target else {
+                                return Err(self.err_here("expected list type before {"));
+                            };
+                            self.bump();
+                            self.skip_nl();
+                            let mut items = vec![];
+                            while self.peek() != Some(&Token::RBrace) {
+                                items.push(self.expr(true)?);
+                                self.skip_nl();
+                                if !self.eat(&Token::Comma) {
+                                    break;
+                                }
+                                self.skip_nl();
+                            }
+                            self.expect(&Token::RBrace, "}")?;
+                            return Ok(mk(ExprKind::ListLit { elem: *elem, items }));
+                        }
                         let (mut args, kwargs) = self.call_args()?;
                         if args.len() != 1 || !kwargs.is_empty() {
                             return Err(self.err_here("conversion takes one argument"));

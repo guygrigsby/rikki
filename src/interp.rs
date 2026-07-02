@@ -632,7 +632,7 @@ impl<'p> Interp<'p> {
                 }
                 Err(self.fault(format!("undefined: {n}")))
             }
-            K::List(items) => {
+            K::List(items) | K::ListLit { items, .. } => {
                 let mut out = vec![];
                 for it in items {
                     out.push(val!(self.eval(it)));

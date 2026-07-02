@@ -1,0 +1,15 @@
+fn main() error? {
+  // 3 is fizz
+  // 5 is buzz
+  for i := range 45 {
+  i := i+1
+    if i % 3 == 0 {
+      printf("fizz")
+    }
+    if i % 5 == 0 {
+      printf("buzz")
+    }
+    print()
+  }
+  return none
+}

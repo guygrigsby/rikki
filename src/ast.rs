@@ -14,6 +14,10 @@ pub enum ExprKind {
     NoneLit,
     Ident(String),
     List(Vec<Expr>),
+    ListLit {
+        elem: TypeExpr,
+        items: Vec<Expr>,
+    },
     MapLit {
         key: TypeExpr,
         val: TypeExpr,

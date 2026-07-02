@@ -590,7 +590,8 @@ of a selector (`math.pi`, `util.double(2)`).
 #### 7.2.1 List literals
 
 ```
-ListLit = "[" { newline } [ ExpressionList [ "," ] ] { newline } "]" .
+ListLit = "[" { newline } [ ExpressionList [ "," ] ] { newline } "]"
+        | "[" "]" Type "{" { newline } [ ExpressionList [ "," ] ] { newline } "}" .
 ExpressionList = Expression { "," { newline } Expression } .
 ```
 
@@ -603,11 +604,18 @@ argument position, return position, field value, map value, or assignment to
 a location of known list type. A bare `[]` with no such context is a
 compile-time error ("cannot infer element type of []").
 
+The typed form `[]T{e1, ..., en}` carries its element type and needs no
+context: every element must be assignable to `T`, and `[]T{}` is the empty
+list of type `[]T`. In expression position `[]T` followed by `{` is always a
+list literal; followed by `(` it is a conversion (section 7.7).
+
 ```
 fn total(xs []int) int { return len(xs) }
 
 print(total([]))     // ok: parameter supplies []int
 // xs := []          // compile error
+xs := []int{}        // ok: empty, typed
+ys := []str{"a", "b"}
 ```
 
 #### 7.2.2 Map literals

@@ -13,11 +13,9 @@ fn rank(query str, corpus []str) ([]Hit, error?) {
     c := check model.encode(corpus)
     sims := check sentence_transformers.util.cos_sim(q, c)
     scores := check []float(sims[0].tolist())
-    hits := [Hit{text: corpus[0], score: scores[0]}]
+    hits := []Hit{}
     for i, text := range corpus {
-        if i > 0 {
-            hits = hits.append(Hit{text: text, score: scores[i]})
-        }
+        hits = hits.append(Hit{text: text, score: scores[i]})
     }
     return hits.sorted_by(fn(a, b) { a.score > b.score }), none
 }

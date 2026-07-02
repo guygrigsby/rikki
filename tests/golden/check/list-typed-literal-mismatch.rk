@@ -1,0 +1,4 @@
+fn main() {
+    xs := []int{1, "a"}
+    print(xs)
+}

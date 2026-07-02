@@ -813,6 +813,16 @@ impl Checker {
                 }
                 one(Type::List(Box::new(elem)))
             }
+            K::ListLit { elem, items } => {
+                let et = self.resolve(elem, line, col);
+                for it in items {
+                    let t = self.expr_one(it, Some(&et));
+                    if !et.accepts(&t) {
+                        self.diag(it.line, it.col, format!("expected {et}, got {t}"));
+                    }
+                }
+                one(Type::List(Box::new(et)))
+            }
             K::MapLit { key, val, entries } => {
                 let kt = self.resolve(key, line, col);
                 let vt = self.resolve(val, line, col);
