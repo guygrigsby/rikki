@@ -875,10 +875,16 @@ impl Checker {
                     (Type::Float, Type::Float, _) => Type::Float,
                     (Type::Str, Type::Str, BinOp::Add) => Type::Str,
                     (Type::List(a), Type::List(b), BinOp::Add) => {
-                        if !a.accepts(b) && !b.accepts(a) {
+                        // the wider element type wins, so an option side
+                        // cannot hide behind a plain one
+                        if a.accepts(b) {
+                            lt.clone()
+                        } else if b.accepts(a) {
+                            rt.clone()
+                        } else {
                             self.diag(line, col, format!("cannot concat list[{a}] and list[{b}]"));
+                            lt.clone()
                         }
-                        lt.clone()
                     }
                     _ => {
                         self.diag(line, col, format!("cannot apply operator to {lt} and {rt}"));
