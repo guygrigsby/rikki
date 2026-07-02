@@ -174,6 +174,14 @@ impl<'p> Interp<'p> {
         }
     }
 
+    pub(crate) fn has_fn(&self, name: &str) -> bool {
+        self.fns.contains_key(name)
+    }
+
+    pub(crate) fn call_fn_by_name(&mut self, name: &str, args: Vec<Value>) -> Result<Value, Fault> {
+        self.call_named(name, args)
+    }
+
     pub(crate) fn call_value(&mut self, f: &Value, args: Vec<Value>) -> Result<Value, Fault> {
         match f {
             Value::Fn(FnRef::Decl(name)) => self.call_named(&name.clone(), args),

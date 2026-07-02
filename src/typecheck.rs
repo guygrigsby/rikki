@@ -44,6 +44,7 @@ struct Checker {
 enum ImportKind {
     Py,
     Std(String),
+    File(String),
 }
 
 const STD_MODULES: &[&str] = &["math", "error", "file", "ctx", "http"];
@@ -98,7 +99,7 @@ impl Checker {
 
     fn collect(&mut self, prog: &Program) {
         for d in &prog.decls {
-            if let Decl::Import { path, py, line, col } = d {
+            if let Decl::Import { path, py, line: _, col: _ } = d {
                 if *py {
                     self.imports.insert(path.clone(), ImportKind::Py);
                 } else if STD_MODULES.contains(&path.as_str()) {
@@ -131,18 +132,22 @@ impl Checker {
                     if path == "ctx" {
                         self.structs.insert("Ctx".into(), vec![]);
                     }
-                } else {
-                    self.diag(*line, *col, format!("unknown module: {path}"));
                 }
+                // file imports resolve after fns and structs are collected
             }
         }
         for d in &prog.decls {
-            if let Decl::Struct { name, fields, line, col } = d {
+            if let Decl::Struct { name, line, col, .. } = d {
                 if self.structs.contains_key(name) {
                     self.diag(*line, *col, format!("duplicate struct: {name}"));
                     continue;
                 }
-                let fs = fields
+                self.structs.insert(name.clone(), vec![]);
+            }
+        }
+        for d in &prog.decls {
+            if let Decl::Struct { name, fields, line, col } = d {
+                let fs: Vec<(String, Type)> = fields
                     .iter()
                     .map(|(f, t)| (f.clone(), self.resolve(t, *line, *col)))
                     .collect();
@@ -164,6 +169,23 @@ impl Checker {
                 let rets = f.ret.iter().map(|t| self.resolve(t, f.line, f.col)).collect();
                 if self.fns.insert(f.name.clone(), (params, rets)).is_some() {
                     self.diag(f.line, f.col, format!("duplicate function: {}", f.name));
+                }
+            }
+        }
+        // second import pass: a path that isn't stdlib or py is a file import
+        // if the merged program has symbols under its namespace
+        for d in &prog.decls {
+            if let Decl::Import { path, py: false, line, col } = d {
+                if STD_MODULES.contains(&path.as_str()) {
+                    continue;
+                }
+                let prefix = format!("{path}.");
+                let has_symbols = self.fns.keys().any(|k| k.starts_with(&prefix))
+                    || self.structs.keys().any(|k| k.starts_with(&prefix));
+                if has_symbols {
+                    self.imports.insert(path.clone(), ImportKind::File(path.clone()));
+                } else {
+                    self.diag(*line, *col, format!("unknown module: {path}"));
                 }
             }
         }
@@ -586,7 +608,7 @@ impl Checker {
                 if let Some(k) = self.imports.get(n) {
                     return one(match k {
                         ImportKind::Py => Type::Py,
-                        ImportKind::Std(m) => Type::Module(m.clone()),
+                        ImportKind::Std(m) | ImportKind::File(m) => Type::Module(m.clone()),
                     });
                 }
                 self.diag(line, col, format!("undefined: {n}"));
@@ -934,6 +956,19 @@ impl Checker {
         }
         let rt = self.expr_one(recv, None);
         match &rt {
+            Type::Module(m) if matches!(self.imports.get(m), Some(ImportKind::File(_))) => {
+                let mangled = format!("{m}.{name}");
+                match self.fns.get(&mangled).cloned() {
+                    Some((params, rets)) => {
+                        self.check_args(&params, args, line, col);
+                        rets_ty(rets)
+                    }
+                    None => {
+                        self.diag(line, col, format!("{m} has no member {name}"));
+                        ExprTy::One(Type::Unknown)
+                    }
+                }
+            }
             Type::Module(m) => {
                 // polymorphic math members
                 if m == "math" && matches!(name, "abs" | "min" | "max") {
@@ -1141,6 +1176,15 @@ impl Checker {
                     Type::Unknown
                 }
             },
+            Type::Module(m) if matches!(self.imports.get(m), Some(ImportKind::File(_))) => {
+                match self.fns.get(&format!("{m}.{name}")) {
+                    Some((args, rets)) => Type::Fn(args.clone(), rets.clone()),
+                    None => {
+                        self.diag(line, col, format!("{m} has no member {name}"));
+                        Type::Unknown
+                    }
+                }
+            }
             Type::Module(m) => match std_member(m, name) {
                 Some(Member::Const(t)) => t,
                 Some(Member::Fn(args, rets)) => Type::Fn(args, rets),

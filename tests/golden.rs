@@ -1,6 +1,12 @@
 use std::{fs, path::Path, path::PathBuf};
 
 fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
+    // a directory with a main.mg is one multi-file case; siblings are modules
+    let main = dir.join("main.mg");
+    if main.exists() {
+        out.push(main);
+        return;
+    }
     for e in fs::read_dir(dir).unwrap() {
         let p = e.unwrap().path();
         if p.is_dir() {

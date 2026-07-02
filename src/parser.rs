@@ -185,6 +185,14 @@ impl Parser {
         }
     }
 
+    fn maybe_opt(&mut self, base: TypeExpr) -> TypeExpr {
+        if self.eat(&Token::Question) {
+            TypeExpr::Opt(Box::new(base))
+        } else {
+            base
+        }
+    }
+
     fn type_expr(&mut self) -> Result<TypeExpr, Diag> {
         let base = match self.peek().cloned() {
             Some(Token::Py) => {
@@ -238,7 +246,16 @@ impl Parser {
                         self.expect(&Token::RBracket, "]")?;
                         TypeExpr::Map(Box::new(k), Box::new(v))
                     }
-                    _ => TypeExpr::Named(name),
+                    _ => {
+                        if self.peek() == Some(&Token::Dot) {
+                            if let Some(Token::Ident(_)) = self.peek2() {
+                                self.bump();
+                                let member = self.ident("type name")?;
+                                return Ok(self.maybe_opt(TypeExpr::Named(format!("{name}.{member}"))));
+                            }
+                        }
+                        TypeExpr::Named(name)
+                    }
                 }
             }
             _ => return Err(self.err_here("expected type")),

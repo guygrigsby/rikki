@@ -3,6 +3,7 @@ pub mod builtins;
 pub mod diag;
 pub mod interp;
 pub mod lexer;
+pub mod loader;
 pub mod parser;
 pub mod stdlib;
 pub mod token;
@@ -34,7 +35,8 @@ pub fn run_source(path: &Path) -> RunResult {
             }
         }
     };
-    let prog = match parser::parse(&src) {
+    drop(src);
+    let prog = match loader::load(path) {
         Ok(p) => p,
         Err(d) => {
             return RunResult { stdout: String::new(), exit: ExitKind::CompileError(d.to_string()) }

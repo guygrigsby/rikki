@@ -1,0 +1,7 @@
+import "util.mg"
+
+fn main() {
+    print(util.double(21))
+    p := util.make(1, 2)
+    print(p.a + p.b)
+}

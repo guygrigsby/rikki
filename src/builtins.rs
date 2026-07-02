@@ -273,6 +273,10 @@ impl Interp<'_> {
         name: &str,
         args: Vec<Value>,
     ) -> Result<Value, Fault> {
+        let mangled = format!("{module}.{name}");
+        if self.has_fn(&mangled) {
+            return self.call_fn_by_name(&mangled, args);
+        }
         let module = module.to_string();
         crate::stdlib::call(self, &module, name, args)
     }
