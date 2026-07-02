@@ -2,6 +2,8 @@
 
 Status: approved 2026-07-01. Supersedes the ichor design entirely (removed at `fe59f69`).
 
+Rationale document. For exact language rules the normative reference is `language-spec.md` at the repo root; where details here have drifted (known: Ctx is also a reference type, `bool(x)` exists, `.pytype`/`.traceback` exist on every error, inbound conversions include `none` and `py` passthrough, all failures exit 1), the spec governs.
+
 Interpreted language with Go's discipline and CPython's ecosystem. Named for the animal that hunts snakes and shrugs off venom. CLI is `mongoose`, source files are `.mg`.
 
 Four Python failure modes drove the design, and each gets a structural fix, not a lint:
