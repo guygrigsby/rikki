@@ -11,4 +11,6 @@ fn main() {
     print(math.ceil(2.1))
     print(math.round(2.5))
     printf("%.5f\n", math.pi)
+    printf("%.4f %.4f %.4f\n", math.cos(0.0), math.sin(math.pi / 2.0), math.tan(0.0))
+    printf("%.4f\n", math.cos(math.pi))
 }

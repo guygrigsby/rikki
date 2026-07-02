@@ -1691,6 +1691,7 @@ Error fields are specified in section 5.7.
 | `abs` | `(int) int` or `(float) float` | absolute value (polymorphic over the two numeric types) |
 | `min`, `max` | `(int, int) int` or `(float, float) float` | both arguments the same numeric type |
 | `sqrt` | `(float) float` | square root |
+| `cos`, `sin`, `tan` | `(float) float` | trigonometry, radians |
 | `pow` | `(float, float) float` | exponentiation |
 | `floor` | `(float) int` | round down |
 | `ceil` | `(float) int` | round up |
