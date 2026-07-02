@@ -343,8 +343,13 @@ impl<'p> Interp<'p> {
                     Ev::V(v) => v,
                     Ev::Ret(r) => return Ok(Flow::Return(r)),
                     Ev::PyErr(e) => {
-                        // py chain destructured: zero-fill values, bind error
-                        let mut parts = vec![Value::NoneV; names.len().saturating_sub(1)];
+                        // py chain destructured: zero-fill values, bind error;
+                        // the value slots of a py chain are always py-typed,
+                        // so their zero is a Python None handle
+                        let mut parts = vec![
+                            Value::Py(crate::bridge::py_none());
+                            names.len().saturating_sub(1)
+                        ];
                         parts.push(Value::Err(e));
                         for (n, p) in names.iter().zip(parts) {
                             if n != "_" {
@@ -964,7 +969,7 @@ impl<'p> Interp<'p> {
                 "bool" => Value::Bool(false),
                 "str" => Value::Str(String::new()),
                 "error" => Value::NoneV,
-                "py" => Value::NoneV, // placeholder until the bridge lands
+                "py" => Value::Py(crate::bridge::py_none()),
                 s => match self.structs.get(s) {
                     Some(fields) => {
                         let mut out = IndexMap::new();
