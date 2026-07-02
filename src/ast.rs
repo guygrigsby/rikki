@@ -35,11 +35,13 @@ pub enum ExprKind {
     Call {
         callee: Box<Expr>,
         args: Vec<Expr>,
+        kwargs: Vec<(String, Expr)>,
     },
     Method {
         recv: Box<Expr>,
         name: String,
         args: Vec<Expr>,
+        kwargs: Vec<(String, Expr)>,
     },
     Field {
         recv: Box<Expr>,

@@ -871,8 +871,16 @@ impl Checker {
                     one(t)
                 }
             }
-            K::Call { callee, args } => self.call(callee, args, line, col),
-            K::Method { recv, name, args } => self.method(recv, name, args, line, col),
+            K::Call { callee, args, kwargs } => {
+                let ty = self.call(callee, args, line, col);
+                self.check_kwargs(kwargs, &ty, line, col);
+                ty
+            }
+            K::Method { recv, name, args, kwargs } => {
+                let ty = self.method(recv, name, args, line, col);
+                self.check_kwargs(kwargs, &ty, line, col);
+                ty
+            }
             K::Field { recv, name } => {
                 let t = self.field(recv, name, line, col);
                 if t == Type::Py {
@@ -1234,6 +1242,20 @@ impl Checker {
             if *t != want {
                 self.diag(line, col, format!("{name}: %{v} needs {want}, got {t}"));
             }
+        }
+    }
+
+    /// Named arguments exist only for python calls: the call's result is a
+    /// py chain exactly when the callee was py, so gate on that.
+    fn check_kwargs(&mut self, kwargs: &[(String, Expr)], result: &ExprTy, line: u32, col: u32) {
+        if kwargs.is_empty() {
+            return;
+        }
+        if !matches!(result, ExprTy::PyChain) {
+            self.diag(line, col, "named arguments are only for python calls");
+        }
+        for (_, v) in kwargs {
+            self.expr_one(v, None);
         }
     }
 

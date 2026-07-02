@@ -1,0 +1,12 @@
+import py "json"
+
+fn main() (error?) {
+    m := map[str, int]{"zeta": 1, "alpha": 2}
+    plain := check str(check json.dumps(m))
+    sorted_json := check str(check json.dumps(m, sort_keys: true))
+    print(plain)
+    print(sorted_json)
+    compact := check str(check json.dumps([1, 2], separators: [",", ":"]))
+    print(compact)
+    return none
+}

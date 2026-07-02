@@ -703,7 +703,7 @@ impl<'p> Interp<'p> {
                 }
                 self.binop(*op, l, r).map(Ev::V)
             }
-            K::Call { callee, args } => {
+            K::Call { callee, args, kwargs } => {
                 let mut vals = vec![];
                 // builtins by bare name, unless shadowed
                 if let K::Ident(name) = &callee.kind {
@@ -721,14 +721,21 @@ impl<'p> Interp<'p> {
                     vals.push(val!(self.eval(a)));
                 }
                 if let Value::Py(h) = &f {
-                    return Ok(match crate::bridge::call(h, &vals) {
+                    let mut kws = vec![];
+                    for (k, v) in kwargs {
+                        kws.push((k.clone(), val!(self.eval(v))));
+                    }
+                    return Ok(match crate::bridge::call(h, &vals, &kws) {
                         Ok(v) => Ev::V(v),
                         Err(e) => Ev::PyErr(e),
                     });
                 }
+                if !kwargs.is_empty() {
+                    return Err(self.fault("named arguments are only for python calls"));
+                }
                 self.call_value(&f, vals).map(Ev::V)
             }
-            K::Method { recv, name, args } => {
+            K::Method { recv, name, args, kwargs } => {
                 // error.new / error.wrap
                 if let K::Ident(id) = &recv.kind {
                     let shadowed = self.scopes.iter().rev().any(|s| s.contains_key(id));
@@ -751,10 +758,17 @@ impl<'p> Interp<'p> {
                         Err(e) => return Ok(Ev::PyErr(e)),
                     };
                     let Value::Py(fh) = &f else { unreachable!() };
-                    return Ok(match crate::bridge::call(fh, &vals) {
+                    let mut kws = vec![];
+                    for (k, v) in kwargs {
+                        kws.push((k.clone(), val!(self.eval(v))));
+                    }
+                    return Ok(match crate::bridge::call(fh, &vals, &kws) {
                         Ok(v) => Ev::V(v),
                         Err(e) => Ev::PyErr(e),
                     });
+                }
+                if !kwargs.is_empty() {
+                    return Err(self.fault("named arguments are only for python calls"));
                 }
                 self.method_call(r, name, vals).map(Ev::V)
             }

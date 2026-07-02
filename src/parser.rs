@@ -598,12 +598,13 @@ impl Parser {
                     self.bump();
                     let name = self.ident("member name")?;
                     if self.peek() == Some(&Token::LParen) {
-                        let args = self.call_args()?;
+                        let (args, kwargs) = self.call_args()?;
                         e = Expr {
                             kind: ExprKind::Method {
                                 recv: Box::new(e),
                                 name,
                                 args,
+                                kwargs,
                             },
                             line,
                             col,
@@ -620,11 +621,12 @@ impl Parser {
                     }
                 }
                 Some(Token::LParen) => {
-                    let args = self.call_args()?;
+                    let (args, kwargs) = self.call_args()?;
                     e = Expr {
                         kind: ExprKind::Call {
                             callee: Box::new(e),
                             args,
+                            kwargs,
                         },
                         line,
                         col,
@@ -665,12 +667,29 @@ impl Parser {
         Ok(e)
     }
 
-    fn call_args(&mut self) -> Result<Vec<Expr>, Diag> {
+    #[allow(clippy::type_complexity)]
+    fn call_args(&mut self) -> Result<(Vec<Expr>, Vec<(String, Expr)>), Diag> {
         self.expect(&Token::LParen, "(")?;
         self.skip_nl();
         let mut args = vec![];
+        let mut kwargs: Vec<(String, Expr)> = vec![];
         while self.peek() != Some(&Token::RParen) {
-            args.push(self.expr(true)?);
+            // `name: value` is a named argument (python calls only)
+            let named = matches!(self.peek(), Some(Token::Ident(_)))
+                && self.peek2() == Some(&Token::Colon);
+            if named {
+                let name = self.ident("argument name")?;
+                self.bump(); // the colon
+                self.skip_nl();
+                kwargs.push((name, self.expr(true)?));
+            } else {
+                if !kwargs.is_empty() {
+                    return Err(
+                        self.err_here("positional arguments cannot follow named arguments")
+                    );
+                }
+                args.push(self.expr(true)?);
+            }
             self.skip_nl();
             if !self.eat(&Token::Comma) {
                 break;
@@ -678,7 +697,7 @@ impl Parser {
             self.skip_nl();
         }
         self.expect(&Token::RParen, ")")?;
-        Ok(args)
+        Ok((args, kwargs))
     }
 
     fn primary(&mut self, struct_ok: bool) -> Result<Expr, Diag> {
@@ -728,8 +747,8 @@ impl Parser {
                     );
                     if type_follows {
                         let target = self.type_expr()?;
-                        let mut args = self.call_args()?;
-                        if args.len() != 1 {
+                        let (mut args, kwargs) = self.call_args()?;
+                        if args.len() != 1 || !kwargs.is_empty() {
                             return Err(self.err_here("conversion takes one argument"));
                         }
                         return Ok(mk(ExprKind::Conv {
@@ -767,8 +786,8 @@ impl Parser {
                 if CONV_NAMES.contains(&name.as_str()) && self.peek2() == Some(&Token::LParen) {
                     self.bump();
                     let target = TypeExpr::Named(name);
-                    let mut args = self.call_args()?;
-                    if args.len() != 1 {
+                    let (mut args, kwargs) = self.call_args()?;
+                    if args.len() != 1 || !kwargs.is_empty() {
                         return Err(self.err_here("conversion takes one argument"));
                     }
                     return Ok(mk(ExprKind::Conv {

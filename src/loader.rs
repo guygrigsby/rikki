@@ -277,16 +277,22 @@ impl Renamer {
                 self.expr(lhs);
                 self.expr(rhs);
             }
-            ExprKind::Call { callee, args } => {
+            ExprKind::Call { callee, args, kwargs } => {
                 self.expr(callee);
                 for a in args {
                     self.expr(a);
                 }
+                for (_, v) in kwargs {
+                    self.expr(v);
+                }
             }
-            ExprKind::Method { recv, args, .. } => {
+            ExprKind::Method { recv, args, kwargs, .. } => {
                 self.expr(recv);
                 for a in args {
                     self.expr(a);
+                }
+                for (_, v) in kwargs {
+                    self.expr(v);
                 }
             }
             ExprKind::Field { recv, .. } => self.expr(recv),

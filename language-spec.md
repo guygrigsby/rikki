@@ -703,7 +703,9 @@ normally at call time.
 ```
 PostfixExpr = PrimaryExpr { Selector | Arguments | Index | Slice } .
 Selector    = "." identifier .
-Arguments   = "(" { newline } [ ExpressionList [ "," ] ] { newline } ")" .
+Arguments   = "(" { newline } [ ArgumentList [ "," ] ] { newline } ")" .
+ArgumentList = Argument { "," { newline } Argument } .
+Argument     = Expression | identifier ":" Expression .
 ```
 
 `x.f` selects, depending on the type of `x`:
@@ -729,6 +731,12 @@ parameter type. A call of a non-function is a compile-time error
 (where `mod.f(...)` calls the module function), on `error` as the receiver of
 the builtin constructors `error.new` and `error.wrap` (section 15.1), and on
 `py` values (chapter 13). User struct types have no methods in v1.
+
+A named argument (`identifier ":" Expression`) binds the value to the named
+Python parameter and is permitted only in calls whose callee is a py value
+(chapter 13); a named argument in any other call is a compile-time error, as
+is a positional argument following a named one. Mongoose functions are
+positional only.
 
 Arguments are evaluated left to right, after the callee (or receiver)
 expression. Calls with multiple results are covered in section 7.10.
@@ -1422,7 +1430,7 @@ A `py` value supports:
 
 - attribute selection `x.attr`, yielding `py`;
 - calls `x(args...)` and method calls `x.m(args...)`, yielding `py`.
-  Arguments are positional only in v1; there is no keyword-argument syntax;
+  Named arguments (`f(x, lr: 0.001)`) pass as Python keyword arguments;
 - subscript `x[i]`, yielding `py`;
 - the binary operators `+ - * / % == != < <= > >=` when either operand is
   `py`, dispatched to the corresponding Python operation and yielding `py`

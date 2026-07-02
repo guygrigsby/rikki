@@ -4,8 +4,6 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
 
 ## v1.1
 
-- Keyword arguments for py calls. Positional-only today; torch APIs lean hard
-  on kwargs, this bites first.
 - `bytes` type. Unblocks binary file and http bodies. Touches literals,
   indexing, conversions.
 - `mongoose fmt`. One true style, needs a lossless formatter.

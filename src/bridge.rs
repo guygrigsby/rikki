@@ -125,12 +125,22 @@ pub fn getattr(h: &PyHandle, name: &str) -> Result<Value, ErrVal> {
     })
 }
 
-pub fn call(h: &PyHandle, args: &[Value]) -> Result<Value, ErrVal> {
+pub fn call(h: &PyHandle, args: &[Value], kwargs: &[(String, Value)]) -> Result<Value, ErrVal> {
     Python::attach(|py| {
         let converted: Result<Vec<Py<PyAny>>, ErrVal> = args.iter().map(|a| to_py(py, a)).collect();
         let tuple = PyTuple::new(py, converted?).map_err(|e| errval(py, e))?;
-        h.0.bind(py)
-            .call1(tuple)
+        let bound = h.0.bind(py);
+        let result = if kwargs.is_empty() {
+            bound.call1(tuple)
+        } else {
+            let d = PyDict::new(py);
+            for (k, v) in kwargs {
+                let val = to_py(py, v)?;
+                d.set_item(k, val).map_err(|e| errval(py, e))?;
+            }
+            bound.call(tuple, Some(&d))
+        };
+        result
             .map(|v| Value::Py(PyHandle::new(v.unbind())))
             .map_err(|e| errval(py, e))
     })
