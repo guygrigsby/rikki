@@ -73,7 +73,7 @@ fn zero_response() -> Value {
     let mut fields = IndexMap::new();
     fields.insert("status".to_string(), Value::Int(0));
     fields.insert("body".to_string(), Value::Str(String::new()));
-    fields.insert("headers".to_string(), Value::Map(IndexMap::new()));
+    fields.insert("headers".to_string(), Value::map(IndexMap::new()));
     Value::Struct {
         name: "Response".into(),
         fields,
@@ -135,7 +135,7 @@ pub fn call(interp: &mut Interp, name: &str, args: Vec<Value>) -> Result<Value, 
             };
             let mut headers = vec![];
             if let Some(Value::Map(h)) = fields.get("headers") {
-                for (k, v) in h {
+                for (k, v) in h.borrow().iter() {
                     if let (MapKey::Str(k), Value::Str(v)) = (k, v) {
                         headers.push((k.clone(), v.clone()));
                     }
@@ -203,7 +203,7 @@ pub fn call(interp: &mut Interp, name: &str, args: Vec<Value>) -> Result<Value, 
     let mut fields = IndexMap::new();
     fields.insert("status".to_string(), Value::Int(status));
     fields.insert("body".to_string(), Value::Str(body));
-    fields.insert("headers".to_string(), Value::Map(headers));
+    fields.insert("headers".to_string(), Value::map(headers));
     Ok(Value::Tuple(vec![
         Value::Struct {
             name: "Response".into(),
@@ -261,7 +261,7 @@ fn stream(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Fault> {
     let mut fields = IndexMap::new();
     fields.insert("status".to_string(), Value::Int(status));
     fields.insert("body".to_string(), Value::Str(full));
-    fields.insert("headers".to_string(), Value::Map(headers));
+    fields.insert("headers".to_string(), Value::map(headers));
     Ok(Value::Tuple(vec![
         Value::Struct {
             name: "Response".into(),
@@ -326,7 +326,7 @@ mod tests {
         let Value::Map(h) = &fields["headers"] else {
             panic!()
         };
-        assert!(matches!(&h[&MapKey::Str("x-test".into())], Value::Str(s) if s == "yes"));
+        assert!(matches!(&h.borrow()[&MapKey::Str("x-test".into())], Value::Str(s) if s == "yes"));
     }
 
     #[test]

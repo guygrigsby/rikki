@@ -1,0 +1,38 @@
+struct Box {
+    xs []int
+}
+
+fn main() {
+    // lists are references: assignment aliases
+    xs := [1, 2, 3]
+    ys := xs
+    ys[0] = 9
+    print(xs[0])
+    // maps too
+    m := map[str]int{"a": 1}
+    n := m
+    n["b"] = 2
+    print(len(m))
+    // clone is the explicit one-level copy
+    zs := clone(xs)
+    zs[1] = 0
+    print(xs[1])
+    // struct copies are shallow: the copy's list field aliases
+    b := Box{xs: xs}
+    c := b
+    c.xs[2] = 7
+    print(xs[2])
+    // delete mutates in place
+    m.delete("a")
+    print(len(n))
+    // list range fixes length at entry; element writes are visible
+    total := 0
+    for i, v := range xs {
+        if i == 0 {
+            xs[2] = 100
+            xs = append(xs, 5)
+        }
+        total = total + v
+    }
+    print(total)
+}

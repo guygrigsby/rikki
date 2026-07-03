@@ -33,7 +33,8 @@ Source files use the `.rk` extension.
 
 ## 1. Introduction
 
-Rikki is a statically typed, interpreted language with value semantics,
+Rikki is a statically typed, interpreted language with Go's copy model
+(scalars and structs copy; lists, maps, and functions are references),
 errors as values, option types instead of nil, and an embedded Python bridge.
 A rikki program is checked in full before any of it runs; a program that
 passes the checker cannot crash the hosting process at runtime. The worst
@@ -192,7 +193,8 @@ always denote a conversion (section 7.7), and `map [` in expression position
 always begins a map literal. Slice types and slice conversions are written
 with the `[]` prefix (`[]int`, `[]float(x)`; sections 5.9, 7.7) and involve
 no reserved name. Builtin function names (`print`, `printf`, `sprintf`,
-`len`, `append`, `ord`, `chr`, `args`, `input`) are also not reserved; a variable or
+`len`, `append`, `clone`, `ord`, `chr`, `args`, `input`) are also not
+reserved; a variable or
 function declaration with the same name shadows the builtin.
 
 ### 4.5 Operators and punctuation
@@ -291,8 +293,9 @@ between `int` and `float` (section 7.9.1).
 
 ### 5.2 List types
 
-`[]T` is an ordered sequence of values of element type `T`. Lists have
-value semantics (chapter 11): assignment copies the whole list.
+`[]T` is an ordered sequence of values of element type `T`. Lists are
+reference types (chapter 11): assignment, argument passing, and capture
+alias the one underlying list. `clone(xs)` makes an explicit copy.
 
 ### 5.3 Map types
 
@@ -300,7 +303,8 @@ value semantics (chapter 11): assignment copies the whole list.
 must be `int`, `str`, or `bool`; any other key type is a compile-time error.
 Maps preserve insertion order: iteration, `keys()`, and `values()` visit
 entries in the order the keys were first inserted, and `delete` preserves the
-relative order of the remaining entries. Maps have value semantics.
+relative order of the remaining entries. Maps are reference types
+(chapter 11), like lists.
 
 Reading `m[k]` yields `V?`: a missing key reads as `none` (section 7.5).
 Writing `m[k] = v` inserts or updates (section 8.3).
@@ -348,8 +352,9 @@ parenthesized: `fn() (fn() int)`.
 
 A struct type is declared at the top level (section 6.3) and consists of an
 ordered list of named, typed fields. Structs are nominal: two structs with
-the same fields but different names are distinct types. Struct values have
-value semantics; fields are accessed with `.` and assigned through assignment
+the same fields but different names are distinct types. Structs are value
+types (chapter 11); copies are shallow in Go's sense, so reference-typed
+fields alias. Fields are accessed with `.` and assigned through assignment
 statements. User struct types have no methods in v1.
 
 Recursive structs are restricted: a struct must not contain itself by value,
@@ -747,7 +752,7 @@ parameter type. A call of a non-function is a compile-time error
 ("not callable").
 
 `x.m(a1, ..., an)` is a method call. Methods exist only on strings, slices,
-and maps (section 14.10), on `Ctx` (section 15.4), on modules
+and maps (section 14.11), on `Ctx` (section 15.4), on modules
 (where `mod.f(...)` calls the module function), on `error` as the receiver of
 the builtin constructors `error.new` and `error.wrap` (section 15.1), and on
 `py` values (chapter 13). User struct types have no methods in v1.
@@ -1219,8 +1224,13 @@ Rikki has one loop keyword with three forms, as in Go:
   The variables and `:=` may be omitted (`for range e { ... }`) to run
   the body once per element. Ranging over any other type, or with more
   variables than the operand admits, is a compile-time error. The
-  iteration variables are fresh copies each round; mutating them does not
-  affect the container.
+  iteration variables are fresh bindings each round, copied by their
+  kinds (chapter 11): rebinding or mutating a value-typed variable does
+  not affect the container; a reference-typed variable aliases the
+  element. A list operand's length is fixed at loop entry (element writes
+  during iteration are visible; growth is a new list anyway, since append
+  is pure); a map operand's keys are snapshotted at entry, entries
+  deleted mid-iteration are skipped and additions are not visited.
 
 Struct literals are suppressed in the loop header (section 7.2.3).
 
@@ -1400,32 +1410,53 @@ fn parse_age(s str) (int, error?) {
 `main` may itself declare `(error?)`; returning a non-none error from `main`
 terminates the program with a nonzero exit status (section 17.2).
 
-## 11. Value semantics and equality
+## 11. The copy model and equality
 
-### 11.1 Value semantics
+### 11.1 Value and reference types
 
-Assignment, argument passing, returning, capturing in a function literal,
-placing in a container, and iteration binding all copy the value, deeply.
-After `b := a`, mutating `b` never affects `a`, for every type except the two
-documented reference types:
+Rikki splits its types the way Go does. **Value types** copy on
+assignment, argument passing, returning, iteration binding, and placement
+in a container: `int`, `float`, `bool`, `str` (immutable), `error`,
+structs, and tuples. A struct copy is shallow in Go's sense: fields of
+reference type copy the reference, so the copy's containers alias the
+original's.
 
-- `py` values are references to live Python objects (section 5.8); copying
-  copies the reference.
-- `Ctx` values (section 15.4) are opaque handles; copying copies the handle.
+**Reference types** copy the reference; there is one underlying object:
+`[]T`, `map[K]V`, `fn`, `py` (section 5.8), and `Ctx` (section 15.4).
 
 ```
 a := [1, 2, 3]
 b := a
 b[0] = 99
-print(a[0])   // 1
+print(a[0])   // 99: a and b are the same list
 
 fn mutate(xs []int) { xs[0] = 42 }
 mutate(a)
-print(a[0])   // 1
+print(a[0])   // 42
 ```
 
-The `append` builtin and builtin methods are value-semantic too: `append(xs, v)`, `m.delete(k)`, and
-`xs.sorted()` return new containers and leave the receiver untouched.
+The zero value of a list or map is a fresh empty container, immediately
+usable; rikki has no nil and no nil-map write fault.
+
+`clone(x)` returns a one-level copy of a list or map: the container is
+new, its elements are copied by their own kinds (values copy, references
+alias), matching Go's `slices.Clone` and `maps.Clone`. `clone` of a value
+type is a compile-time error; those copy already.
+
+Mutation happens through element and field assignment (`xs[i] = v`,
+`m[k] = v`, `s.f = v`) and through `m.delete(k)`, which removes in place.
+`append(xs, v)` stays pure, Go's contract: it returns a fresh list, and
+growth becomes visible to other names only by rebinding
+(`xs = append(xs, v)`). `xs.sorted()`, `xs.map(f)`, and the other list
+methods also return fresh lists.
+
+Aliasing makes cyclic values constructible (a struct field list can reach
+its own container through a chain of references). Every deep walk over
+values is bounded: structural comparison and bridge conversion fault with
+"value too deep or cyclic" past depth 256, rendering truncates to "...",
+and an assignment path that reaches the same container twice faults
+("assignment path aliases itself"). A cyclic value can exist; it cannot
+hang or crash the interpreter.
 
 ### 11.2 Equality
 
@@ -1471,7 +1502,10 @@ The complete set of fault conditions reachable from checked programs:
   precision exceeds the implementation's pad limit (section 14.2);
 - operations on list elements whose actual type does not match the list's
   static element type after an unchecked `[]T` conversion
-  (section 7.7).
+  (section 7.7);
+- structural comparison or bridge conversion of a value deeper than the
+  implementation's depth limit (a cyclic value; section 11.1), and an
+  assignment whose path reaches the same container twice.
 
 Float arithmetic never faults (section 5.1). Reading a map never faults.
 Python exceptions are not faults; they become error values (chapter 13) --
@@ -1704,12 +1738,25 @@ runtime fault. `chr(ord(c)) == c` for every one-character `c`.
 append(xs []T, v1 T, ..., vn T) []T
 ```
 
-A copy of `xs` with the values appended, as in Go: `xs = append(xs, v)`.
-The first argument must be a list; every following value must be assignable
-to its element type. Zero values yield a plain copy. The original list is
-never modified (chapter 12).
+A fresh list: `xs` with the values appended, as in Go's idiom
+`xs = append(xs, v)`. The first argument must be a list; every following
+value must be assignable to its element type. Zero values yield a plain
+copy. The original list is never modified; other names bound to it see
+growth only through rebinding (chapter 11).
 
-### 14.10 Methods on builtin types
+### 14.10 clone
+
+```
+clone(x []T) []T
+clone(x map[K]V) map[K]V
+```
+
+A one-level copy of a list or map (chapter 11): the container is new, its
+elements copy by their kinds, exactly Go's `slices.Clone`/`maps.Clone`.
+Applying `clone` to a value type is a compile-time error; value types
+already copy.
+
+### 14.11 Methods on builtin types
 
 All receivers are unchanged; results are new values.
 
@@ -1741,7 +1788,7 @@ List methods (receiver `[]T`):
 | `filter` | `(f fn(T) bool) []T` | keep elements where `f` is true |
 | `each` | `(f fn(T))` | call `f` on each element; no result |
 | `sum` | `() T` | `T` must be `int` or `float`; sum of elements. Integer overflow faults (chapter 12). Summing an empty `[]int` yields 0; the result of summing an empty `[]float` is unspecified in v1 (the reference implementation yields a value that faults on later float use) |
-| `sorted` | `() []T` | `T` must be `int`, `float`, or `str`; ascending copy |
+| `sorted` | `() []T` | `T` must be `int`, `float`, or `str`; a fresh ascending list |
 | `sorted_by` | `(before fn(T, T) bool) []T` | sorted copy per comparator; stable |
 | `contains` | `(v T) bool` | structural membership (section 11.2) |
 | `join` | `(sep str) str` | `T` must be `str`; concatenation with separator |
@@ -1753,7 +1800,7 @@ Map methods (receiver `map[K]V`):
 | `keys` | `() []K` | keys in insertion order |
 | `values` | `() []V` | values in insertion order |
 | `has` | `(k K) bool` | key presence |
-| `delete` | `(k K) map[K]V` | copy without `k`; remaining order preserved |
+| `delete` | `(k K)` | removes `k` in place, Go's delete; remaining order preserved |
 
 ## 15. Standard library
 

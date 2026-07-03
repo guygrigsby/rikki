@@ -9,7 +9,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyList, PyString, PyTuple};
 
 use crate::ast::BinOp;
-use crate::value::{ErrVal, Value};
+use crate::value::{ErrVal, Value, DEPTH_LIMIT};
 
 /// Arc so rikki's deep-copy Clone never needs the GIL; py values are
 /// shared references by design.
@@ -227,6 +227,16 @@ pub fn binop(op: BinOp, l: &Value, r: &Value) -> Result<Value, ErrVal> {
 
 /// rikki → Python for arguments and indexes.
 fn to_py(py: Python<'_>, v: &Value) -> Result<Py<PyAny>, ErrVal> {
+    to_py_depth(py, v, 0)
+}
+
+fn to_py_depth(py: Python<'_>, v: &Value, depth: u32) -> Result<Py<PyAny>, ErrVal> {
+    if depth > DEPTH_LIMIT {
+        return Err(ErrVal {
+            msg: "value too deep or cyclic".into(),
+            ..Default::default()
+        });
+    }
     let obj: Py<PyAny> = match v {
         Value::Int(i) => PyInt::new(py, *i).into_any().unbind(),
         Value::Float(f) => PyFloat::new(py, *f).into_any().unbind(),
@@ -235,8 +245,11 @@ fn to_py(py: Python<'_>, v: &Value) -> Result<Py<PyAny>, ErrVal> {
         Value::NoneV => py.None(),
         Value::Py(h) => (*h.0).clone_ref(py),
         Value::List(items) => {
-            let converted: Result<Vec<Py<PyAny>>, ErrVal> =
-                items.iter().map(|x| to_py(py, x)).collect();
+            let items = items.borrow();
+            let converted: Result<Vec<Py<PyAny>>, ErrVal> = items
+                .iter()
+                .map(|x| to_py_depth(py, x, depth + 1))
+                .collect();
             PyList::new(py, converted?)
                 .map_err(|e| errval(py, e))?
                 .into_any()
@@ -244,9 +257,9 @@ fn to_py(py: Python<'_>, v: &Value) -> Result<Py<PyAny>, ErrVal> {
         }
         Value::Map(m) => {
             let d = PyDict::new(py);
-            for (k, val) in m {
-                let key = to_py(py, &k.to_value())?;
-                let value = to_py(py, val)?;
+            for (k, val) in m.borrow().iter() {
+                let key = to_py_depth(py, &k.to_value(), depth + 1)?;
+                let value = to_py_depth(py, val, depth + 1)?;
                 d.set_item(key, value).map_err(|e| errval(py, e))?;
             }
             d.into_any().unbind()
@@ -300,7 +313,7 @@ pub fn extract(target: &ConvTarget, h: &PyHandle) -> Result<Value, ErrVal> {
                     let item = item.map_err(|e| errval(py, e))?;
                     out.push(scalar(py, elem, &item)?);
                 }
-                Ok(Value::List(out))
+                Ok(Value::list(out))
             }
             ConvTarget::Other(name) => Err(ErrVal {
                 msg: format!("cannot convert py to {name}"),
@@ -376,7 +389,12 @@ mod tests {
             let m = ns.get_item("M").unwrap().unwrap().call0().unwrap();
             PyHandle::new(m.unbind())
         });
-        let out = binop(crate::ast::BinOp::MatMul, &Value::Py(h.clone()), &Value::Py(h)).unwrap();
+        let out = binop(
+            crate::ast::BinOp::MatMul,
+            &Value::Py(h.clone()),
+            &Value::Py(h),
+        )
+        .unwrap();
         let Value::Py(r) = out else { panic!("{out:?}") };
         assert_eq!(display(&r), "42");
     }

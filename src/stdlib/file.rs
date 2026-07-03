@@ -58,9 +58,9 @@ pub fn call(interp: &mut Interp, name: &str, args: Vec<Value>) -> Result<Value, 
                         .map(|e| e.file_name().to_string_lossy().to_string())
                         .collect();
                     names.sort();
-                    Value::List(names.into_iter().map(Value::Str).collect())
+                    Value::list(names.into_iter().map(Value::Str).collect())
                 }),
-            Value::List(vec![]),
+            Value::list(vec![]),
         ),
         ("remove", [path]) => {
             let r = if fs::metadata(path).map(|m| m.is_dir()).unwrap_or(false) {
@@ -140,6 +140,7 @@ mod tests {
             Value::Tuple(ts) => match &ts[0] {
                 Value::List(items) => {
                     let names: Vec<String> = items
+                        .borrow()
                         .iter()
                         .map(|v| match v {
                             Value::Str(x) => x.clone(),

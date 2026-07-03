@@ -450,14 +450,14 @@ impl Checker {
                                     }
                                 }
                                 match (&target.kind, t) {
-                                // map read is V?, but assignment writes a V
-                                (ExprKind::Index { recv, .. }, t) => {
-                                    let recv_ty = self.expr_one(recv, None);
-                                    match recv_ty {
-                                        Type::Map(_, v) => *v,
-                                        _ => t,
+                                    // map read is V?, but assignment writes a V
+                                    (ExprKind::Index { recv, .. }, t) => {
+                                        let recv_ty = self.expr_one(recv, None);
+                                        match recv_ty {
+                                            Type::Map(_, v) => *v,
+                                            _ => t,
+                                        }
                                     }
-                                }
                                     (_, t) => t,
                                 }
                             }

@@ -25,7 +25,9 @@ like uv/python: `rikki` (setup: new, py add, check, project run) and `tk`
   from user source is a bug.
 - `src/bridge.rs` is the only file that may name pyo3. The GIL, conversions,
   and exception translation live there and nowhere else.
-- Value semantics: `Value::clone` is a deep copy. `py` and ctx values are the
-  documented reference exceptions. Do not add more without an ADR.
+- The copy model is Go's split (ADR 0010): scalars, str, structs, tuples,
+  and errors are value types; lists, maps, fn, py, and ctx are reference
+  types behind shared cells. `Value::clone` copies by kind (cheap; never a
+  deep copy). Do not move a type across the split without an ADR.
 - Commit style: terse, verb-first, area prefix (`lexer:`, `parser:`, `check:`,
   `eval:`, `stdlib:`, `bridge:`, `cli:`, `spec:`).

@@ -14,7 +14,7 @@ fn main() {
     print(m.keys())
     print(m.values())
     print(m.has("a"))
-    print(m.delete("a"))
+    m.delete("a")
     print(m)
     s := " Hello,World "
     print(s.trim())

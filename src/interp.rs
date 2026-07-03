@@ -487,25 +487,25 @@ impl<'p> Interp<'p> {
                     let h = h.clone();
                     return self.py_range(names, &h, body);
                 }
-                let rounds: Box<dyn Iterator<Item = Vec<Value>>> = match it {
-                    Value::Int(n) => Box::new((0..n.max(0)).map(|i| vec![Value::Int(i)])),
-                    Value::List(items) => Box::new(
-                        items
-                            .into_iter()
-                            .enumerate()
-                            .map(|(i, v)| vec![Value::Int(i as i64), v]),
-                    ),
-                    Value::Map(m) => Box::new(m.into_iter().map(|(k, v)| vec![k.to_value(), v])),
-                    Value::Str(s) => {
-                        let chars: Vec<char> = s.chars().collect();
-                        Box::new(
-                            chars.into_iter().enumerate().map(|(i, c)| {
+                if let Value::List(items) = &it {
+                    let items = items.clone();
+                    return self.list_range(names, &items, body);
+                }
+                if let Value::Map(m) = &it {
+                    let m = m.clone();
+                    return self.map_range(names, &m, body);
+                }
+                let rounds: Box<dyn Iterator<Item = Vec<Value>>> =
+                    match it {
+                        Value::Int(n) => Box::new((0..n.max(0)).map(|i| vec![Value::Int(i)])),
+                        Value::Str(s) => {
+                            let chars: Vec<char> = s.chars().collect();
+                            Box::new(chars.into_iter().enumerate().map(|(i, c)| {
                                 vec![Value::Int(i as i64), Value::Str(c.to_string())]
-                            }),
-                        )
-                    }
-                    _ => return Err(self.fault("cannot range over this value")),
-                };
+                            }))
+                        }
+                        _ => return Err(self.fault("cannot range over this value")),
+                    };
                 for round in rounds {
                     self.scopes.push(Rc::new(HashMap::new()));
                     for (n, v) in names.iter().zip(round) {
@@ -543,6 +543,69 @@ impl<'p> Interp<'p> {
         }
     }
 
+    /// `for range` over a list: the length is fixed at loop entry, element
+    /// writes during iteration are visible, growth is not visited (append
+    /// is pure, so growth is a different list anyway).
+    #[inline(never)]
+    fn list_range(
+        &mut self,
+        names: &[String],
+        items: &crate::value::ListRef,
+        body: &Block,
+    ) -> Result<Flow, Fault> {
+        let n = items.borrow().len();
+        for i in 0..n {
+            let Some(v) = items.borrow().get(i).cloned() else {
+                break;
+            };
+            self.scopes.push(Rc::new(HashMap::new()));
+            for (name, val) in names.iter().zip([Value::Int(i as i64), v]) {
+                if name != "_" {
+                    self.bind(name.clone(), val)?;
+                }
+            }
+            let flow = self.exec_block_no_scope(body);
+            self.scopes.pop();
+            match flow? {
+                Flow::Normal | Flow::Continue => {}
+                Flow::Break => break,
+                r @ Flow::Return(_) => return Ok(r),
+            }
+        }
+        Ok(Flow::Normal)
+    }
+
+    /// `for range` over a map: keys are snapshotted at loop entry; entries
+    /// deleted mid-iteration are skipped, entries added are not visited.
+    #[inline(never)]
+    fn map_range(
+        &mut self,
+        names: &[String],
+        m: &crate::value::MapRef,
+        body: &Block,
+    ) -> Result<Flow, Fault> {
+        let keys: Vec<MapKey> = m.borrow().keys().cloned().collect();
+        for k in keys {
+            let Some(v) = m.borrow().get(&k).cloned() else {
+                continue;
+            };
+            self.scopes.push(Rc::new(HashMap::new()));
+            for (name, val) in names.iter().zip([k.to_value(), v]) {
+                if name != "_" {
+                    self.bind(name.clone(), val)?;
+                }
+            }
+            let flow = self.exec_block_no_scope(body);
+            self.scopes.pop();
+            match flow? {
+                Flow::Normal | Flow::Continue => {}
+                Flow::Break => break,
+                r @ Flow::Return(_) => return Ok(r),
+            }
+        }
+        Ok(Flow::Normal)
+    }
+
     /// `for range` over a py iterable: iter() once, __next__ per round,
     /// StopIteration ends the loop, anything else faults.
     #[inline(never)]
@@ -552,8 +615,7 @@ impl<'p> Interp<'p> {
         h: &crate::bridge::PyHandle,
         body: &Block,
     ) -> Result<Flow, Fault> {
-        let pit = crate::bridge::iter(h)
-            .map_err(|e| self.fault(format!("py range: {}", e.msg)))?;
+        let pit = crate::bridge::iter(h).map_err(|e| self.fault(format!("py range: {}", e.msg)))?;
         let mut i: i64 = 0;
         loop {
             let item = match crate::bridge::next(&pit) {
@@ -615,16 +677,32 @@ impl<'p> Interp<'p> {
             // steps are nonempty by construction; the loop always returns
             Err("py assignment: empty path".into())
         }
+        // Navigate &mut within one value (structs are inline); delegate to a
+        // container or the bridge at the first reference boundary. Deeper
+        // container hops recurse, each holding at most one borrow; a path
+        // that aliases itself is a clean error, never a RefCell abort.
         fn assign_into(mut slot: &mut Value, steps: Vec<Step>, v: Value) -> Result<(), String> {
-            let n = steps.len();
-            let mut iter = steps.into_iter().enumerate();
-            while let Some((i, st)) = iter.next() {
-                let last = i + 1 == n;
-                // a py value on the path takes the rest through the bridge
-                if let Value::Py(h) = slot {
-                    let rest: Vec<Step> = std::iter::once(st).chain(iter.map(|(_, s)| s)).collect();
-                    return py_assign(h, rest, v);
+            let mut steps = steps.into_iter().peekable();
+            loop {
+                if steps.peek().is_none() {
+                    *slot = v;
+                    return Ok(());
                 }
+                match slot {
+                    Value::Py(h) => return py_assign(h, steps.collect(), v),
+                    Value::List(items) => {
+                        let items = items.clone();
+                        return assign_list(&items, steps, v);
+                    }
+                    Value::Map(m) => {
+                        let m = m.clone();
+                        return assign_map(&m, steps, v);
+                    }
+                    _ => {}
+                }
+                let Some(st) = steps.next() else {
+                    return Err("internal: assignment path underflow".into());
+                };
                 match st {
                     Step::Field(f) => match slot {
                         Value::Struct { fields, .. } => match fields.get_mut(&f) {
@@ -633,38 +711,64 @@ impl<'p> Interp<'p> {
                         },
                         _ => return Err("cannot assign field here".into()),
                     },
-                    Step::Idx(idx) => match slot {
-                        Value::List(items) => {
-                            let i = match idx {
-                                Value::Int(i) => i,
-                                _ => return Err("index must be int".into()),
-                            };
-                            let len = items.len() as i64;
-                            if i < 0 || i >= len {
-                                return Err(format!("index out of bounds: {i} of {len}"));
-                            }
-                            slot = &mut items[i as usize];
-                        }
-                        Value::Map(m) => {
-                            let Some(k) = MapKey::from_value(&idx) else {
-                                return Err("bad map key".into());
-                            };
-                            if last {
-                                m.insert(k, v);
-                                return Ok(());
-                            }
-                            match m.get_mut(&k) {
-                                Some(x) => slot = x,
-                                None => return Err("missing key".into()),
-                            }
-                        }
+                    Step::Idx(_) => match slot {
                         Value::Str(_) => return Err("cannot assign into a string".into()),
                         _ => return Err("cannot index this value".into()),
                     },
                 }
             }
-            *slot = v;
-            Ok(())
+        }
+        fn assign_list(
+            items: &crate::value::ListRef,
+            mut steps: std::iter::Peekable<std::vec::IntoIter<Step>>,
+            v: Value,
+        ) -> Result<(), String> {
+            let idx = match steps.next() {
+                Some(Step::Idx(idx)) => idx,
+                Some(Step::Field(_)) => return Err("cannot assign field here".into()),
+                None => return Err("internal: assignment path underflow".into()),
+            };
+            let i = match idx {
+                Value::Int(i) => i,
+                _ => return Err("index must be int".into()),
+            };
+            let Ok(mut b) = items.try_borrow_mut() else {
+                return Err("assignment path aliases itself".into());
+            };
+            let len = b.len() as i64;
+            if i < 0 || i >= len {
+                return Err(format!("index out of bounds: {i} of {len}"));
+            }
+            if steps.peek().is_none() {
+                b[i as usize] = v;
+                return Ok(());
+            }
+            assign_into(&mut b[i as usize], steps.collect(), v)
+        }
+        fn assign_map(
+            m: &crate::value::MapRef,
+            mut steps: std::iter::Peekable<std::vec::IntoIter<Step>>,
+            v: Value,
+        ) -> Result<(), String> {
+            let idx = match steps.next() {
+                Some(Step::Idx(idx)) => idx,
+                Some(Step::Field(_)) => return Err("cannot assign field here".into()),
+                None => return Err("internal: assignment path underflow".into()),
+            };
+            let Some(k) = MapKey::from_value(&idx) else {
+                return Err("bad map key".into());
+            };
+            let Ok(mut b) = m.try_borrow_mut() else {
+                return Err("assignment path aliases itself".into());
+            };
+            if steps.peek().is_none() {
+                b.insert(k, v);
+                return Ok(());
+            }
+            match b.get_mut(&k) {
+                Some(x) => assign_into(x, steps.collect(), v),
+                None => Err("missing key".into()),
+            }
         }
         let mut steps = vec![];
         let mut cur = target;
@@ -742,7 +846,7 @@ impl<'p> Interp<'p> {
                 for it in items {
                     out.push(val!(self.eval(it)));
                 }
-                ok(Value::List(out))
+                ok(Value::list(out))
             }
             K::MapLit { entries, .. } => {
                 let mut m = IndexMap::new();
@@ -754,7 +858,7 @@ impl<'p> Interp<'p> {
                     let vv = val!(self.eval(v));
                     m.insert(key, vv);
                 }
-                ok(Value::Map(m))
+                ok(Value::map(m))
             }
             K::StructLit { name, fields } => {
                 if !self.structs.contains_key(name) {
@@ -1037,9 +1141,11 @@ impl<'p> Interp<'p> {
         };
         // list concat consumes both operands; the match below only borrows
         let (l, r) = match (op, l, r) {
-            (Add, List(mut a), List(b)) => {
-                a.extend(b);
-                return Ok(List(a));
+            (Add, List(a), List(b)) => {
+                // concat builds a fresh list; neither operand is mutated
+                let mut out = a.borrow().clone();
+                out.extend(b.borrow().iter().cloned());
+                return Ok(Value::list(out));
             }
             (_, l, r) => (l, r),
         };
@@ -1064,8 +1170,14 @@ impl<'p> Interp<'p> {
             (Mul, Float(a), Float(b)) => Float(a * b),
             (Div, Float(a), Float(b)) => Float(a / b),
             (Add, Str(a), Str(b)) => Str(format!("{a}{b}")),
-            (Eq, a, b) => Bool(a.eq_value(b)),
-            (NotEq, a, b) => Bool(!a.eq_value(b)),
+            (Eq, a, b) => match a.eq_value(b, 0) {
+                Some(eq) => Bool(eq),
+                None => return Result::Err(self.fault("value too deep or cyclic")),
+            },
+            (NotEq, a, b) => match a.eq_value(b, 0) {
+                Some(eq) => Bool(!eq),
+                None => return Result::Err(self.fault("value too deep or cyclic")),
+            },
             (Lt, Int(a), Int(b)) => Bool(a < b),
             (LtEq, Int(a), Int(b)) => Bool(a <= b),
             (Gt, Int(a), Int(b)) => Bool(a > b),
@@ -1110,6 +1222,7 @@ impl<'p> Interp<'p> {
     fn index(&self, r: &Value, i: Value) -> Result<Value, Fault> {
         match (r, i) {
             (Value::List(items), Value::Int(i)) => {
+                let items = items.borrow();
                 let len = items.len() as i64;
                 if i < 0 || i >= len {
                     return Err(self.fault(format!("index out of bounds: {i} of {len}")));
@@ -1134,7 +1247,7 @@ impl<'p> Interp<'p> {
                 let Some(key) = MapKey::from_value(&k) else {
                     return Err(self.fault("bad map key"));
                 };
-                Ok(m.get(&key).cloned().unwrap_or(Value::NoneV))
+                Ok(m.borrow().get(&key).cloned().unwrap_or(Value::NoneV))
             }
             _ => Err(self.fault("cannot index this value")),
         }
@@ -1146,11 +1259,12 @@ impl<'p> Interp<'p> {
         };
         match r {
             Value::List(items) => {
+                let items = items.borrow();
                 let len = items.len() as i64;
                 if a < 0 || b < a || b > len {
                     return Err(self.fault(format!("slice out of bounds: {a}:{b} of {len}")));
                 }
-                Ok(Value::List(items[a as usize..b as usize].to_vec()))
+                Ok(Value::list(items[a as usize..b as usize].to_vec()))
             }
             Value::Str(s) => {
                 let chars: Vec<char> = s.chars().collect();
@@ -1218,8 +1332,8 @@ impl<'p> Interp<'p> {
                     }
                 },
             },
-            TypeExpr::List(_) => Value::List(vec![]),
-            TypeExpr::Map(..) => Value::Map(IndexMap::new()),
+            TypeExpr::List(_) => Value::list(vec![]),
+            TypeExpr::Map(..) => Value::map(IndexMap::new()),
             TypeExpr::Opt(_) => Value::NoneV,
             TypeExpr::Fn(..) => Value::Fn(FnRef::Zero),
         })

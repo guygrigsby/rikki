@@ -475,6 +475,22 @@ impl Checker {
                         }
                         return ExprTy::One(Type::Str);
                     }
+                    "clone" => {
+                        if args.len() != 1 {
+                            self.diag(span, "clone takes one argument");
+                            return ExprTy::One(Type::Unknown);
+                        }
+                        let t = self.expr_one(&args[0], None);
+                        if !matches!(t, Type::List(_) | Type::Map(..) | Type::Unknown) {
+                            self.diag(
+                                span,
+                                format!(
+                                    "clone needs a list or map, got {t} (value types already copy)"
+                                ),
+                            );
+                        }
+                        return ExprTy::One(t);
+                    }
                     "len" => {
                         if args.len() != 1 {
                             self.diag(span, "len takes one argument");

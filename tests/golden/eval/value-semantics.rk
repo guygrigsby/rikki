@@ -1,14 +1,29 @@
+struct P {
+    n int
+}
+
+fn bump(p P) {
+    p.n = 99
+}
+
 fn mutate(xs []int) {
     xs[0] = 42
 }
+
 fn main() {
+    // scalars and structs copy on assignment and call
+    p := P{n: 1}
+    q := p
+    q.n = 5
+    print(p.n)
+    print(q.n)
+    bump(p)
+    print(p.n)
+    // lists are references: the callee mutates the caller's list
     a := [1, 2, 3]
-    b := a
-    b[0] = 99
-    print(a[0])
-    print(b[0])
     mutate(a)
     print(a[0])
+    // maps too
     m := map[str]int{"k": 1}
     n := m
     n["k"] = 5

@@ -11,7 +11,6 @@ x-y
 [2, 1]
 true
 {b: 2}
-{b: 2, a: 1}
 Hello,World
 [Hello, World]
 true

@@ -25,18 +25,29 @@ impl Interp<'_> {
             }
             "len" => match args.first() {
                 Some(Value::Str(s)) => Ok(Value::Int(s.chars().count() as i64)),
-                Some(Value::List(v)) => Ok(Value::Int(v.len() as i64)),
-                Some(Value::Map(m)) => Ok(Value::Int(m.len() as i64)),
+                Some(Value::List(v)) => Ok(Value::Int(v.borrow().len() as i64)),
+                Some(Value::Map(m)) => Ok(Value::Int(m.borrow().len() as i64)),
                 _ => Err(self.fault("len needs str, list, or map")),
             },
             "append" => {
+                // pure, Go's contract: a fresh list; growth is visible to
+                // aliases only through rebinding the same variable
                 let mut it = args.into_iter();
                 match it.next() {
-                    Some(Value::List(mut items)) => {
-                        items.extend(it);
-                        Ok(Value::List(items))
+                    Some(Value::List(items)) => {
+                        let mut out = items.borrow().clone();
+                        out.extend(it);
+                        Ok(Value::list(out))
                     }
                     _ => Err(self.fault("append needs a list first argument")),
+                }
+            }
+            "clone" => {
+                let mut it = args.into_iter();
+                match it.next() {
+                    Some(Value::List(items)) => Ok(Value::list(items.borrow().clone())),
+                    Some(Value::Map(m)) => Ok(Value::map(m.borrow().clone())),
+                    _ => Err(self.fault("clone needs a list or map (value types already copy)")),
                 }
             }
             "ord" => match args.first() {
@@ -57,7 +68,7 @@ impl Interp<'_> {
                     .ok_or_else(|| self.fault(format!("chr: invalid code point {n}"))),
                 _ => Err(self.fault("chr needs an int")),
             },
-            "args" => Ok(Value::List(
+            "args" => Ok(Value::list(
                 self.prog_args.iter().cloned().map(Value::Str).collect(),
             )),
             "input" => {
@@ -185,17 +196,19 @@ impl Interp<'_> {
             Value::Map(m) => {
                 let arg = args.pop();
                 match (name, arg) {
-                    ("keys", None) => Ok(Value::List(m.keys().map(|k| k.to_value()).collect())),
-                    ("values", None) => Ok(Value::List(m.values().cloned().collect())),
+                    ("keys", None) => Ok(Value::list(
+                        m.borrow().keys().map(|k| k.to_value()).collect(),
+                    )),
+                    ("values", None) => Ok(Value::list(m.borrow().values().cloned().collect())),
                     ("has", Some(k)) => match crate::value::MapKey::from_value(&k) {
-                        Some(key) => Ok(Value::Bool(m.contains_key(&key))),
+                        Some(key) => Ok(Value::Bool(m.borrow().contains_key(&key))),
                         None => Err(self.fault("bad map key")),
                     },
+                    // mutates in place, Go's delete
                     ("delete", Some(k)) => match crate::value::MapKey::from_value(&k) {
                         Some(key) => {
-                            let mut out = m;
-                            out.shift_remove(&key);
-                            Ok(Value::Map(out))
+                            m.borrow_mut().shift_remove(&key);
+                            Ok(Value::Unit)
                         }
                         None => Err(self.fault("bad map key")),
                     },
@@ -208,10 +221,14 @@ impl Interp<'_> {
 
     fn list_method(
         &mut self,
-        items: Vec<Value>,
+        items: crate::value::ListRef,
         name: &str,
         mut args: Vec<Value>,
     ) -> Result<Value, Fault> {
+        // snapshot the elements (shallow: scalars copy, containers alias) so
+        // no borrow is held while callbacks run; a callback mutating the
+        // receiver sees its writes afterwards, the iteration is fixed
+        let items: Vec<Value> = items.borrow().clone();
         match name {
             "map" => {
                 let f = args
@@ -221,7 +238,7 @@ impl Interp<'_> {
                 for it in items {
                     out.push(self.call_value(&f, vec![it])?);
                 }
-                Ok(Value::List(out))
+                Ok(Value::list(out))
             }
             "filter" => {
                 let f = args
@@ -233,7 +250,7 @@ impl Interp<'_> {
                         out.push(it);
                     }
                 }
-                Ok(Value::List(out))
+                Ok(Value::list(out))
             }
             "each" => {
                 let f = args
@@ -287,7 +304,7 @@ impl Interp<'_> {
                 });
                 match err {
                     Some(m) => Err(self.fault(m)),
-                    None => Ok(Value::List(out)),
+                    None => Ok(Value::list(out)),
                 }
             }
             "sorted_by" => {
@@ -308,13 +325,20 @@ impl Interp<'_> {
                     }
                     out.insert(pos, it);
                 }
-                Ok(Value::List(out))
+                Ok(Value::list(out))
             }
             "contains" => {
                 let v = args
                     .pop()
                     .ok_or_else(|| self.fault("contains needs a value"))?;
-                Ok(Value::Bool(items.iter().any(|it| it.eq_value(&v))))
+                for it in &items {
+                    match it.eq_value(&v, 0) {
+                        Some(true) => return Ok(Value::Bool(true)),
+                        Some(false) => {}
+                        None => return Err(self.fault("value too deep or cyclic")),
+                    }
+                }
+                Ok(Value::Bool(false))
             }
             "join" => {
                 let Some(Value::Str(sep)) = args.pop() else {
@@ -346,7 +370,7 @@ impl Interp<'_> {
             "lower" => Ok(Value::Str(s.to_lowercase())),
             "split" => {
                 let sep = one_str(self, &mut args)?;
-                Ok(Value::List(
+                Ok(Value::list(
                     s.split(&sep).map(|p| Value::Str(p.to_string())).collect(),
                 ))
             }
@@ -374,12 +398,12 @@ impl Interp<'_> {
                     None => Value::NoneV,
                 })
             }
-            "fields" => Ok(Value::List(
+            "fields" => Ok(Value::list(
                 s.split_whitespace()
                     .map(|p| Value::Str(p.to_string()))
                     .collect(),
             )),
-            "lines" => Ok(Value::List(
+            "lines" => Ok(Value::list(
                 s.lines().map(|p| Value::Str(p.to_string())).collect(),
             )),
             "trim_prefix" => {
@@ -390,7 +414,7 @@ impl Interp<'_> {
                 let p = one_str(self, &mut args)?;
                 Ok(Value::Str(s.strip_suffix(&p).unwrap_or(s).to_string()))
             }
-            "chars" => Ok(Value::List(
+            "chars" => Ok(Value::list(
                 s.chars().map(|c| Value::Str(c.to_string())).collect(),
             )),
             "repeat" => match args.pop() {

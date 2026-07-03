@@ -1,21 +1,36 @@
-use indexmap::IndexMap;
+use std::cell::RefCell;
 use std::rc::Rc;
+
+use indexmap::IndexMap;
 
 use crate::ast::{Block, Param, TypeExpr};
 
-/// Runtime value. `Clone` is a deep copy (value semantics); `py` and ctx
-/// values are the documented reference exceptions, and closures share their
-/// immutable captured environment (ADR 0009).
+/// Shared list storage: lists are reference types (ADR 0010).
+pub type ListRef = Rc<RefCell<Vec<Value>>>;
+/// Shared map storage: maps are reference types (ADR 0010).
+pub type MapRef = Rc<RefCell<IndexMap<MapKey, Value>>>;
+
+/// Recursion budget for deep walks over values (render, structural
+/// compare, bridge conversion). Aliasing makes cyclic values
+/// constructible; the cap turns a would-be hang into a fault or a
+/// truncated rendering.
+pub const DEPTH_LIMIT: u32 = 256;
+
+/// Runtime value, split Go's way (ADR 0010): scalars, strings, structs,
+/// tuples, and errors are value types (`Clone` copies them); lists, maps,
+/// fn, py, and ctx are reference types (`Clone` copies the reference).
+/// A struct copy is shallow in Go's sense: reference-typed fields alias.
 #[derive(Debug, Clone)]
 pub enum Value {
     Int(i64),
     Float(f64),
     Bool(bool),
     Str(String),
-    List(Vec<Value>),
-    /// Insertion order is language-visible (iteration, rendering); the
-    /// IndexMap is semantics, not an optimization target.
-    Map(IndexMap<MapKey, Value>),
+    /// Reference type: assignment, argument passing, and capture alias
+    /// the one underlying list. Insertion order is language-visible.
+    List(ListRef),
+    /// Reference type, like List. Insertion order is language-visible.
+    Map(MapRef),
     /// Field order is declaration order, also language-visible.
     Struct {
         name: String,
@@ -96,24 +111,37 @@ pub struct ClosureData {
 }
 
 impl Value {
+    pub fn list(items: Vec<Value>) -> Value {
+        Value::List(Rc::new(RefCell::new(items)))
+    }
+
+    pub fn map(m: IndexMap<MapKey, Value>) -> Value {
+        Value::Map(Rc::new(RefCell::new(m)))
+    }
+
     /// Equality per the language: scalars, none, options, and structural
     /// (recursive) equality for lists, structs, maps, and tuples. Py, fn,
     /// ctx, module, error, and unit values never compare equal, even to
-    /// themselves. Matching on `self` exhaustively (no catch-all) so a new
-    /// variant forces an equality decision at compile time.
-    pub fn eq_value(&self, other: &Value) -> bool {
-        match self {
+    /// themselves. None means the walk exceeded DEPTH_LIMIT (a cyclic or
+    /// absurdly deep value); callers fault. Matching on `self`
+    /// exhaustively (no catch-all) so a new variant forces an equality
+    /// decision at compile time.
+    pub fn eq_value(&self, other: &Value, depth: u32) -> Option<bool> {
+        if depth > DEPTH_LIMIT {
+            return None;
+        }
+        Some(match self {
             Value::Int(a) => matches!(other, Value::Int(b) if a == b),
             Value::Float(a) => matches!(other, Value::Float(b) if a == b),
             Value::Bool(a) => matches!(other, Value::Bool(b) if a == b),
             Value::Str(a) => matches!(other, Value::Str(b) if a == b),
             Value::NoneV => matches!(other, Value::NoneV),
             Value::List(a) => match other {
-                Value::List(b) => eq_seq(a, b),
+                Value::List(b) => Rc::ptr_eq(a, b) || eq_seq(&a.borrow(), &b.borrow(), depth + 1)?,
                 _ => false,
             },
             Value::Tuple(a) => match other {
-                Value::Tuple(b) => eq_seq(a, b),
+                Value::Tuple(b) => eq_seq(a, b, depth + 1)?,
                 _ => false,
             },
             Value::Struct {
@@ -124,19 +152,46 @@ impl Value {
                     name: bn,
                     fields: bf,
                 } => {
-                    an == bn
-                        && af.len() == bf.len()
-                        && af
-                            .iter()
-                            .all(|(k, v)| bf.get(k).is_some_and(|w| v.eq_value(w)))
+                    if an != bn || af.len() != bf.len() {
+                        false
+                    } else {
+                        for (k, v) in af {
+                            match bf.get(k) {
+                                Some(w) => {
+                                    if !v.eq_value(w, depth + 1)? {
+                                        return Some(false);
+                                    }
+                                }
+                                None => return Some(false),
+                            }
+                        }
+                        true
+                    }
                 }
                 _ => false,
             },
             Value::Map(a) => match other {
                 Value::Map(b) => {
-                    a.len() == b.len()
-                        && a.iter()
-                            .all(|(k, v)| b.get(k).is_some_and(|w| v.eq_value(w)))
+                    if Rc::ptr_eq(a, b) {
+                        true
+                    } else {
+                        let (a, b) = (a.borrow(), b.borrow());
+                        if a.len() != b.len() {
+                            false
+                        } else {
+                            for (k, v) in a.iter() {
+                                match b.get(k) {
+                                    Some(w) => {
+                                        if !v.eq_value(w, depth + 1)? {
+                                            return Some(false);
+                                        }
+                                    }
+                                    None => return Some(false),
+                                }
+                            }
+                            true
+                        }
+                    }
                 }
                 _ => false,
             },
@@ -146,30 +201,49 @@ impl Value {
             | Value::Module(_)
             | Value::Ctx(_)
             | Value::Unit => false,
-        }
+        })
     }
 }
 
-fn eq_seq(a: &[Value], b: &[Value]) -> bool {
-    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.eq_value(y))
+fn eq_seq(a: &[Value], b: &[Value], depth: u32) -> Option<bool> {
+    if a.len() != b.len() {
+        return Some(false);
+    }
+    for (x, y) in a.iter().zip(b) {
+        if !x.eq_value(y, depth)? {
+            return Some(false);
+        }
+    }
+    Some(true)
 }
 
 /// Canonical rendering, shared by print, %v, str() conversion, and the
-/// bridge's "cannot pass X to python" diagnostics.
+/// bridge's "cannot pass X to python" diagnostics. Rendering is for eyes:
+/// past DEPTH_LIMIT (cyclic values) it truncates to "..." rather than
+/// faulting.
 pub fn render(v: &Value) -> String {
+    render_depth(v, 0)
+}
+
+fn render_depth(v: &Value, depth: u32) -> String {
+    if depth > DEPTH_LIMIT {
+        return "...".into();
+    }
+    let r = |x: &Value| render_depth(x, depth + 1);
     match v {
         Value::Int(i) => i.to_string(),
         Value::Float(f) => f.to_string(),
         Value::Bool(b) => b.to_string(),
         Value::Str(s) => s.clone(),
         Value::List(items) => {
-            let inner = items.iter().map(render).collect::<Vec<_>>().join(", ");
+            let inner = items.borrow().iter().map(r).collect::<Vec<_>>().join(", ");
             format!("[{inner}]")
         }
         Value::Map(m) => {
             let inner = m
+                .borrow()
                 .iter()
-                .map(|(k, v)| format!("{}: {}", render(&k.to_value()), render(v)))
+                .map(|(k, v)| format!("{}: {}", r(&k.to_value()), r(v)))
                 .collect::<Vec<_>>()
                 .join(", ");
             format!("{{{inner}}}")
@@ -177,7 +251,7 @@ pub fn render(v: &Value) -> String {
         Value::Struct { name, fields } => {
             let inner = fields
                 .iter()
-                .map(|(k, v)| format!("{k}: {}", render(v)))
+                .map(|(k, v)| format!("{k}: {}", r(v)))
                 .collect::<Vec<_>>()
                 .join(", ");
             format!("{name}{{{inner}}}")
@@ -188,7 +262,7 @@ pub fn render(v: &Value) -> String {
         Value::Fn(_) => "fn".into(),
         Value::Module(m) => format!("module {m}"),
         Value::Ctx(_) => "ctx".into(),
-        Value::Tuple(items) => items.iter().map(render).collect::<Vec<_>>().join(", "),
+        Value::Tuple(items) => items.iter().map(r).collect::<Vec<_>>().join(", "),
         Value::Unit => "()".into(),
     }
 }
