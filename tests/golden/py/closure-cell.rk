@@ -1,0 +1,24 @@
+import py "builtins"
+
+fn main() (error?) {
+    // a captured py object shares the handle: the documented accumulator
+    // pattern until reference capture lands
+    acc := check builtins.list()
+    add := fn(x int) (error?) {
+        check acc.append(x)
+        return none
+    }
+    check add(2)
+    check add(3)
+    n := check int(builtins.len(acc))
+    print(n)
+    // and writes through a captured py target stay legal
+    d := check builtins.dict()
+    set := fn(v int) {
+        d["k"] = v
+    }
+    set(9)
+    v := check int(d["k"])
+    print(v)
+    return none
+}

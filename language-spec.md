@@ -706,6 +706,15 @@ n = 2
 print(f())    // 1
 ```
 
+Because such a write could only ever land in the discarded copy, assignment
+to a captured name inside a function literal is a compile-time error
+("... is captured by value; writes inside a function literal do not
+escape"), including field and index assignment on a captured native value.
+The exception is a py-target assignment (section 13.2): captured `py`
+values copy the handle, not the referent, so writes through them genuinely
+escape. A captured mutable Python object is therefore the accumulator
+pattern for callbacks.
+
 Top-level functions and imported modules are not captured; they resolve
 normally at call time.
 

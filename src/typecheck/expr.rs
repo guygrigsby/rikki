@@ -845,6 +845,7 @@ impl Checker {
 
         let saved_ret = std::mem::take(&mut self.current_ret);
         let saved_loop = std::mem::replace(&mut self.loop_depth, 0);
+        self.lambda_bases.push(self.scopes.len());
         self.push_scope();
         for (p, t) in params.iter().zip(&param_tys) {
             self.declare(&p.name, t.clone(), span);
@@ -881,6 +882,7 @@ impl Checker {
         };
 
         self.pop_scope();
+        self.lambda_bases.pop();
         self.current_ret = saved_ret;
         self.loop_depth = saved_loop;
         Type::Fn(param_tys, ret_tys)

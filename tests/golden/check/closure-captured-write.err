@@ -1,0 +1,2 @@
+total is captured by value; writes inside a function literal do not escape
+xs is captured by value; writes inside a function literal do not escape
