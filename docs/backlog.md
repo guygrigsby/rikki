@@ -8,12 +8,22 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
   indexing, conversions.
 - `rikki fmt`. One true style, needs a lossless formatter.
 - Repl typechecking (currently unchecked).
-- Go closure capture semantics (own design round + ADR superseding 0009).
-  The by-value snapshot of spec 7.3 has silently eaten writes in the
-  training project twice; the interim compile error on captured writes
-  makes it loud, the real fix is reference capture of free variables with
-  per-iteration loop bindings (Go 1.22 lesson baked in from day one). Also
-  un-hacks the http.stream accumulated-body apology.
+- Rethink strict copies everywhere (own design round + ADR superseding
+  0004/0009; scope widened 2026-07-02 from closure capture to the whole
+  value-semantics posture). Evidence so far: the by-value capture snapshot
+  silently ate training-project writes twice (now a compile error, which
+  is a tourniquet, not a fix); the sanctioned accumulator workaround (a
+  captured py object) is clunky in practice because a bare py call
+  statement in a callback still needs its chain consumed, forcing a
+  fallible lambda + check + per-call handling just to acc.append(x); and
+  http.stream returns an accumulated body as an apology for closures that
+  cannot accumulate. Key framing for the round: Go, the taste reference,
+  is not strict-copy either. Go structs copy on assign/pass, but slices,
+  maps, and closures are reference-shaped. Candidate end state is the Go
+  model wholesale: reference lists/maps, reference capture of free
+  variables, per-iteration loop bindings (Go 1.22 lesson), structs and
+  scalars staying value. Touches ADR 0004, 0009, spec 5/7.3/11, and the
+  mutation-visibility goldens flip.
 - Context managers, from the training project (2026-07-02):
   torch.no_grad() / autocast() currently need set_grad_enabled or explicit
   __enter__/__exit__ calls. Likely a py-only `with expr { }` statement;
