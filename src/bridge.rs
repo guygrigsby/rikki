@@ -150,6 +150,25 @@ pub fn call(h: &PyHandle, args: &[Value], kwargs: &[(String, Value)]) -> Result<
     })
 }
 
+/// A fresh python iterator over the object (`iter(obj)`).
+pub fn iter(h: &PyHandle) -> Result<PyHandle, ErrVal> {
+    Python::attach(|py| {
+        h.0.bind(py)
+            .try_iter()
+            .map(|it| PyHandle::new(it.into_any().unbind()))
+            .map_err(|e| errval(py, e))
+    })
+}
+
+/// `__next__`: Some(item), None on StopIteration, Err on any other raise.
+pub fn next(h: &PyHandle) -> Result<Option<Value>, ErrVal> {
+    Python::attach(|py| match h.0.bind(py).call_method0("__next__") {
+        Ok(v) => Ok(Some(Value::Py(PyHandle::new(v.unbind())))),
+        Err(e) if e.is_instance_of::<pyo3::exceptions::PyStopIteration>(py) => Ok(None),
+        Err(e) => Err(errval(py, e)),
+    })
+}
+
 pub fn setattr(h: &PyHandle, name: &str, v: &Value) -> Result<(), ErrVal> {
     Python::attach(|py| {
         let val = to_py(py, v)?;

@@ -537,10 +537,16 @@ impl Checker {
                 all_div && els_div
             }
             StmtKind::ForRange { names, iter, body } => {
-                let it = self.expr_one(iter, None);
+                // ranging absorbs a py chain: iter() consumes it
+                let it = self.expr_pyish(iter, None);
                 self.push_scope();
                 match (&it, names.len()) {
-                    (Type::Int | Type::List(_) | Type::Map(..) | Type::Str, 0) => {}
+                    (Type::Int | Type::List(_) | Type::Map(..) | Type::Str | Type::Py, 0) => {}
+                    (Type::Py, 1) => self.declare(&names[0], Type::Int, span),
+                    (Type::Py, 2) => {
+                        self.declare(&names[0], Type::Int, span);
+                        self.declare(&names[1], Type::Py, span);
+                    }
                     (Type::Int, 1) => self.declare(&names[0], Type::Int, span),
                     (Type::List(_) | Type::Str, 1) => self.declare(&names[0], Type::Int, span),
                     (Type::Str, 2) => {
@@ -565,7 +571,7 @@ impl Checker {
                     _ => {
                         let msg = if matches!(
                             it,
-                            Type::Int | Type::List(_) | Type::Map(..) | Type::Str
+                            Type::Int | Type::List(_) | Type::Map(..) | Type::Str | Type::Py
                         ) {
                             format!("cannot range over {it} with {} names", names.len())
                         } else {

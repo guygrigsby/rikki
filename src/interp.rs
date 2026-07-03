@@ -481,6 +481,12 @@ impl<'p> Interp<'p> {
             }
             StmtKind::ForRange { names, iter, body } => {
                 let it = sval!(self, self.eval(iter));
+                if let Value::Py(h) = &it {
+                    // out of line: exec_stmt is on every recursive path and
+                    // this block's locals would tax the whole call stack
+                    let h = h.clone();
+                    return self.py_range(names, &h, body);
+                }
                 let rounds: Box<dyn Iterator<Item = Vec<Value>>> = match it {
                     Value::Int(n) => Box::new((0..n.max(0)).map(|i| vec![Value::Int(i)])),
                     Value::List(items) => Box::new(
@@ -535,6 +541,42 @@ impl<'p> Interp<'p> {
             StmtKind::Break => Ok(Flow::Break),
             StmtKind::Continue => Ok(Flow::Continue),
         }
+    }
+
+    /// `for range` over a py iterable: iter() once, __next__ per round,
+    /// StopIteration ends the loop, anything else faults.
+    #[inline(never)]
+    fn py_range(
+        &mut self,
+        names: &[String],
+        h: &crate::bridge::PyHandle,
+        body: &Block,
+    ) -> Result<Flow, Fault> {
+        let pit = crate::bridge::iter(h)
+            .map_err(|e| self.fault(format!("py range: {}", e.msg)))?;
+        let mut i: i64 = 0;
+        loop {
+            let item = match crate::bridge::next(&pit) {
+                Ok(Some(v)) => v,
+                Ok(None) => break,
+                Err(e) => return Err(self.fault(format!("py range: {}", e.msg))),
+            };
+            self.scopes.push(Rc::new(HashMap::new()));
+            for (n, v) in names.iter().zip([Value::Int(i), item]) {
+                if n != "_" {
+                    self.bind(n.clone(), v)?;
+                }
+            }
+            let flow = self.exec_block_no_scope(body);
+            self.scopes.pop();
+            match flow? {
+                Flow::Normal | Flow::Continue => {}
+                Flow::Break => break,
+                r @ Flow::Return(_) => return Ok(r),
+            }
+            i += 1;
+        }
+        Ok(Flow::Normal)
     }
 
     // ---------- assignment ----------

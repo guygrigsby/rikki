@@ -1,0 +1,31 @@
+import py "json"
+
+fn main() (error?) {
+    xs := check json.loads("[10, 20, 30]")
+    // two names: iteration index and item
+    for i, x := range xs {
+        printf("%d %v\n", i, x)
+    }
+    // one name: the index alone, like ranging a list
+    total := 0
+    for i := range xs {
+        total = total + i
+    }
+    print(total)
+    // zero names: once per item
+    n := 0
+    for range xs {
+        n = n + 1
+    }
+    print(n)
+    // a py chain in range position is absorbed by the range
+    for i, c := range json.loads("[7]") {
+        printf("%d %v\n", i, c)
+    }
+    // empty iterable runs zero rounds
+    for range json.loads("[]") {
+        print("never")
+    }
+    print("done")
+    return none
+}

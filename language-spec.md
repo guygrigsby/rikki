@@ -1196,15 +1196,22 @@ Rikki has one loop keyword with three forms, as in Go:
   | `[]T` | index `i: int` | index `i: int`, element `v: T` |
   | `map[K]V` | key `k: K` | key `k: K`, value `v: V` |
   | `str` | index `i: int` | index `i: int`, character `c: str` |
+  | `py` | iteration index `i: int` | index `i: int`, item `x: py` |
 
   An `int` operand of `n <= 0` runs zero iterations. Lists range in element
   order, maps in insertion order. Strings range by code point: the index is
   the code-point index (the same index `s[i]` uses, section 7.5) and the
-  character is a one-character `str`. The variables and `:=` may be omitted
-  (`for range e { ... }`) to run the body once per element. Ranging over any
-  other type (including `py`), or with more variables than the
-  operand admits, is a compile-time error. The iteration variables are fresh
-  copies each round; mutating them does not affect the container.
+  character is a one-character `str`. A `py` operand may be a py chain
+  (ranging absorbs it); iteration calls Python's `iter()` once, then
+  `__next__` per round, and StopIteration ends the loop silently. Any
+  other exception, including from `iter()` itself, faults ("py range:
+  ..."): a loop is a statement with no error slot, and a data source
+  raising mid-iteration is not a per-round condition a program handles.
+  The variables and `:=` may be omitted (`for range e { ... }`) to run
+  the body once per element. Ranging over any other type, or with more
+  variables than the operand admits, is a compile-time error. The
+  iteration variables are fresh copies each round; mutating them does not
+  affect the container.
 
 Struct literals are suppressed in the loop header (section 7.2.3).
 
@@ -1459,8 +1466,9 @@ The complete set of fault conditions reachable from checked programs:
 
 Float arithmetic never faults (section 5.1). Reading a map never faults.
 Python exceptions are not faults; they become error values (chapter 13) --
-except in assignment into a py target, a statement with no error slot,
-where an exception faults (section 13.2).
+except in assignment into a py target and in `for range` over a py
+iterable (both statements with no error slot), where an exception faults
+(sections 13.2 and 8.7).
 
 ## 13. The Python bridge
 
@@ -1498,8 +1506,8 @@ A `py` value supports:
   meaning on native operands (section 7.9).
 
 `&& ||` reject `py` operands; unary `!` and `-` are not defined on `py`;
-`py` values cannot be sliced, ranged over with `for`, or used as
-conditions.
+`py` values can be ranged over with `for` (section 8.7) but cannot be
+sliced or used as conditions.
 
 ### 13.3 Fallibility
 
