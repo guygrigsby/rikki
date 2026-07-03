@@ -8,14 +8,21 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
   indexing, conversions.
 - `rikki fmt`. One true style, needs a lossless formatter.
 - Repl typechecking (currently unchecked).
+- Go closure capture semantics (own design round + ADR superseding 0009).
+  The by-value snapshot of spec 7.3 has silently eaten writes in the
+  training project twice; the interim compile error on captured writes
+  makes it loud, the real fix is reference capture of free variables with
+  per-iteration loop bindings (Go 1.22 lesson baked in from day one). Also
+  un-hacks the http.stream accumulated-body apology.
+- Context managers, from the training project (2026-07-02):
+  torch.no_grad() / autocast() currently need set_grad_enabled or explicit
+  __enter__/__exit__ calls. Likely a py-only `with expr { }` statement;
+  the open semantics question is what __exit__ sees during a check early
+  return or a fault. Queued behind the capture redesign.
 
 ## v2
 
-- Matrix operations: operator sugar over `py` (decided, no native matrix
-  type). Add `@` matmul to the grammar (lexer token, binary op at mul
-  precedence, py-only in the checker) and dispatch it through the bridge's
-  binop path like `+ - * /` already do. Result: `y = w @ x + b` on live
-  tensors; objects and speed stay PyTorch's.
+- Matrix operations: DONE 2026-07-02 (`@`, py-only, spec 7.9/13.2).
 - Branded py types (decided in principle). `pytype tensor = "torch.Tensor"`
   declares a nominal wrapper over a py reference, verified by isinstance
   through the bridge. Fallible assertion py to brand (`tensor(y)` returns
