@@ -1,6 +1,6 @@
 # The Go copy model: reference containers and reference capture
 
-Date: 2026-07-02. Status: draft for review. Supersedes the value-semantics
+Date: 2026-07-02. Status: implemented (ADR 0010). Supersedes the value-semantics
 posture of ADR 0004 and the capture model of ADR 0009 (a new ADR lands with
 the implementation; this doc is its working draft).
 
