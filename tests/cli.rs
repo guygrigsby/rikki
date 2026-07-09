@@ -17,6 +17,25 @@ fn tempdir(tag: &str) -> PathBuf {
     d
 }
 
+/// Wait with a deadline so a child that stops exiting fails the test instead
+/// of hanging the suite. Drops stdin first so the child sees EOF.
+fn wait_within(mut child: std::process::Child, secs: u64) -> std::process::Output {
+    drop(child.stdin.take());
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(secs);
+    while child.try_wait().unwrap().is_none() {
+        if std::time::Instant::now() > deadline {
+            let _ = child.kill();
+            let out = child.wait_with_output().unwrap();
+            panic!(
+                "child still running after {secs}s; stdout so far: {:?}",
+                String::from_utf8_lossy(&out.stdout)
+            );
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    child.wait_with_output().unwrap()
+}
+
 #[test]
 fn new_then_run() {
     let d = tempdir("new");
@@ -173,7 +192,7 @@ fn tk_bare_is_repl() {
         .unwrap()
         .write_all(b"1 + 2\nx := 40\nx + 2\n")
         .unwrap();
-    let out = child.wait_with_output().unwrap();
+    let out = wait_within(child, 30);
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("3\n"), "{stdout}");
     assert!(stdout.contains("42\n"), "{stdout}");
@@ -197,7 +216,7 @@ fn repl_survives_a_failing_line() {
         .unwrap()
         .write_all(b"[9223372036854775807, 1].sum()\n1 + 2\n")
         .unwrap();
-    let out = child.wait_with_output().unwrap();
+    let out = wait_within(child, 30);
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("3\n"), "{stdout}");
 }
@@ -240,7 +259,7 @@ fn repl_evaluates() {
         .unwrap()
         .write_all(b"1 + 2\nx := 40\nx + 2\nfn d(n int) int { return n * 2 }\nd(5)\n")
         .unwrap();
-    let out = child.wait_with_output().unwrap();
+    let out = wait_within(child, 30);
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("3\n"), "{stdout}");
     assert!(stdout.contains("42\n"), "{stdout}");
@@ -270,7 +289,7 @@ fn program_args_and_input() {
         .unwrap()
         .write_all(b"hello\nworld\n")
         .unwrap();
-    let out = child.wait_with_output().unwrap();
+    let out = wait_within(child, 30);
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains(":8080\n"), "{stdout}");
@@ -290,22 +309,38 @@ fn http_get_post_request_from_rikki() {
             let Ok((mut sock, _)) = listener.accept() else {
                 return;
             };
-            sock.set_read_timeout(Some(std::time::Duration::from_millis(300)))
+            sock.set_read_timeout(Some(std::time::Duration::from_secs(5)))
                 .unwrap();
+            // real framing: headers to \r\n\r\n, then exactly content-length
             let mut req = Vec::new();
             let mut buf = [0u8; 4096];
-            while let Ok(n) = sock.read(&mut buf) {
-                if n == 0 {
-                    break;
+            let hdr_end = loop {
+                match sock.read(&mut buf) {
+                    Ok(0) | Err(_) => break None,
+                    Ok(n) => {
+                        req.extend_from_slice(&buf[..n]);
+                        if let Some(p) = req.windows(4).position(|w| w == b"\r\n\r\n") {
+                            break Some(p + 4);
+                        }
+                    }
                 }
-                req.extend_from_slice(&buf[..n]);
-                if req.windows(4).any(|w| w == b"\r\n\r\n") && !req.starts_with(b"P") {
-                    break; // no body expected past the headers
-                }
-                if String::from_utf8_lossy(&req).contains("hello")
-                    || String::from_utf8_lossy(&req).contains("data")
-                {
-                    break;
+            };
+            let clen: usize = hdr_end
+                .map(|end| {
+                    String::from_utf8_lossy(&req[..end])
+                        .lines()
+                        .find_map(|l| {
+                            let (k, v) = l.split_once(':')?;
+                            k.eq_ignore_ascii_case("content-length")
+                                .then(|| v.trim().parse().ok())?
+                        })
+                        .unwrap_or(0)
+                })
+                .unwrap_or(0);
+            while req.len() < hdr_end.unwrap_or(0) + clen {
+                match sock.read(&mut buf) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => req.extend_from_slice(&buf[..n]),
                 }
             }
             let req = String::from_utf8_lossy(&req).to_string();
