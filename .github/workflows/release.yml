@@ -26,19 +26,24 @@ jobs:
           name: wheels-${{ matrix.os }}-py${{ matrix.python }}
           path: dist
 
-  # keeps the homebrew tap's formula version in step with the release;
-  # needs the ENABLE_TAP_BUMP repo variable set to "true" and a
-  # TAP_PUSH_TOKEN secret that can push to guygrigsby/homebrew-tap
+  # keeps the homebrew tap's formula version in step with the release; the
+  # "tap" environment holds ENABLE_TAP_BUMP and TAP_PUSH_TOKEN (fine-grained
+  # PAT, Contents read/write on guygrigsby/homebrew-tap only)
   tap:
     needs: publish
-    if: vars.ENABLE_TAP_BUMP == 'true'
+    environment: tap
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: bump formula version
         env:
           GH_TOKEN: ${{ secrets.TAP_PUSH_TOKEN }}
+          ENABLED: ${{ vars.ENABLE_TAP_BUMP }}
         run: |
+          if [ "$ENABLED" != "true" ] || [ -z "$GH_TOKEN" ]; then
+            echo "tap bump disabled or no token; skipping"
+            exit 0
+          fi
           ver="${GITHUB_REF_NAME#v}"
           gh repo clone guygrigsby/homebrew-tap
           cd homebrew-tap
