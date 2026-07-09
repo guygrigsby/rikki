@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rikki playground</title>
+<meta name="description" content="Run rikki in your browser: Go's discipline, CPython's ecosystem.">
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <img src="logo.png" alt="Rikki the mongoose" class="mascot">
+  <h1>rikki <span class="thin">playground</span></h1>
+  <nav>
+    <select id="examples" aria-label="Examples"></select>
+    <button id="run" class="primary" title="Ctrl/Cmd+Enter">Run</button>
+    <button id="share" title="Copy a link to this program">Share</button>
+    <a class="gh" href="https://github.com/guygrigsby/rikki">GitHub</a>
+  </nav>
+</header>
+<main>
+  <textarea id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="rikki source"></textarea>
+  <div id="output-pane">
+    <div id="status"></div>
+    <pre id="output"></pre>
+  </div>
+</main>
+<footer>
+  <span id="version"></span>
+  <span>code <a href="https://github.com/guygrigsby/rikki/blob/main/LICENSE">MIT</a> ·
+        mascot <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> ·
+        runs entirely in your browser</span>
+</footer>
+<script type="module" src="main.js"></script>
+</body>
+</html>

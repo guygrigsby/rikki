@@ -21,6 +21,9 @@ pub mod value;
 
 use std::path::Path;
 
+/// The interpreter's version, for embedders (the playground shows it).
+pub const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Shared by the unit and integration test suites; not API.
 #[doc(hidden)]
 pub mod testutil {

@@ -1,0 +1,142 @@
+import init, { run, version } from "./pkg/rikki_playground.js";
+
+const EXAMPLES = {
+  "hello world": `fn main() {
+    print("hello, rikki")
+}
+`,
+  "errors are values": `fn half(n int) (int, error?) {
+    if n % 2 != 0 {
+        return 0, error.new("odd number")
+    }
+    return n / 2, none
+}
+
+fn main() {
+    v, err := half(42)
+    if err != none {
+        print("failed: " + err.msg)
+    } else {
+        print(v)
+    }
+    _, err2 := half(7)
+    if err2 != none {
+        print("failed: " + err2.msg)
+    }
+}
+`,
+  "the copy model": `struct User {
+    Name str
+    Age int
+}
+
+fn main() {
+    u := User{Name: "rikki", Age: 1}
+    v := u
+    v.Age = 99
+    print(u.Age)    // 1: structs copy
+
+    xs := [1, 2, 3]
+    ys := xs
+    ys[0] = 99
+    print(xs[0])    // 99: lists are references
+}
+`,
+  "options, no nil": `fn main() {
+    m := map[str]int{"a": 1}
+    v := m["a"]
+    if v != none {
+        print(v + 1)
+    }
+    if m["zzz"] == none {
+        print("missing, and the checker made us look")
+    }
+}
+`,
+  "py bridge (native only)": `// the bridge needs a real CPython; install rikki
+// (uv tool install rikki-lang) to run this one
+import py "json"
+
+fn main() (error?) {
+    x := check json.loads("[1, 2, 3]")
+    xs := check []int(x)
+    print(xs.sum())
+    return none
+}
+`,
+};
+
+const editor = document.getElementById("editor");
+const output = document.getElementById("output");
+const status = document.getElementById("status");
+const examples = document.getElementById("examples");
+
+for (const name of Object.keys(EXAMPLES)) {
+  const o = document.createElement("option");
+  o.value = name;
+  o.textContent = name;
+  examples.appendChild(o);
+}
+
+function execute() {
+  const r = run(editor.value);
+  if (r.status === "ok") {
+    status.textContent = "ok";
+    status.classList.remove("error");
+    output.classList.remove("error");
+    output.textContent = r.stdout.length ? r.stdout : "(no output)";
+  } else {
+    status.textContent = r.status === "compile" ? "compile error" : "runtime error";
+    status.classList.add("error");
+    output.classList.add("error");
+    output.textContent = (r.stdout.length ? r.stdout + "\n" : "") + r.error;
+  }
+}
+
+function share() {
+  const bytes = new TextEncoder().encode(editor.value);
+  const b64 = btoa(String.fromCharCode(...bytes))
+    .replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+  location.hash = b64;
+  navigator.clipboard?.writeText(location.href);
+  status.textContent = "link copied";
+  status.classList.remove("error");
+}
+
+function fromHash() {
+  if (location.hash.length < 2) return false;
+  try {
+    const b64 = location.hash.slice(1).replaceAll("-", "+").replaceAll("_", "/");
+    const bin = atob(b64);
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    editor.value = new TextDecoder().decode(bytes);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+document.getElementById("run").addEventListener("click", execute);
+document.getElementById("share").addEventListener("click", share);
+examples.addEventListener("change", () => {
+  editor.value = EXAMPLES[examples.value];
+  history.replaceState(null, "", location.pathname);
+  execute();
+});
+editor.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+    e.preventDefault();
+    execute();
+  } else if (e.key === "Tab") {
+    e.preventDefault();
+    const { selectionStart: s, selectionEnd: t } = editor;
+    editor.setRangeText("    ", s, t, "end");
+  }
+});
+
+await init();
+document.getElementById("version").textContent = `rikki ${version()} · wasm`;
+if (!fromHash()) {
+  editor.value = EXAMPLES["hello world"];
+}
+execute();
