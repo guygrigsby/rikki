@@ -68,6 +68,24 @@ pub fn init(venv: Option<&Path>) {
             }
         }
         Python::initialize();
+        // Venv isolation: a real venv python never sees the base
+        // interpreter's site-packages or the user site, but embedding
+        // starts from the base config, so host packages (a homebrew numpy,
+        // say) would shadow or mix with the project's (one OMP runtime
+        // meeting another is a hard abort). The manifest and lock fully
+        // determine the environment (spec 17.5); prune everything sited
+        // outside the venv.
+        if let Some(v) = venv {
+            let keep = v.to_string_lossy().to_string();
+            Python::attach(|py| {
+                let code = format!(
+                    "import sys\nsys.path[:] = [p for p in sys.path if 'site-packages' not in p or p.startswith({keep:?})]",
+                );
+                if let Ok(c) = std::ffi::CString::new(code) {
+                    let _ = py.run(c.as_c_str(), None, None);
+                }
+            });
+        }
         // Inside an embedded interpreter sys.executable is the host binary
         // (tk); libraries that re-exec `sys.executable -c ...`
         // (multiprocessing, joblib, tokenizers) would invoke the runner.

@@ -87,6 +87,7 @@ jobs:
             exit 0
           fi
           ver="${GITHUB_REF_NAME#v}"
+          gh auth setup-git
           gh repo clone guygrigsby/homebrew-tap
           cd homebrew-tap
           sed -i -E "s/version \"[0-9][0-9.]*\"/version \"$ver\"/" Formula/rikki.rb
