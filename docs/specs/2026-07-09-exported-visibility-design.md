@@ -32,6 +32,12 @@ lowercase), py values (Python's rules), and local names inside functions.
 The repl is unchecked (17.6), so visibility is a compile-time rule like
 every other check.
 
+Stdlib capitalization was considered for Go parity (`math.Sqrt`) and
+rejected (decided 2026-07-09): the stdlib sits beside lowercase builtins
+as the language's own vocabulary, and the boundary reads cleanly as
+"capital = someone's rikki code, lowercase = the language". Settled;
+don't reopen without new evidence.
+
 ## Implementation
 
 Checker only; the loader's qualified-name flattening already makes every
