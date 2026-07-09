@@ -810,7 +810,7 @@ empty. Slicing any other type, including `py`, is a compile-time error.
 ### 7.7 Conversions
 
 ```
-Conversion = ( "int" | "float" | "str" | "bool" ) "(" Expression ")"
+Conversion = ( "int" | "float" | "str" | "bool" | "py" ) "(" Expression ")"
            | SliceType "(" Expression ")" .
 ```
 
@@ -840,6 +840,7 @@ Permitted operand types and behavior, for non-`py` operands:
 | `bool(x)` | `bool` | identity |
 | | `str` | after trimming, exactly `"true"` or `"false"`; anything else is an error value |
 | `str(x)` | any type | the canonical rendering of section 14.1; never fails |
+| `py(x)` | `int`, `float`, `bool`, `str`, the literal `none` | the inbound bridge conversion (section 13.5) as a `py` handle; never fails. `py(none)` is the zero value of `py` (section 5.11). Containers, structs, functions, and option-typed values are compile-time errors ("cannot convert ... to py"); pass them to py calls directly |
 | `[]T(x)` | `[]U` | yields the operand list unchanged; element types are not validated in v1 (see below) |
 
 Any other operand type is a compile-time error ("cannot convert").
@@ -1013,7 +1014,8 @@ unbound (section 10.2).
 
 An expression is a py chain when it applies an operation to a value of type
 `py`: attribute selection, call, method call, indexing, or a binary operator
-with a `py` operand. Within further postfix or binary operations the chain
+with a `py` operand. Reading a py-typed struct field, or writing `py(x)`
+(section 7.7), yields a plain `py` value and starts no chain. Within further postfix or binary operations the chain
 continues to act as `py`, so consecutive Python steps need no per-step
 handling. A chain appearing as an argument (positional or named) to an
 enclosing py call is absorbed into that chain: `f(g(x))` on py values is one

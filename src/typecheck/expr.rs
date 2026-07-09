@@ -183,12 +183,13 @@ impl Checker {
                 ty
             }
             K::Field { recv, name } => {
-                let t = self.field(recv, name, span);
-                if t == Type::Py {
-                    ExprTy::PyChain
-                } else {
-                    one(t)
+                // a chain starts at an operation ON a py value; a py-typed
+                // struct field read is an ordinary infallible access
+                let rt = self.expr_pyish(recv, None);
+                if rt == Type::Py {
+                    return ExprTy::PyChain;
                 }
+                one(self.field_of(&rt, name, span))
             }
             K::Index { recv, idx } => {
                 let rt = self.expr_pyish(recv, None);
@@ -266,6 +267,22 @@ impl Checker {
             K::Conv { target, arg } => {
                 let t = self.resolve(target, span);
                 let at = self.expr_pyish(arg, None);
+                if t == Type::Py {
+                    // py(x): scalars, str, and the none literal; infallible
+                    // (spec 7.7). Containers convert at py call boundaries.
+                    let ok = matches!(arg.kind, K::NoneLit)
+                        || matches!(
+                            at,
+                            Type::Int | Type::Float | Type::Bool | Type::Str | Type::Unknown
+                        );
+                    if !ok {
+                        self.diag(
+                            span,
+                            format!("cannot convert {at} to py; pass it to a py call directly"),
+                        );
+                    }
+                    return ExprTy::One(Type::Py);
+                }
                 let ok = matches!(
                     (&t, &at),
                     (_, Type::Py)
@@ -760,12 +777,11 @@ impl Checker {
         Some(t)
     }
 
-    fn field(&mut self, recv: &Expr, name: &str, span: Span) -> Type {
-        let rt = self.expr_pyish(recv, None);
-        if rt == Type::Py {
+    fn field_of(&mut self, rt: &Type, name: &str, span: Span) -> Type {
+        if *rt == Type::Py {
             return Type::Py;
         }
-        match &rt {
+        match rt {
             Type::Struct(s) => match self
                 .structs
                 .get(s)

@@ -810,6 +810,18 @@ impl Parser {
                 let body = self.block()?;
                 Ok(mk(ExprKind::Lambda { params, ret, body }))
             }
+            Some(Token::Py) if self.peek2() == Some(&Token::LParen) => {
+                // py(x): conversion into a py handle (spec 7.7)
+                self.bump();
+                let (mut args, kwargs) = self.call_args()?;
+                if args.len() != 1 || !kwargs.is_empty() {
+                    return Err(self.err_here("conversion takes one argument"));
+                }
+                Ok(mk(ExprKind::Conv {
+                    target: TypeExpr::Named("py".into()),
+                    arg: Box::new(args.remove(0)),
+                }))
+            }
             Some(Token::Ident(name)) => {
                 // conversions: int(x), str(x), float(x), bool(x); []T(x) is handled at LBracket
                 if CONV_NAMES.contains(&name.as_str()) && self.peek2() == Some(&Token::LParen) {

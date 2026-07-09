@@ -172,6 +172,12 @@ impl Interp<'_> {
                 _ => fail(self, target, format!("cannot parse {s:?} as bool")),
             },
             ("str", v) => Ok(Value::Str(render(&v))),
+            // py(x): checker limits sources to scalars, str, and none, all
+            // of which the inbound table converts without failing
+            ("py", v) => match crate::bridge::to_py_handle(&v) {
+                Ok(h) => Ok(Value::Py(h)),
+                Err(e) => Err(self.fault(format!("py conversion: {}", e.msg))),
+            },
             ("list", Value::List(items)) => Ok(Value::List(items)),
             // py conversions land with the bridge
             (t, v) => fail(

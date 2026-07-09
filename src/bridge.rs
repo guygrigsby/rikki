@@ -314,6 +314,14 @@ fn to_py(py: Python<'_>, v: &Value) -> Result<Py<PyAny>, ErrVal> {
     to_py_depth(py, v, 0)
 }
 
+/// rikki → Python as an owned handle, for the `py(x)` conversion. May be
+/// the program's first Python touch (no `import py` required), so it
+/// initializes the interpreter.
+pub fn to_py_handle(v: &Value) -> Result<PyHandle, ErrVal> {
+    init(None);
+    Python::attach(|py| to_py(py, v).map(PyHandle::new))
+}
+
 fn to_py_depth(py: Python<'_>, v: &Value, depth: u32) -> Result<Py<PyAny>, ErrVal> {
     if depth > DEPTH_LIMIT {
         return Err(ErrVal {

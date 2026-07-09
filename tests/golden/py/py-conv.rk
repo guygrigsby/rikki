@@ -1,0 +1,12 @@
+struct Tracker {
+    handle py
+}
+
+fn main() {
+    t := Tracker{handle: py(none)}
+    print(t.handle)
+    print(py(42))
+    print(py(2.5))
+    print(py(true))
+    print(py("hi"))
+}
