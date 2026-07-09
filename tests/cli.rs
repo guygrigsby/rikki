@@ -47,6 +47,14 @@ fn new_then_run() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(d.join("hello/rikki.toml").exists());
+    // agent support: primer, CLAUDE.md import, check-on-edit hook
+    let primer = std::fs::read_to_string(d.join("hello/AGENTS.md")).unwrap();
+    assert!(primer.contains("py bridge"), "primer content missing");
+    let claude = std::fs::read_to_string(d.join("hello/CLAUDE.md")).unwrap();
+    assert!(claude.contains("@AGENTS.md"), "{claude}");
+    let settings = std::fs::read_to_string(d.join("hello/.claude/settings.json")).unwrap();
+    assert!(settings.contains("rikki-check.py"), "{settings}");
+    assert!(d.join("hello/.claude/hooks/rikki-check.py").exists());
     let out = Command::new(bin())
         .args(["run", "src/main.rk"])
         .current_dir(d.join("hello"))
