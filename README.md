@@ -1,3 +1,5 @@
+<img src="art/logo.png" alt="Rikki the mongoose" width="200" align="right">
+
 # Rikki: A New ML Language
 
 I have been doing some experiments training and tuning language models. All the good stuff to do that is in Python. I got so sick of Python just core dumping all over the place, I literally made a new "front end" for it.
