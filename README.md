@@ -52,8 +52,6 @@ tk src/main.rk            # run a file directly; bare tk is the repl
 
 Homebrew works too, same wheels underneath: `brew install guygrigsby/tap/rikki`.
 
-Not on PyPI yet: until the first release, build the wheel from a checkout (needs a Rust toolchain): `uvx maturin build --release`, then `uv tool install target/wheels/rikki_lang-*.whl`.
-
 New projects come with `AGENTS.md`, a rikki primer for coding agents; `rikki new --claude-hook` also installs a Claude Code hook that typechecks after every edit. `rikki new` only ever writes into the directory it creates; it refuses to run where anything already exists.
 
 ## Developing
