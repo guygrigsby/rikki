@@ -234,10 +234,7 @@ mod tests {
     use super::*;
 
     fn tempdir(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("rikki-proj-{}-{tag}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&d);
-        std::fs::create_dir_all(&d).unwrap();
-        d
+        crate::testutil::tempdir(&format!("proj-{tag}"))
     }
 
     /// A fake uv that records its argv lines into uv-calls.log.

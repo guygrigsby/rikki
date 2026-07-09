@@ -17,6 +17,18 @@ pub mod value;
 
 use std::path::Path;
 
+/// Shared by the unit and integration test suites; not API.
+#[doc(hidden)]
+pub mod testutil {
+    /// A fresh, empty scratch directory keyed by pid and tag.
+    pub fn tempdir(tag: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("rikki-test-{}-{tag}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+}
+
 /// Run the program after checking, or stop at the check.
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {

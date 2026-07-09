@@ -11,10 +11,7 @@ fn tk() -> &'static str {
 }
 
 fn tempdir(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rikki-cli-{}-{tag}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+    rikki::testutil::tempdir(&format!("cli-{tag}"))
 }
 
 /// Wait with a deadline so a child that stops exiting fails the test instead
