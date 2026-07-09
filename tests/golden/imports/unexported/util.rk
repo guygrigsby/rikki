@@ -1,0 +1,13 @@
+struct Pair {
+    A int
+    secret int
+}
+struct hidden {
+    X int
+}
+fn helper(x int) int {
+    return x
+}
+fn New(a int) Pair {
+    return Pair{A: a, secret: a * 2}
+}

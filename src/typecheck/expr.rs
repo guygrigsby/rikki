@@ -23,6 +23,17 @@ impl Checker {
         }
     }
 
+    /// Capitalized first character = exported from its file module (16.3).
+    fn is_exported(name: &str) -> bool {
+        name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+    }
+
+    /// Stem of the file this code lives in; foreign-module accesses are
+    /// the ones whose qualified prefix differs (section 16.3).
+    fn current_module(&self) -> Option<&str> {
+        self.current_file.as_deref().and_then(|f| f.strip_suffix(".rk"))
+    }
+
     /// Like expr_one but lets a py chain through as `py` (for contexts that
     /// absorb its fallibility: conversions, operators, further chain links).
     pub(super) fn expr_pyish(&mut self, e: &Expr, expected: Option<&Type>) -> Type {
@@ -120,6 +131,25 @@ impl Checker {
                     self.diag(span, format!("unknown struct: {name}"));
                     return one(Type::Unknown);
                 };
+                // foreign struct literals: the type and every field must be
+                // exported (literals require every field; section 16.3)
+                if let Some((module, member)) = name.rsplit_once('.') {
+                    if self.current_module() != Some(module) {
+                        if !Self::is_exported(member) {
+                            self.diag(span, format!("{member} is not exported by {module}"));
+                            return one(Type::Unknown);
+                        }
+                        if let Some((f, _)) = def.iter().find(|(f, _)| !Self::is_exported(f)) {
+                            self.diag(
+                                span,
+                                format!(
+                                    "{name} has unexported fields ({f}); construct it inside {module}"
+                                ),
+                            );
+                            return one(Type::Struct(name.clone()));
+                        }
+                    }
+                }
                 for (fname, fty) in &def {
                     match fields.iter().find(|(n, _)| n == fname) {
                         Some((_, v)) => {
@@ -682,6 +712,10 @@ impl Checker {
                 let mangled = crate::loader::qualified(m, name);
                 match self.fns.get(&mangled).cloned() {
                     Some((params, rets)) => {
+                        if !Self::is_exported(name) {
+                            self.diag(span, format!("{name} is not exported by {m}"));
+                            return ExprTy::One(Type::Unknown);
+                        }
                         self.check_args(&params, args, span);
                         rets_ty(rets)
                     }
@@ -787,7 +821,20 @@ impl Checker {
                 .get(s)
                 .and_then(|fs| fs.iter().find(|(f, _)| f == name).map(|(_, t)| t.clone()))
             {
-                Some(t) => t,
+                Some(t) => {
+                    if !Self::is_exported(name) {
+                        if let Some((module, _)) = s.rsplit_once('.') {
+                            if self.current_module() != Some(module) {
+                                self.diag(
+                                    span,
+                                    format!("field {name} of {s} is not exported"),
+                                );
+                                return Type::Unknown;
+                            }
+                        }
+                    }
+                    t
+                }
                 None => {
                     self.diag(span, format!("{s} has no field {name}"));
                     Type::Unknown

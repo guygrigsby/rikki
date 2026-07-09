@@ -1,8 +1,8 @@
 struct Pair {
-    a int
-    b int
+    A int
+    B int
 }
 
-fn sum(p Pair) int {
-    return p.a + p.b
+fn Sum(p Pair) int {
+    return p.A + p.B
 }

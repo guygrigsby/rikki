@@ -19,12 +19,9 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
   optional deps all-or-nothing. importlib.import_module through the bridge
   already expresses runtime-optional imports; revisit first-class syntax
   only if that pattern spreads.
-- Exported-identifier visibility, the Go way (2026-07-09): capitalized =
-  exported, lowercase = module-private, no new keywords. Breaking (file
-  modules currently expose everything, e.g. util.twice in the goldens),
-  which is exactly why it goes NOW and not with packages later: the
-  standing posture is to ship breaking fundamental changes early, before
-  anyone depends on the old shape. Prerequisite for packages below.
+- Exported-identifier visibility: DONE 2026-07-09 (Go capitalization,
+  spec 16.3; design in docs/specs/2026-07-09-exported-visibility-design.md).
+  Prerequisite for packages below.
 
 ## v2
 

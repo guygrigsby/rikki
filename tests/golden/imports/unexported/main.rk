@@ -1,0 +1,11 @@
+import "util.rk"
+
+fn main() {
+    print(util.helper(1))
+    p := util.New(1)
+    print(p.secret)
+    q := util.Pair{A: 1, secret: 2}
+    print(q)
+    h := util.hidden{X: 1}
+    print(h)
+}

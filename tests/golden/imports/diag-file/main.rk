@@ -3,5 +3,5 @@ import "bad.rk"
 fn main() {
     x := 1 + "a"
     print(x)
-    print(bad.broken())
+    print(bad.Broken())
 }

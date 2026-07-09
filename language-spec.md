@@ -508,6 +508,8 @@ FieldDeclList = FieldDecl { ( "," | newline ) { newline } FieldDecl } [ "," | ne
 FieldDecl  = identifier Type .
 ```
 
+Whether a struct or field is visible to other file modules follows its
+name's capitalization (section 16.3).
 Fields are separated by commas or line breaks; both of these are valid:
 
 ```
@@ -650,7 +652,9 @@ FieldValue = identifier ":" Expression .
 
 A struct literal must name a declared struct type, either bare (`Pair{...}`)
 or dotted for a struct of an imported file module (`util.Pair{...}`,
-chapter 16), and must supply every declared field exactly once, each value
+chapter 16; the struct and, because every field is supplied, all of its
+fields must be exported there, section 16.3), and must supply every
+declared field exactly once, each value
 assignable to the field's type.
 Missing fields and unknown fields are compile-time errors. Field order in the
 literal is free; the constructed value's field order follows the declaration.
@@ -1991,30 +1995,32 @@ Behavior:
 
 `import "util.rk"` imports another rikki source file. The path is
 resolved relative to the directory of the importing file. The imported
-file's top-level functions and structs become visible under a namespace
+file's exported top-level functions and structs (section 16.3) become
+visible under a namespace
 equal to the file's stem (the file name without `.rk`):
 
 ```
 // util.rk
-struct Pair { a int, b int }
-fn double(x int) int { return x * 2 }
-fn make(a int, b int) Pair { return Pair{a: a, b: b} }
+struct Pair { A int, B int }
+fn Double(x int) int { return twice(x) }
+fn twice(x int) int { return x * 2 }    // private to util.rk
+fn Make(a int, b int) Pair { return Pair{A: a, B: b} }
 
 // main.rk
 import "util.rk"
 
-fn sum(p util.Pair) int { return p.a + p.b }
+fn sum(p util.Pair) int { return p.A + p.B }
 
 fn main() {
-    print(util.double(21))       // 42
-    p := util.make(1, 2)
+    print(util.Double(21))       // 42
+    p := util.Make(1, 2)
     print(sum(p))                // 3
 }
 ```
 
 Struct types of a file module are named with the dotted form `util.Pair`,
 in type positions (section 5.9) and in struct literals
-(`util.Pair{a: 1}`, section 7.2.3).
+(`util.Pair{A: 1, B: 2}`, section 7.2.3).
 
 ### 16.2 Semantics
 
@@ -2028,6 +2034,33 @@ in type positions (section 5.9) and in struct literals
   local shadowing inside the imported module: a local variable that shadows
   a module-level name refers to the local.
 - Modules are namespaces only; they are not first-class values.
+
+### 16.3 Visibility
+
+A module's top-level name is exported when its first character is an ASCII
+capital letter; otherwise it is private to its file. There are no
+visibility keywords. The rule binds at module boundaries only: inside the
+defining file every name is reachable, and the root file's own names are
+unaffected.
+
+- Calling an unexported function through a module
+  (`util.twice(...)`) is a compile-time error
+  ("twice is not exported by util").
+- A foreign struct literal must name an exported struct
+  ("pair is not exported by util"), and every field of the struct must be
+  exported: because literals supply every field (section 7.2.3), a struct
+  with any unexported field cannot be constructed outside its module at
+  all ("util.Pair has unexported fields (secret); construct it inside
+  util"), Go's constructor pattern.
+- Reading or assigning an unexported field of a foreign struct is a
+  compile-time error ("field secret of util.Pair is not exported").
+
+An exported function may mention unexported types: its results flow, and
+their exported fields read fine; the importer just cannot write the type
+in a literal or touch its unexported fields. Standard library modules
+(chapter 15) are exempt — their members are defined by this specification
+— as are py values, whose access rules are Python's. Visibility is a
+compile-time rule; the REPL is unchecked (section 17.6).
 
 ## 17. Program execution
 

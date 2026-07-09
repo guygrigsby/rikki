@@ -130,6 +130,8 @@ fallible), `ctx` (`background`, `timeout`, `interrupt` cancellation
 handles), `http` (`get`/`post`/`request`/`stream`, all take a `Ctx`).
 
 Multi-file: `import "util.rk"` binds the sibling file as module `util`.
+Only Capitalized top-level names (functions, structs, fields) are visible
+across modules, Go's rule; lowercase is private to its file.
 
 The normative reference is `language-spec.md` in the rikki repo;
 `tests/golden/` there is a corpus of small correct programs.

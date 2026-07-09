@@ -1,7 +1,7 @@
 import "util.rk"
 
 fn main() {
-    print(util.double(21))
-    p := util.make(1, 2)
-    print(p.a + p.b)
+    print(util.Double(21))
+    p := util.Make(1, 2)
+    print(p.A + p.B)
 }
