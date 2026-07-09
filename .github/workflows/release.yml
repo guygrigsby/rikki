@@ -4,26 +4,60 @@ on:
   push:
     tags: ["v*"]
 
+# every wheel gets libpython grafted in by packaging/repair-wheel.py: the
+# build links an absolute libpython path that only exists on the build
+# machine, so the binaries ship their own copy (loaded via
+# @executable_path/../lib on mac, $ORIGIN/../lib on linux)
 jobs:
-  wheels:
+  wheels-linux:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
         python: ["3.10", "3.11", "3.12", "3.13"]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python }}
       - uses: PyO3/maturin-action@v1
         with:
           command: build
           args: --release --out dist -i python${{ matrix.python }}
+      - uses: astral-sh/setup-uv@v6
+      - name: graft libpython
+        run: |
+          uv python install ${{ matrix.python }}
+          P=$(uv python find ${{ matrix.python }})
+          LIBDIR=$(dirname "$P")/../lib
+          uvx --with wheel --with patchelf python packaging/repair-wheel.py \
+            dist/*.whl "$LIBDIR/libpython${{ matrix.python }}.so.1.0"
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}-py${{ matrix.python }}
+          name: wheels-linux-py${{ matrix.python }}
+          path: dist
+
+  wheels-macos:
+    strategy:
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: astral-sh/setup-uv@v6
+      - name: build against a uv-managed python
+        run: |
+          uv python install ${{ matrix.python }}
+          uvx maturin build --release --out dist -i "$(uv python find ${{ matrix.python }})"
+      - name: graft libpython
+        run: |
+          P=$(uv python find ${{ matrix.python }})
+          LIBDIR=$(dirname "$P")/../lib
+          uvx --with wheel python packaging/repair-wheel.py \
+            dist/*.whl "$LIBDIR/libpython${{ matrix.python }}.dylib"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-py${{ matrix.python }}
           path: dist
 
   # keeps the homebrew tap's formula version in step with the release; the
@@ -58,7 +92,7 @@ jobs:
           git push
 
   publish:
-    needs: wheels
+    needs: [wheels-linux, wheels-macos]
     runs-on: ubuntu-latest
     # PyPI trusted publishing: register this repo + workflow on pypi.org,
     # no token secret needed

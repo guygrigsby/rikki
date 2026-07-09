@@ -31,3 +31,16 @@ tag. Runtime needs a matching CPython stdlib on the machine; uv provides
 one on demand. An explicit `PYTHONHOME` always wins over probing. If the
 probe finds nothing, startup falls back to libpython's own search, which
 is correct for dev builds linked against a system python.
+
+## Addendum 2026-07-09: bundle libpython
+
+The first release proved the build always links libpython at an absolute
+path from the build machine (the runner's framework python on macOS, a
+bare `NEEDED libpython3.12.so.1.0` with no rpath on Linux), so v0.1.0
+wheels only ran where that python existed. Every wheel now grafts the
+build python's shared library into `<prefix>/lib` next to the install
+(`packaging/repair-wheel.py`): binaries load it via
+`@executable_path/../lib` (macOS, re-signed after the edit) or
+`$ORIGIN/../lib` (Linux). The PYTHONHOME probe still supplies the stdlib.
+Static linking was rejected because python-build-standalone's full
+archives carry LTO bitcode locked to their build clang.

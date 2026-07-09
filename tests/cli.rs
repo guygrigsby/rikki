@@ -288,6 +288,15 @@ fn tk_runs_file() {
 }
 
 #[test]
+fn tk_version_flag() {
+    let out = Command::new(tk()).arg("--version").output().unwrap();
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.starts_with("tk "), "{stdout}");
+    assert!(stdout.contains("python"), "{stdout}");
+}
+
+#[test]
 fn tk_bare_is_repl() {
     let mut child = Command::new(tk())
         .stdin(Stdio::piped())
