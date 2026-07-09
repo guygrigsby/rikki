@@ -56,7 +56,7 @@ New projects come with `AGENTS.md`, a rikki primer for coding agents; `rikki new
 
 ## Developing
 
-The gate is `RIKKI_TEST_PY=1 cargo test`, green before every commit (the py goldens need a `python3` on PATH). Language behavior lives in `tests/golden/`: a `.rk` file next to a `.out` (expected stdout) or `.err` (expected error substrings), and a directory with a `main.rk` is one multi-file case. Any change to language semantics updates `language-spec.md` in the same commit, no exceptions. The front end has a fuzz target, `cargo +nightly fuzz run parse_check`, and CI runs the full gate plus a 60 second fuzz pass on every push.
+The gate is `RIKKI_TEST_PY=1 cargo test`, green before every commit (the py goldens need a `python3` on PATH). Language behavior lives in `tests/golden/`: a `.rk` file next to a `.out` (expected stdout) or `.err` (expected error substrings), and a directory with a `main.rk` is one multi-file case. Any change to language semantics updates `language-spec.md` in the same commit, no exceptions. `rikki fmt` rewrites source in the one true style (`--check` for CI). The front end has a fuzz target, `cargo +nightly fuzz run parse_check`, and CI runs the full gate plus a 60 second fuzz pass on every push.
 
 ## Where things live
 

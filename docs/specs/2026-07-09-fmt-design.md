@@ -13,7 +13,9 @@ whatever fmt produces, so lmtk stops drifting.
   and colons; none inside `()` `[]` `{}` delimiters of calls, indexes, and
   literals; none around `.` or inside slice `:`.
 - Blank lines: user intent preserved, runs collapsed to one; none allowed
-  at the start or end of a block; exactly one between top-level decls.
+  at the start or end of a block; exactly one between top-level decls,
+  except between consecutive imports, which follow the source (import
+  groups stay grouped).
 - Composite literals (lists, maps, struct literals) and call arguments
   keep the source's break decision: all on one line stays one line, any
   newline inside means one element per line with a trailing comma at

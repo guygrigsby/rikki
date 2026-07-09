@@ -6,9 +6,10 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
 
 - `bytes` type. Unblocks binary file and http bodies. Touches literals,
   indexing, conversions.
-- `rikki fmt`. One true style, needs a lossless formatter. IN PROGRESS
-  2026-07-09 (design: docs/specs/2026-07-09-fmt-design.md); the playground
-  Format button is its acceptance test.
+- `rikki fmt`: DONE 2026-07-09 (design:
+  docs/specs/2026-07-09-fmt-design.md). Corpus-proven lossless (AST and
+  comments preserved, idempotent over every golden); `rikki fmt --check`
+  for gates; Format button in the playground.
 - `rikki test` (decided 2026-07-09): fast follow after fmt. A test runner
   for rikki programs; convention (test_*.rk files vs fn Test* in-module)
   and assertion story get their own design round. The biggest unlisted
