@@ -38,21 +38,17 @@ Split like uv and python. `rikki` does setup: `rikki new`, `rikki py add torch`,
 
 ## Getting started
 
-No packages yet; build from source. You need a Rust toolchain, a Python 3 with a shared library (pyo3 links it at build time), and [uv](https://docs.astral.sh/uv/) for Python dependencies.
+rikki ships as a python wheel carrying both binaries, so [uv](https://docs.astral.sh/uv/) is the whole story:
 
 ```sh
-git clone https://github.com/guygrigsby/rikki && cd rikki
-cargo install --path .    # installs both rikki and tk
-```
-
-Then:
-
-```sh
+uv tool install rikki
 rikki new hello && cd hello
 rikki run                 # hello, rikki
 rikki py add numpy        # declare a Python dep; uv builds .rikki/venv
 tk src/main.rk            # run a file directly; bare tk is the repl
 ```
+
+Not on PyPI yet: until the first release, build the wheel from a checkout (needs a Rust toolchain): `uvx maturin build --release`, then `uv tool install target/wheels/rikki-*.whl`.
 
 New projects come with `AGENTS.md`, a rikki primer for coding agents; `rikki new --claude-hook` also installs a Claude Code hook that typechecks after every edit. `rikki new` only ever writes into the directory it creates; it refuses to run where anything already exists.
 
