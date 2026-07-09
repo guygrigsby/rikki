@@ -15,8 +15,9 @@ a Rust toolchain they do not have.
 Ship `rikki` and `tk` inside python wheels built by maturin
 (`bindings = "bin"`; the wheel build links python-build-standalone CPython
 statically). Wheels are tagged per interpreter and platform, so the install
-channel itself keys the python match: `uv tool install rikki` is the
-blessed path. At startup the bridge resolves `PYTHONHOME` by probing
+channel itself keys the python match: `uv tool install rikki-lang` is the
+blessed path (bare `rikki` was taken on PyPI; the binaries stay `rikki`
+and `tk`). At startup the bridge resolves `PYTHONHOME` by probing
 `pythonX.Y`, `python3`, then `uv python find X.Y`, because the build
 python's baked prefix does not exist on user machines. `cargo install
 --path .` remains the development path. The wheel version is read from
