@@ -6,6 +6,7 @@ pub mod bridge;
 pub mod bridge;
 pub mod builtins;
 pub mod diag;
+pub mod format;
 mod fmt;
 pub mod interp;
 pub mod lexer;

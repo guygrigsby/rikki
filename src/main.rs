@@ -19,6 +19,13 @@ enum Cmd {
     },
     /// Typecheck only (defaults to the project's src/main.rk)
     Check { file: Option<PathBuf> },
+    /// Rewrite source in the one true style (defaults to the project's src/)
+    Fmt {
+        paths: Vec<PathBuf>,
+        /// List unformatted files and exit nonzero instead of rewriting
+        #[arg(long)]
+        check: bool,
+    },
     /// Scaffold a new project
     New {
         name: String,
@@ -54,6 +61,7 @@ fn main() -> ExitCode {
             rikki::report(rikki::run_with(f, args.clone(), true))
         }),
         Cmd::Check { file } => with_entry(file, |f| rikki::report(rikki::check_source(f))),
+        Cmd::Fmt { paths, check } => fmt_cmd(paths, check),
         Cmd::Py {
             cmd: PyCmd::Add { package, module },
         } => py_add(&package, module.as_deref()),
@@ -179,6 +187,77 @@ if r.returncode != 0:
     sys.stderr.write(r.stdout + r.stderr)
     sys.exit(2)  # exit 2 returns stderr to the agent as feedback
 "#;
+
+fn fmt_cmd(paths: Vec<PathBuf>, check: bool) -> ExitCode {
+    let mut files = vec![];
+    if paths.is_empty() {
+        let cwd = std::env::current_dir().unwrap_or_default();
+        let Some(root) = rikki::project::Project::find(&cwd) else {
+            eprintln!("error: no paths given and no rikki project found");
+            return ExitCode::FAILURE;
+        };
+        collect_rk(&root.join("src"), &mut files);
+    } else {
+        for p in paths {
+            if p.is_dir() {
+                collect_rk(&p, &mut files);
+            } else {
+                files.push(p);
+            }
+        }
+    }
+    files.sort();
+    let mut unformatted = vec![];
+    let mut failed = false;
+    for f in &files {
+        let src = match std::fs::read_to_string(f) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("error: {}: {e}", f.display());
+                failed = true;
+                continue;
+            }
+        };
+        let formatted = match rikki::format::fmt_source(&src) {
+            Ok(s) => s,
+            Err(d) => {
+                // never rewrite what we cannot parse
+                eprintln!("error: {}:{}", f.display(), d);
+                failed = true;
+                continue;
+            }
+        };
+        if formatted == src {
+            continue;
+        }
+        if check {
+            println!("{}", f.display());
+            unformatted.push(f);
+        } else if let Err(e) = std::fs::write(f, formatted) {
+            eprintln!("error: {}: {e}", f.display());
+            failed = true;
+        }
+    }
+    if failed || (check && !unformatted.is_empty()) {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
+}
+
+fn collect_rk(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            collect_rk(&p, out);
+        } else if p.extension().is_some_and(|x| x == "rk") {
+            out.push(p);
+        }
+    }
+}
 
 fn py_add(package: &str, module: Option<&str>) -> ExitCode {
     let cwd = match std::env::current_dir() {

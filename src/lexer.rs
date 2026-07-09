@@ -2,7 +2,29 @@ use crate::diag::Diag;
 use crate::token::{Spanned, Token};
 
 pub fn lex(src: &str) -> Result<Vec<Spanned<Token>>, Diag> {
-    Lexer::new(src).run()
+    Lexer::new(src, false).run().map(|(toks, _)| toks)
+}
+
+/// The formatter's entry: the same token stream plus the trivia the
+/// ordinary lexer throws away (comments and blank lines).
+pub fn lex_trivia(src: &str) -> Result<(Vec<Spanned<Token>>, Trivia), Diag> {
+    Lexer::new(src, true).run()
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Comment {
+    pub line: u32,
+    /// text after `//`, untrimmed
+    pub text: String,
+    /// nothing but whitespace before it on its line
+    pub own_line: bool,
+}
+
+#[derive(Debug, Default)]
+pub struct Trivia {
+    pub comments: Vec<Comment>,
+    /// source lines that are entirely blank
+    pub blank_lines: Vec<u32>,
 }
 
 struct Lexer<'a> {
@@ -10,10 +32,13 @@ struct Lexer<'a> {
     line: u32,
     col: u32,
     out: Vec<Spanned<Token>>,
+    trivia: Option<Trivia>,
+    /// a token or comment has landed on the current source line
+    line_has_content: bool,
 }
 
 impl<'a> Lexer<'a> {
-    fn new(src: &'a str) -> Self {
+    fn new(src: &'a str, trivia: bool) -> Self {
         // Executable scripts: a `#!...` first line is the interpreter's,
         // not ours. Skip to its newline (kept, so line numbers stay true).
         let src = if src.starts_with("#!") {
@@ -26,6 +51,8 @@ impl<'a> Lexer<'a> {
             line: 1,
             col: 1,
             out: vec![],
+            trivia: trivia.then(Trivia::default),
+            line_has_content: false,
         }
     }
 
@@ -41,6 +68,9 @@ impl<'a> Lexer<'a> {
     }
 
     fn push(&mut self, tok: Token, line: u32, col: u32) {
+        if tok != Token::Newline {
+            self.line_has_content = true;
+        }
         self.out.push(Spanned {
             node: tok,
             line,
@@ -56,7 +86,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn run(mut self) -> Result<Vec<Spanned<Token>>, Diag> {
+    fn run(mut self) -> Result<(Vec<Spanned<Token>>, Trivia), Diag> {
         while let Some(&c) = self.chars.peek() {
             let (line, col) = (self.line, self.col);
             match c {
@@ -65,6 +95,12 @@ impl<'a> Lexer<'a> {
                 }
                 '\n' => {
                     self.bump();
+                    if let Some(t) = self.trivia.as_mut() {
+                        if !self.line_has_content {
+                            t.blank_lines.push(line);
+                        }
+                    }
+                    self.line_has_content = false;
                     if !matches!(
                         self.out.last().map(|s| &s.node),
                         None | Some(Token::Newline)
@@ -75,11 +111,23 @@ impl<'a> Lexer<'a> {
                 '/' => {
                     self.bump();
                     if self.chars.peek() == Some(&'/') {
+                        let own_line = !self.line_has_content;
+                        self.line_has_content = true;
+                        self.bump();
+                        let mut text = String::new();
                         while let Some(&n) = self.chars.peek() {
                             if n == '\n' {
                                 break;
                             }
+                            text.push(n);
                             self.bump();
+                        }
+                        if let Some(t) = self.trivia.as_mut() {
+                            t.comments.push(Comment {
+                                line,
+                                text,
+                                own_line,
+                            });
                         }
                     } else {
                         self.push(Token::Slash, line, col);
@@ -234,7 +282,7 @@ impl<'a> Lexer<'a> {
                 }
             }
         }
-        Ok(self.out)
+        Ok((self.out, self.trivia.unwrap_or_default()))
     }
 }
 

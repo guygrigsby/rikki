@@ -173,6 +173,40 @@ fn claude_hook_feeds_diagnostics_back() {
 }
 
 #[test]
+fn fmt_rewrites_and_check_reports() {
+    let d = tempdir("fmt");
+    let f = d.join("ugly.rk");
+    std::fs::write(&f, "fn main(){\n    x:=1+2\n    print( x )\n}\n").unwrap();
+    // --check flags it and leaves it alone
+    let out = Command::new(bin())
+        .args(["fmt", "--check"])
+        .arg(&f)
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "unformatted file must fail --check");
+    assert!(String::from_utf8_lossy(&out.stdout).contains("ugly.rk"));
+    assert!(std::fs::read_to_string(&f).unwrap().contains("x:=1+2"));
+    // fmt rewrites in place
+    let out = Command::new(bin()).arg("fmt").arg(&f).output().unwrap();
+    assert!(out.status.success());
+    let formatted = std::fs::read_to_string(&f).unwrap();
+    assert_eq!(formatted, "fn main() {\n    x := 1 + 2\n    print(x)\n}\n");
+    // and the result passes --check
+    let out = Command::new(bin())
+        .args(["fmt", "--check"])
+        .arg(&f)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    // unparseable source is refused, never rewritten
+    let bad = d.join("broken.rk");
+    std::fs::write(&bad, "fn main( {\n").unwrap();
+    let out = Command::new(bin()).arg("fmt").arg(&bad).output().unwrap();
+    assert!(!out.status.success());
+    assert_eq!(std::fs::read_to_string(&bad).unwrap(), "fn main( {\n");
+}
+
+#[test]
 fn check_reports_and_fails() {
     let d = tempdir("check");
     let bad = d.join("bad.rk");
