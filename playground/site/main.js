@@ -15,13 +15,13 @@ const EXAMPLES = {
 fn main() {
     v, err := half(42)
     if err != none {
-        print("failed: " + err.msg)
+        print("half(42) came back with an error: " + err.msg)
     } else {
         print(v)
     }
     _, err2 := half(7)
     if err2 != none {
-        print("failed: " + err2.msg)
+        print("half(7) handled cleanly: " + err2.msg)
     }
 }
 `,
@@ -49,7 +49,7 @@ fn main() {
         print(v + 1)
     }
     if m["zzz"] == none {
-        print("missing, and the checker made us look")
+        print("no zzz in the map, and the checker made us look")
     }
 }
 `,
@@ -97,7 +97,7 @@ function execute() {
   const r = run(editor.value);
   errLines = new Set();
   if (r.status === "ok") {
-    status.textContent = "ok";
+    status.textContent = "ok \u00b7 program output";
     status.classList.remove("error");
     output.classList.remove("error");
     output.textContent = r.stdout.length ? r.stdout : "(no output)";
