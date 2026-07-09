@@ -14,7 +14,10 @@ impl Checker {
                 Type::Unknown
             }
             ExprTy::PyChain => {
-                self.diag(e.span, "error result must be handled");
+                self.diag(
+                    e.span,
+                    "error result must be handled: prefix with check, destructure (v, err := ...), or convert (int(...), str(...), ...)",
+                );
                 Type::Py
             }
         }

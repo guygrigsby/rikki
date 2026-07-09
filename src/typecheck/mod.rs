@@ -383,7 +383,10 @@ impl Checker {
                         self.declare(n, t, span);
                     }
                 } else if names.len() == supplied.len() - 1 && supplied.last() == Some(&err_opt()) {
-                    self.diag(span, "error result must be handled");
+                    self.diag(
+                        span,
+                        "error result must be handled: bind it (v, err := ...) or propagate it (v := check ...)",
+                    );
                 } else {
                     self.diag(
                         span,
@@ -453,13 +456,22 @@ impl Checker {
                 let ty = self.check_expr(e, None);
                 match ty {
                     ExprTy::PyChain => {
-                        self.diag(span, "error result must be handled");
+                        self.diag(
+                            span,
+                            "error result must be handled: prefix the call with check, or destructure (v, err := ...)",
+                        );
                     }
                     ExprTy::Multi(ts) if ts.last() == Some(&err_opt()) => {
-                        self.diag(span, "error result must be handled");
+                        self.diag(
+                            span,
+                            "error result must be handled: destructure (v, err := ...) or prefix with check",
+                        );
                     }
                     ExprTy::One(t) if t == err_opt() && !matches!(e.kind, ExprKind::Check(_)) => {
-                        self.diag(span, "error result must be handled");
+                        self.diag(
+                            span,
+                            "error result must be handled: bind it (err := ...) or prefix with check",
+                        );
                     }
                     _ => {}
                 }
@@ -651,7 +663,12 @@ impl Checker {
     fn check_cond(&mut self, cond: &Expr) {
         let t = self.expr_one(cond, Some(&Type::Bool));
         if !matches!(t, Type::Bool | Type::Unknown) {
-            self.diag(cond.span, format!("condition must be bool, got {t}"));
+            let hint = if t == Type::Py {
+                "; a py comparison yields py, extract with check bool(...)"
+            } else {
+                ""
+            };
+            self.diag(cond.span, format!("condition must be bool, got {t}{hint}"));
         }
     }
 
