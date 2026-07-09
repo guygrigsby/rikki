@@ -28,6 +28,33 @@
     <div id="status"></div>
     <pre id="output"></pre>
   </div>
+  <section id="about">
+    <h2>About the rikki playground</h2>
+    <p><a href="https://github.com/guygrigsby/rikki">rikki</a> is a statically
+    typed, interpreted language: Go's discipline, CPython's ecosystem. This
+    page runs the real interpreter, compiled to WebAssembly, entirely in your
+    browser. Nothing you type is sent anywhere.</p>
+    <p><strong>Run</strong> (or Ctrl/Cmd+Enter) typechecks the whole program
+    and executes it. Compile errors carry <code>line:col</code> positions and
+    light up the matching lines in the gutter.</p>
+    <p><strong>Share</strong> copies a link with your program encoded in the
+    URL fragment itself. There is no server and nothing is stored; the link
+    <em>is</em> the program.</p>
+    <p>The <strong>examples</strong> menu walks the ideas that make rikki
+    rikki: errors as values with mandatory handling, option types instead of
+    nil, and Go's copy model.</p>
+    <h2>Limitations</h2>
+    <p>The python bridge (<code>import py</code>), <code>http</code>, and
+    <code>ctx.timeout</code> need a real CPython and a real machine, so they
+    report their absence here rather than pretend. File imports need a
+    filesystem. For the whole language:</p>
+    <pre class="install">uv tool install rikki-lang      # or: brew install guygrigsby/tap/rikki
+rikki new hello &amp;&amp; cd hello &amp;&amp; rikki run</pre>
+    <p>The normative reference is
+    <a href="https://github.com/guygrigsby/rikki/blob/main/language-spec.md">the language spec</a>;
+    every behavior in it is pinned by
+    <a href="https://github.com/guygrigsby/rikki/tree/main/tests/golden">golden tests</a>.</p>
+  </section>
 </main>
 <footer>
   <span id="version"></span>

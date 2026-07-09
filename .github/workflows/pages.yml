@@ -36,6 +36,12 @@ jobs:
           cp site/index.html site/style.css site/main.js ../dist/
           cp pkg/rikki_playground.js pkg/rikki_playground_bg.wasm ../dist/pkg/
           cp ../art/logo.png ../dist/
+          # cache-bust every asset chain with the commit: Pages caches for
+          # ten minutes and a fresh html over stale css shears the layout
+          v="${GITHUB_SHA::8}"
+          sed -i "s|style.css|style.css?v=$v|; s|main.js|main.js?v=$v|" ../dist/index.html
+          sed -i "s|./pkg/rikki_playground.js|./pkg/rikki_playground.js?v=$v|" ../dist/main.js
+          sed -i "s|rikki_playground_bg.wasm|rikki_playground_bg.wasm?v=$v|" ../dist/pkg/rikki_playground.js
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
