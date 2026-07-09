@@ -6,7 +6,21 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
 
 - `bytes` type. Unblocks binary file and http bodies. Touches literals,
   indexing, conversions.
-- `rikki fmt`. One true style, needs a lossless formatter.
+- `rikki fmt`. One true style, needs a lossless formatter. IN PROGRESS
+  2026-07-09 (design: docs/specs/2026-07-09-fmt-design.md); the playground
+  Format button is its acceptance test.
+- `rikki test` (decided 2026-07-09): fast follow after fmt. A test runner
+  for rikki programs; convention (test_*.rk files vs fn Test* in-module)
+  and assertion story get their own design round. The biggest unlisted
+  hole: users currently cannot write tests at all.
+- Version pinning (decided 2026-07-09): rikki.toml gains a rikki version
+  stamp written by rikki new, with a warning on mismatch so future breaks
+  say "built against 0.1.5" instead of mystifying compile errors; and
+  `rikki py add` records the resolved version instead of "*" so the
+  manifest reads true (rikki.lock already pins exactly).
+- Source snippets in diagnostics (decided 2026-07-09): show the offending
+  source line with a caret under file:line:col. Humans and the playground
+  see it immediately; the agent hook feedback gets richer for free.
 - Repl typechecking (currently unchecked).
 - Rethink strict copies everywhere: DONE 2026-07-02 as the Go model
   wholesale (ADR 0010, spec chapter 11): reference lists/maps, reference
@@ -45,7 +59,13 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
   wrappers). Trigger: the first time a second project wants lmtk's rikki
   code. Explicitly NOT a stability commitment: packages do not slow
   language change pre-adoption.
-- Concurrency. Bridge module is the single place GIL work lands.
+- Concurrency: SPEC SOON (escalated 2026-07-09), implement later. A
+  design round before more v1.1 features lock in semantics that
+  concurrency would have to break: the reference types (lists, maps, py,
+  ctx) need a sharing/synchronization story, the GIL bounds what py work
+  can ever parallelize (bridge stays the single place GIL work lands),
+  and ctx is already shaped like the cancellation primitive. The point is
+  to not paint over the door we intend to walk through.
 - Bytecode VM if pure-mongoose loops ever hurt (recorded in ADR 0001).
 - Copy-on-write values if profiling demands (ADR 0004).
 - `==` structural equality for containers (contains already compares
