@@ -239,7 +239,11 @@ fn compile_and(path: &Path, mode: Mode, args: Vec<String>, out: Output) -> RunRe
 fn dep_declared(proj: &project::Project, module: &str) -> bool {
     let norm = |s: &str| s.replace('-', "_").to_lowercase();
     let m = norm(module);
-    proj.py_deps.keys().any(|k| norm(k) == m)
+    // a module override replaces the package-name match (spec 17.5)
+    proj.py_deps.iter().any(|(k, d)| match &d.module {
+        Some(declared) => norm(declared) == m,
+        None => norm(k) == m,
+    })
 }
 
 #[cfg(test)]
@@ -252,10 +256,36 @@ mod tests {
             root: std::path::PathBuf::new(),
             name: "x".into(),
             python: "3.12".into(),
-            py_deps: [("sentence-transformers".to_string(), "*".to_string())].into(),
+            py_deps: [(
+                "sentence-transformers".to_string(),
+                project::PyDep::any(),
+            )]
+            .into(),
         };
         assert!(dep_declared(&proj, "sentence_transformers"));
         assert!(dep_declared(&proj, "sentence-transformers"));
+        assert!(!dep_declared(&proj, "torch"));
+    }
+
+    #[test]
+    fn module_override_satisfies_exactly_that_import() {
+        // mlflow-skinny = { module = "mlflow" } (spec 17.5)
+        let proj = project::Project {
+            root: std::path::PathBuf::new(),
+            name: "x".into(),
+            python: "3.12".into(),
+            py_deps: [(
+                "mlflow-skinny".to_string(),
+                project::PyDep {
+                    version: "*".into(),
+                    module: Some("mlflow".into()),
+                },
+            )]
+            .into(),
+        };
+        assert!(dep_declared(&proj, "mlflow"));
+        // the override replaces the package-name match
+        assert!(!dep_declared(&proj, "mlflow_skinny"));
         assert!(!dep_declared(&proj, "torch"));
     }
 }

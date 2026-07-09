@@ -10,7 +10,25 @@ pub struct Project {
     pub root: PathBuf,
     pub name: String,
     pub python: String,
-    pub py_deps: BTreeMap<String, String>,
+    pub py_deps: BTreeMap<String, PyDep>,
+}
+
+/// One [py-deps] entry: a version constraint, and optionally the import
+/// name the package satisfies when the two differ (mlflow-skinny ->
+/// mlflow; spec 17.5). Only the version reaches uv.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PyDep {
+    pub version: String,
+    pub module: Option<String>,
+}
+
+impl PyDep {
+    pub fn any() -> Self {
+        PyDep {
+            version: "*".into(),
+            module: None,
+        }
+    }
 }
 
 impl Project {
@@ -59,7 +77,24 @@ impl Project {
         let mut py_deps = BTreeMap::new();
         if let Some(deps) = doc.get("py-deps").and_then(|v| v.as_table()) {
             for (k, v) in deps {
-                py_deps.insert(k.clone(), v.as_str().unwrap_or("*").to_string());
+                let dep = match v.as_table() {
+                    Some(t) => PyDep {
+                        version: t
+                            .get("version")
+                            .and_then(|x| x.as_str())
+                            .unwrap_or("*")
+                            .to_string(),
+                        module: t
+                            .get("module")
+                            .and_then(|x| x.as_str())
+                            .map(str::to_string),
+                    },
+                    None => PyDep {
+                        version: v.as_str().unwrap_or("*").to_string(),
+                        module: None,
+                    },
+                };
+                py_deps.insert(k.clone(), dep);
             }
         }
         Ok(Project {
@@ -80,7 +115,16 @@ impl Project {
         if !self.py_deps.is_empty() {
             let mut deps = toml::Table::new();
             for (k, v) in &self.py_deps {
-                deps.insert(k.clone(), s(v));
+                let val = match &v.module {
+                    None => s(&v.version),
+                    Some(m) => {
+                        let mut t = toml::Table::new();
+                        t.insert("version".into(), s(&v.version));
+                        t.insert("module".into(), s(m));
+                        toml::Value::Table(t)
+                    }
+                };
+                deps.insert(k.clone(), val);
             }
             doc.insert("py-deps".into(), toml::Value::Table(deps));
         }
@@ -100,10 +144,10 @@ impl Project {
     fn requirement_lines(&self) -> String {
         let mut s = String::new();
         for (k, v) in &self.py_deps {
-            if v == "*" {
+            if v.version == "*" {
                 s.push_str(&format!("{k}\n"));
             } else {
-                s.push_str(&format!("{k}{v}\n"));
+                s.push_str(&format!("{k}{}\n", v.version));
             }
         }
         s
@@ -215,7 +259,7 @@ impl Project {
     pub fn py_add(&mut self, pkg: &str, uv_bin: &str) -> Result<(), String> {
         self.py_deps
             .entry(pkg.to_string())
-            .or_insert_with(|| "*".to_string());
+            .or_insert_with(PyDep::any);
         self.save()?;
         self.compile_lock(uv_bin)?;
         self.ensure_env(uv_bin)
@@ -257,13 +301,13 @@ mod tests {
             root: d.clone(),
             name: "hello".into(),
             python: "3.12".into(),
-            py_deps: [("torch".to_string(), "*".to_string())].into(),
+            py_deps: [("torch".to_string(), PyDep::any())].into(),
         };
         p.save().unwrap();
         let q = Project::load(&d).unwrap();
         assert_eq!(q.name, "hello");
         assert_eq!(q.python, "3.12");
-        assert_eq!(q.py_deps.get("torch").map(String::as_str), Some("*"));
+        assert_eq!(q.py_deps.get("torch"), Some(&PyDep::any()));
     }
 
     #[test]
@@ -275,14 +319,46 @@ mod tests {
             root: d.clone(),
             name: "hello".into(),
             python: "3.12".into(),
-            py_deps: [("ruamel.yaml".to_string(), "0.18".to_string())].into(),
+            py_deps: [(
+                "ruamel.yaml".to_string(),
+                PyDep {
+                    version: "0.18".into(),
+                    module: None,
+                },
+            )]
+            .into(),
         };
         p.save().unwrap();
         let q = Project::load(&d).unwrap();
         assert_eq!(
-            q.py_deps.get("ruamel.yaml").map(String::as_str),
+            q.py_deps.get("ruamel.yaml").map(|d| d.version.as_str()),
             Some("0.18")
         );
+    }
+
+    #[test]
+    fn toml_roundtrip_module_override() {
+        let d = tempdir("toml-module");
+        let p = Project {
+            root: d.clone(),
+            name: "hello".into(),
+            python: "3.12".into(),
+            py_deps: [(
+                "mlflow-skinny".to_string(),
+                PyDep {
+                    version: "*".into(),
+                    module: Some("mlflow".into()),
+                },
+            )]
+            .into(),
+        };
+        p.save().unwrap();
+        let q = Project::load(&d).unwrap();
+        let dep = q.py_deps.get("mlflow-skinny").unwrap();
+        assert_eq!(dep.version, "*");
+        assert_eq!(dep.module.as_deref(), Some("mlflow"));
+        // only the package name reaches uv
+        assert_eq!(q.requirement_lines(), "mlflow-skinny\n");
     }
 
     #[test]

@@ -2099,6 +2099,22 @@ normalization (`sentence-transformers` satisfies
 `import py "sentence_transformers"`). An undeclared import is a compile-time
 error directing the user to `rikki py add`.
 
+A `[py-deps]` entry is either a version string or a table with optional
+`version` (default `"*"`) and optional `module` naming the import the
+package satisfies when the two differ:
+
+```toml
+[py-deps]
+torch = "*"
+mlflow-skinny = { module = "mlflow" }
+```
+
+A `module` override replaces the package-name match: `mlflow-skinny`
+above satisfies `import py "mlflow"` and no longer satisfies
+`import py "mlflow_skinny"`. Only the package name and version reach the
+dependency resolver. `rikki py add` writes the string form; the table form
+is a manifest edit.
+
 The manifest's `python` pin must match the interpreter embedded in the
 running rikki (major.minor); a mismatch is a compile-time error naming
 both versions. When the pin is omitted it defaults to the embedded version.
