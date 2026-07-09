@@ -48,6 +48,10 @@ jobs:
           gh repo clone guygrigsby/homebrew-tap
           cd homebrew-tap
           sed -i -E "s/version \"[0-9][0-9.]*\"/version \"$ver\"/" Formula/rikki.rb
+          if git diff --quiet; then
+            echo "formula already at $ver"
+            exit 0
+          fi
           git config user.name "rikki-release"
           git config user.email "guy@grigsby.dev"
           git commit -am "rikki $ver"
