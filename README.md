@@ -36,6 +36,30 @@ fn main() (error?) {
 
 Split like uv and python. `rikki` does setup: `rikki new`, `rikki py add torch`, `rikki check`, `rikki run`. `tk` runs code: `tk train.rk`, and bare `tk` is the repl. Python deps live in the project manifest and every `import py` is validated against it at compile time, so a missing dep is a compile error, not a stack trace twenty minutes into a training run.
 
+## Getting started
+
+No packages yet; build from source. You need a Rust toolchain, a Python 3 with a shared library (pyo3 links it at build time), and [uv](https://docs.astral.sh/uv/) for Python dependencies.
+
+```sh
+git clone https://github.com/guygrigsby/rikki && cd rikki
+cargo install --path .    # installs both rikki and tk
+```
+
+Then:
+
+```sh
+rikki new hello && cd hello
+rikki run                 # hello, rikki
+rikki py add numpy        # declare a Python dep; uv builds .rikki/venv
+tk src/main.rk            # run a file directly; bare tk is the repl
+```
+
+New projects come with `AGENTS.md`, a rikki primer for coding agents; `rikki new --claude-hook` also installs a Claude Code hook that typechecks after every edit. `rikki new` only ever writes into the directory it creates; it refuses to run where anything already exists.
+
+## Developing
+
+The gate is `RIKKI_TEST_PY=1 cargo test`, green before every commit (the py goldens need a `python3` on PATH). Language behavior lives in `tests/golden/`: a `.rk` file next to a `.out` (expected stdout) or `.err` (expected error substrings), and a directory with a `main.rk` is one multi-file case. Any change to language semantics updates `language-spec.md` in the same commit, no exceptions. The front end has a fuzz target, `cargo +nightly fuzz run parse_check`, and CI runs the full gate plus a 60 second fuzz pass on every push.
+
 ## Where things live
 
 `language-spec.md` is the normative spec. `tests/golden/` is the executable spec; every language-visible behavior has a golden test. Design rationale is in `docs/specs/`, decisions in `docs/adr/`. There's an nvim plugin under `editors/` with syntax highlighting and check-on-save.

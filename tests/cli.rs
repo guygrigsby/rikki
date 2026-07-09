@@ -47,14 +47,31 @@ fn new_then_run() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(d.join("hello/rikki.toml").exists());
-    // agent support: primer, CLAUDE.md import, check-on-edit hook
+    // agent docs scaffold by default; the executable hook is opt-in
     let primer = std::fs::read_to_string(d.join("hello/AGENTS.md")).unwrap();
     assert!(primer.contains("py bridge"), "primer content missing");
     let claude = std::fs::read_to_string(d.join("hello/CLAUDE.md")).unwrap();
     assert!(claude.contains("@AGENTS.md"), "{claude}");
-    let settings = std::fs::read_to_string(d.join("hello/.claude/settings.json")).unwrap();
+    assert!(!d.join("hello/.claude").exists(), "hook must be opt-in");
+    // the flag is discoverable from the success message
+    assert!(
+        String::from_utf8_lossy(&out.stdout).contains("--claude-hook"),
+        "{}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+    let out = Command::new(bin())
+        .args(["new", "hooked", "--claude-hook"])
+        .current_dir(&d)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let settings = std::fs::read_to_string(d.join("hooked/.claude/settings.json")).unwrap();
     assert!(settings.contains("rikki-check.py"), "{settings}");
-    assert!(d.join("hello/.claude/hooks/rikki-check.py").exists());
+    assert!(d.join("hooked/.claude/hooks/rikki-check.py").exists());
     let out = Command::new(bin())
         .args(["run", "src/main.rk"])
         .current_dir(d.join("hello"))
@@ -66,6 +83,93 @@ fn new_then_run() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert_eq!(String::from_utf8_lossy(&out.stdout), "hello, rikki\n");
+}
+
+#[test]
+fn new_refuses_existing_dir_and_touches_nothing() {
+    let d = tempdir("new-exists");
+    let proj = d.join("mine");
+    std::fs::create_dir_all(&proj).unwrap();
+    std::fs::write(proj.join("CLAUDE.md"), "precious\n").unwrap();
+    std::fs::write(proj.join("AGENTS.md"), "mine\n").unwrap();
+    for args in [vec!["new", "mine"], vec!["new", "mine", "--claude-hook"]] {
+        let out = Command::new(bin()).args(&args).current_dir(&d).output().unwrap();
+        assert!(!out.status.success(), "{args:?} must refuse an existing dir");
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains("already exists"),
+            "{args:?}"
+        );
+    }
+    // nothing inside was rewritten
+    assert_eq!(
+        std::fs::read_to_string(proj.join("CLAUDE.md")).unwrap(),
+        "precious\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(proj.join("AGENTS.md")).unwrap(),
+        "mine\n"
+    );
+    assert!(!proj.join(".claude").exists());
+    assert!(!proj.join("rikki.toml").exists());
+}
+
+#[test]
+fn claude_hook_feeds_diagnostics_back() {
+    let d = tempdir("hook");
+    let out = Command::new(bin())
+        .args(["new", "h", "--claude-hook"])
+        .current_dir(&d)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let proj = d.join("h");
+    let hook = proj.join(".claude/hooks/rikki-check.py");
+    let bin_dir = PathBuf::from(bin()).parent().unwrap().to_path_buf();
+    let run_hook = |file: PathBuf| {
+        let mut child = Command::new("python3")
+            .arg(&hook)
+            .env(
+                "PATH",
+                format!("{}:{}", bin_dir.display(), std::env::var("PATH").unwrap()),
+            )
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let payload = format!(r#"{{"tool_input": {{"file_path": "{}"}}}}"#, file.display());
+        child
+            .stdin
+            .as_mut()
+            .unwrap()
+            .write_all(payload.as_bytes())
+            .unwrap();
+        wait_within(child, 30)
+    };
+    // a bad edit comes back as diagnostics on stderr with exit 2
+    std::fs::write(
+        proj.join("src/main.rk"),
+        "fn main() {\n    if 1 {\n        print(\"x\")\n    }\n}\n",
+    )
+    .unwrap();
+    let out = run_hook(proj.join("src/main.rk"));
+    assert_eq!(out.status.code(), Some(2), "bad edit must exit 2");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("condition must be bool"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    // a clean edit is silent success
+    std::fs::write(proj.join("src/main.rk"), "fn main() {\n    print(\"ok\")\n}\n").unwrap();
+    let out = run_hook(proj.join("src/main.rk"));
+    assert_eq!(out.status.code(), Some(0), "clean edit must exit 0");
+    // non-.rk files are ignored
+    let out = run_hook(proj.join("notes.md"));
+    assert_eq!(out.status.code(), Some(0), "non-rk file must exit 0");
 }
 
 #[test]

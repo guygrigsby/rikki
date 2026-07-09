@@ -1,0 +1,9 @@
+import py "json"
+
+fn main() (error?) {
+    y, _ := json.loads("1")
+    if y {
+        print("x")
+    }
+    return none
+}

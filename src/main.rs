@@ -20,7 +20,12 @@ enum Cmd {
     /// Typecheck only (defaults to the project's src/main.rk)
     Check { file: Option<PathBuf> },
     /// Scaffold a new project
-    New { name: String },
+    New {
+        name: String,
+        /// Also install a Claude Code hook that typechecks after every edit
+        #[arg(long)]
+        claude_hook: bool,
+    },
     /// Interactive session
     Repl,
     /// Python dependency management
@@ -46,7 +51,7 @@ fn main() -> ExitCode {
         Cmd::Py {
             cmd: PyCmd::Add { package },
         } => py_add(&package),
-        Cmd::New { name } => new_project(&name),
+        Cmd::New { name, claude_hook } => new_project(&name, claude_hook),
         Cmd::Repl => {
             rikki::repl::run();
             ExitCode::SUCCESS
@@ -66,7 +71,7 @@ fn with_entry(file: Option<PathBuf>, f: impl FnOnce(&std::path::Path) -> ExitCod
     }
 }
 
-fn new_project(name: &str) -> ExitCode {
+fn new_project(name: &str, claude_hook: bool) -> ExitCode {
     let root = std::path::Path::new(name);
     if root.exists() {
         eprintln!("error: {name} already exists");
@@ -87,18 +92,25 @@ fn new_project(name: &str) -> ExitCode {
         )?;
         std::fs::write(root.join(".gitignore"), ".rikki/\n")?;
         // agents writing rikki: the primer, loaded by anything that reads
-        // AGENTS.md or CLAUDE.md, plus a check-after-every-edit hook so the
-        // checker's diagnostics land in the agent loop
+        // AGENTS.md or CLAUDE.md; the executable check-after-every-edit
+        // hook only lands when asked for
         std::fs::write(root.join("AGENTS.md"), PRIMER)?;
         std::fs::write(root.join("CLAUDE.md"), "@AGENTS.md\n")?;
-        std::fs::create_dir_all(root.join(".claude/hooks"))?;
-        std::fs::write(root.join(".claude/settings.json"), HOOK_SETTINGS)?;
-        std::fs::write(root.join(".claude/hooks/rikki-check.py"), HOOK_CHECK)?;
+        if claude_hook {
+            std::fs::create_dir_all(root.join(".claude/hooks"))?;
+            std::fs::write(root.join(".claude/settings.json"), HOOK_SETTINGS)?;
+            std::fs::write(root.join(".claude/hooks/rikki-check.py"), HOOK_CHECK)?;
+        }
         Ok(())
     };
     match make() {
         Ok(()) => {
-            println!("created {name}/ (rikki.toml, src/main.rk, AGENTS.md, .claude/)");
+            if claude_hook {
+                println!("created {name}/ (rikki.toml, src/main.rk, AGENTS.md, .claude/)");
+            } else {
+                println!("created {name}/ (rikki.toml, src/main.rk, AGENTS.md)");
+                println!("tip: --claude-hook adds a Claude Code hook that typechecks after every edit");
+            }
             ExitCode::SUCCESS
         }
         Err(e) => {

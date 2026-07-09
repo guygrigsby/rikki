@@ -1,0 +1,2 @@
+condition must be bool, got py
+check bool(
