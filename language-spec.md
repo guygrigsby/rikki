@@ -1038,8 +1038,9 @@ A py chain must be consumed by one of: a two-name destructure
 (`v, err := chain`), a `check`, or a conversion (which absorbs the
 fallibility; section 7.7). Binding a chain to a single name, or evaluating it
 as a bare expression statement, is a compile-time error ("error result must
-be handled"). Assigning into a py expression (`obj.attr = x` or
-`obj[i] = x`) is a compile-time error in v1.
+be handled"). Assigning into a py target (`obj.attr = x` or
+`obj[i] = x`) is a statement, not a chain consumption; its semantics are
+given in section 13.2.
 
 When a destructured chain fails, the value slot receives the zero value of
 `py` (a Python `None` handle) and the error slot the error; on success the
