@@ -44,12 +44,18 @@ fn main() {
 `,
   "options, no nil": `fn main() {
     m := map[str]int{"a": 1}
+
+    // a map read is int?, present or none; no comma-ok, no nil
     v := m["a"]
+
+    // print(v + 1) up here would be a compile error: v might be none.
+    // the none-check narrows v to plain int inside the branch
     if v != none {
         print(v + 1)
     }
+
     if m["zzz"] == none {
-        print("no zzz in the map, and the checker made us look")
+        print("zzz is not in the map")
     }
 }
 `,
