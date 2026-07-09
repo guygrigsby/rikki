@@ -26,6 +26,28 @@ jobs:
           name: wheels-${{ matrix.os }}-py${{ matrix.python }}
           path: dist
 
+  # keeps the homebrew tap's formula version in step with the release;
+  # needs the ENABLE_TAP_BUMP repo variable set to "true" and a
+  # TAP_PUSH_TOKEN secret that can push to guygrigsby/homebrew-tap
+  tap:
+    needs: publish
+    if: vars.ENABLE_TAP_BUMP == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: bump formula version
+        env:
+          GH_TOKEN: ${{ secrets.TAP_PUSH_TOKEN }}
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          gh repo clone guygrigsby/homebrew-tap
+          cd homebrew-tap
+          sed -i -E "s/version \"[0-9][0-9.]*\"/version \"$ver\"/" Formula/rikki.rb
+          git config user.name "rikki-release"
+          git config user.email "guy@grigsby.dev"
+          git commit -am "rikki $ver"
+          git push
+
   publish:
     needs: wheels
     runs-on: ubuntu-latest
