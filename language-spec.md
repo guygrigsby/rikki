@@ -2145,8 +2145,15 @@ mlflow-skinny = { module = "mlflow" }
 A `module` override replaces the package-name match: `mlflow-skinny`
 above satisfies `import py "mlflow"` and no longer satisfies
 `import py "mlflow_skinny"`. Only the package name and version reach the
-dependency resolver. `rikki py add` writes the string form; the table form
-is a manifest edit.
+dependency resolver. `rikki py add <pkg>` writes the string form;
+`rikki py add <pkg> --module <name>` writes the table form, and
+re-adding an existing package preserves its table entry.
+
+Hand-editing `[py-deps]` is first-class: the lock's first line records a
+fingerprint of the resolution inputs (the python pin and the requirement
+lines), and provisioning with a drifted manifest re-resolves the lock
+automatically before syncing the environment. A lock is never trusted
+past its manifest.
 
 The manifest's `python` pin must match the interpreter embedded in the
 running rikki (major.minor); a mismatch is a compile-time error naming

@@ -141,6 +141,24 @@ impl Project {
         self.root.join("rikki.lock")
     }
 
+    /// First line of every lock: a fingerprint of exactly the inputs that
+    /// determine resolution (python pin + requirement lines). When the
+    /// manifest drifts from it, hand edits included, the lock is stale.
+    fn manifest_stamp(&self) -> String {
+        format!(
+            "# rikki-manifest: {}",
+            cheap_hash(&format!("{}\n{}", self.python, self.requirement_lines()))
+        )
+    }
+
+    fn lock_fresh(&self) -> bool {
+        match std::fs::read_to_string(self.lock_path()) {
+            Ok(lock) => lock.lines().next() == Some(self.manifest_stamp().as_str()),
+            // no lock and no deps is the fresh empty state
+            Err(_) => self.py_deps.is_empty(),
+        }
+    }
+
     fn requirement_lines(&self) -> String {
         let mut s = String::new();
         for (k, v) in &self.py_deps {
@@ -205,12 +223,20 @@ impl Project {
             ],
             Some(&reqs),
         )?;
-        std::fs::write(self.lock_path(), lock).map_err(|e| format!("write lock: {e}"))
+        let stamped = format!("{}\n{lock}", self.manifest_stamp());
+        std::fs::write(self.lock_path(), stamped).map_err(|e| format!("write lock: {e}"))
     }
 
     /// Create/refresh the venv so it matches the lock. Idempotent: skips work
     /// when the lock hash matches the last sync marker.
     pub fn ensure_env(&self, uv_bin: &str) -> Result<(), String> {
+        // the lock follows the manifest: re-resolve whenever [py-deps] or
+        // the python pin changed since the lock was written, hand edits
+        // included (spec 17.5). compile_lock also clears a lock whose deps
+        // were all removed.
+        if !self.lock_fresh() {
+            self.compile_lock(uv_bin)?;
+        }
         if self.py_deps.is_empty() && !self.lock_path().exists() {
             // still need a venv for the pinned interpreter itself
             if !self.venv().exists() {
@@ -256,10 +282,14 @@ impl Project {
         Ok(())
     }
 
-    pub fn py_add(&mut self, pkg: &str, uv_bin: &str) -> Result<(), String> {
-        self.py_deps
+    pub fn py_add(&mut self, pkg: &str, module: Option<&str>, uv_bin: &str) -> Result<(), String> {
+        let dep = self
+            .py_deps
             .entry(pkg.to_string())
             .or_insert_with(PyDep::any);
+        if let Some(m) = module {
+            dep.module = Some(m.to_string());
+        }
         self.save()?;
         self.compile_lock(uv_bin)?;
         self.ensure_env(uv_bin)
@@ -362,6 +392,68 @@ mod tests {
     }
 
     #[test]
+    fn hand_edited_manifest_relocks_on_ensure_env() {
+        let d = tempdir("relock");
+        let uv = fake_uv(&d);
+        let mut p = Project {
+            root: d.clone(),
+            name: "h".into(),
+            python: "3.12".into(),
+            py_deps: BTreeMap::new(),
+        };
+        p.save().unwrap();
+        p.py_add("mlflow", None, &uv).unwrap();
+        // hand edit, as a user swapping to the table form would
+        p.py_deps.clear();
+        p.py_deps.insert(
+            "mlflow-skinny".into(),
+            PyDep {
+                version: "*".into(),
+                module: Some("mlflow".into()),
+            },
+        );
+        p.save().unwrap();
+        std::fs::write(d.join("uv-calls.log"), "").unwrap();
+        p.ensure_env(&uv).unwrap();
+        let log = std::fs::read_to_string(d.join("uv-calls.log")).unwrap();
+        assert!(log.contains("pip compile"), "stale lock must re-resolve: {log}");
+        assert!(log.contains("pip sync"), "{log}");
+        // the re-resolved lock is fresh: next provision is a no-op
+        std::fs::write(d.join("uv-calls.log"), "").unwrap();
+        p.ensure_env(&uv).unwrap();
+        let log = std::fs::read_to_string(d.join("uv-calls.log")).unwrap();
+        assert_eq!(log.trim(), "", "{log}");
+    }
+
+    #[test]
+    fn py_add_keeps_and_sets_module_overrides() {
+        let d = tempdir("readd");
+        let uv = fake_uv(&d);
+        let mut p = Project {
+            root: d.clone(),
+            name: "h".into(),
+            python: "3.12".into(),
+            py_deps: BTreeMap::new(),
+        };
+        p.py_deps.insert(
+            "mlflow-skinny".into(),
+            PyDep {
+                version: "*".into(),
+                module: Some("mlflow".into()),
+            },
+        );
+        p.save().unwrap();
+        // re-adding an existing dep re-locks without clobbering the table form
+        p.py_add("mlflow-skinny", None, &uv).unwrap();
+        assert_eq!(p.py_deps["mlflow-skinny"].module.as_deref(), Some("mlflow"));
+        // and --module writes the table form first class
+        p.py_add("pillow", Some("PIL"), &uv).unwrap();
+        assert_eq!(p.py_deps["pillow"].module.as_deref(), Some("PIL"));
+        let toml = std::fs::read_to_string(d.join("rikki.toml")).unwrap();
+        assert!(toml.contains("module = \"PIL\""), "{toml}");
+    }
+
+    #[test]
     fn find_walks_up() {
         let d = tempdir("find");
         std::fs::write(d.join("rikki.toml"), "[project]\nname = \"x\"\n").unwrap();
@@ -396,7 +488,7 @@ mod tests {
             py_deps: BTreeMap::new(),
         };
         p.save().unwrap();
-        p.py_add("torch", &uv).unwrap();
+        p.py_add("torch", None, &uv).unwrap();
         let lock = std::fs::read_to_string(d.join("rikki.lock")).unwrap();
         assert!(lock.contains("torch==2.9.0"));
         let log = std::fs::read_to_string(d.join("uv-calls.log")).unwrap();

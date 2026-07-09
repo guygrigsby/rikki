@@ -38,7 +38,13 @@ enum Cmd {
 #[derive(Subcommand)]
 enum PyCmd {
     /// Declare a Python dependency and sync the environment
-    Add { package: String },
+    Add {
+        package: String,
+        /// Import name this package satisfies when the two differ
+        /// (mlflow-skinny provides mlflow)
+        #[arg(long)]
+        module: Option<String>,
+    },
 }
 
 fn main() -> ExitCode {
@@ -49,8 +55,8 @@ fn main() -> ExitCode {
         }),
         Cmd::Check { file } => with_entry(file, |f| rikki::report(rikki::check_source(f))),
         Cmd::Py {
-            cmd: PyCmd::Add { package },
-        } => py_add(&package),
+            cmd: PyCmd::Add { package, module },
+        } => py_add(&package, module.as_deref()),
         Cmd::New { name, claude_hook } => new_project(&name, claude_hook),
         Cmd::Repl => {
             rikki::repl::run();
@@ -174,7 +180,7 @@ if r.returncode != 0:
     sys.exit(2)  # exit 2 returns stderr to the agent as feedback
 "#;
 
-fn py_add(package: &str) -> ExitCode {
+fn py_add(package: &str, module: Option<&str>) -> ExitCode {
     let cwd = match std::env::current_dir() {
         Ok(d) => d,
         Err(e) => {
@@ -193,7 +199,7 @@ fn py_add(package: &str) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    match proj.py_add(package, "uv") {
+    match proj.py_add(package, module, "uv") {
         Ok(()) => {
             println!("added {package}; lock and env updated");
             ExitCode::SUCCESS
