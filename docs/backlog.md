@@ -19,6 +19,12 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
   optional deps all-or-nothing. importlib.import_module through the bridge
   already expresses runtime-optional imports; revisit first-class syntax
   only if that pattern spreads.
+- Exported-identifier visibility, the Go way (2026-07-09): capitalized =
+  exported, lowercase = module-private, no new keywords. Breaking (file
+  modules currently expose everything, e.g. util.twice in the goldens),
+  which is exactly why it goes NOW and not with packages later: the
+  standing posture is to ship breaking fundamental changes early, before
+  anyone depends on the old shape. Prerequisite for packages below.
 
 ## v2
 
@@ -30,6 +36,18 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
   mismatch in signatures. Brands erode through dynamic ops (`w @ x` is py
   again); re-assert at function boundaries. Zero copies, reference semantics
   like py. Composes with the `@` sugar above.
+- Packages: export and depend on rikki code across projects (2026-07-09).
+  The Go shape throughout, it is already muscle memory: capitalization
+  visibility (v1.1 item above, the breaking prerequisite), git-based deps
+  over any registry (`[deps] torchkit = { git = "...", rev = "..." }` in
+  rikki.toml, vendored under .rikki/, imported by name), a package is a
+  directory of .rk files without a main. The genuinely novel piece is
+  transitive py-deps: a package's `[py-deps]` merge into the consumer's
+  requirement set and one uv resolve covers the union. Natural first
+  artifact: typed facades over python packages (the lmtk tracker/loader
+  wrappers). Trigger: the first time a second project wants lmtk's rikki
+  code. Explicitly NOT a stability commitment: packages do not slow
+  language change pre-adoption.
 - Concurrency. Bridge module is the single place GIL work lands.
 - Bytecode VM if pure-mongoose loops ever hurt (recorded in ADR 0001).
 - Copy-on-write values if profiling demands (ADR 0004).
