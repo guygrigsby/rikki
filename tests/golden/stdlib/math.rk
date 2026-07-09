@@ -14,4 +14,8 @@ fn main() {
     printf("%.5f\n", math.e)
     printf("%.4f %.4f %.4f\n", math.cos(0.0), math.sin(math.pi / 2.0), math.tan(0.0))
     printf("%.4f\n", math.cos(math.pi))
+    printf("%.4f\n", math.exp(1.0))
+    printf("%.4f\n", math.ln(math.e))
+    printf("%.4f\n", math.log(2.0, 1024.0))
+    printf("%.4f\n", math.log(10.0, 1000.0))
 }

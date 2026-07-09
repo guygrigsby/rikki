@@ -20,10 +20,9 @@ pub(super) fn std_member(module: &str, name: &str) -> Option<Member> {
     let ctx = || Struct("Ctx".into());
     let resp = || Struct("Response".into());
     let m = match (module, name) {
-        ("math", "sqrt") | ("math", "cos") | ("math", "sin") | ("math", "tan") => {
-            Member::Fn(vec![Float], vec![Float])
-        }
-        ("math", "pow") => Member::Fn(vec![Float, Float], vec![Float]),
+        ("math", "sqrt") | ("math", "cos") | ("math", "sin") | ("math", "tan")
+        | ("math", "exp") | ("math", "ln") => Member::Fn(vec![Float], vec![Float]),
+        ("math", "pow") | ("math", "log") => Member::Fn(vec![Float, Float], vec![Float]),
         ("math", "floor") | ("math", "ceil") | ("math", "round") => {
             Member::Fn(vec![Float], vec![Int])
         }

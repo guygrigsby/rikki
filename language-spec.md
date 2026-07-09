@@ -1899,6 +1899,9 @@ Error fields are specified in section 5.7.
 | `sqrt` | `(float) float` | square root |
 | `cos`, `sin`, `tan` | `(float) float` | trigonometry, radians |
 | `pow` | `(float, float) float` | exponentiation |
+| `exp` | `(float) float` | e raised to the argument |
+| `ln` | `(float) float` | natural logarithm |
+| `log` | `(float, float) float` | `log(base, num)`: logarithm of `num` in `base` |
 | `floor` | `(float) int` | round down |
 | `ceil` | `(float) int` | round up |
 | `round` | `(float) int` | round half away from zero (not banker's rounding) |
