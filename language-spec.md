@@ -2153,7 +2153,10 @@ Hand-editing `[py-deps]` is first-class: the lock's first line records a
 fingerprint of the resolution inputs (the python pin and the requirement
 lines), and provisioning with a drifted manifest re-resolves the lock
 automatically before syncing the environment. A lock is never trusted
-past its manifest.
+past its manifest. A changed lock rebuilds `.rikki/venv` from scratch
+rather than syncing in place: packages that own overlapping directories
+(mlflow and mlflow-skinny both own `mlflow/`) corrupt in-place removals,
+and the venv is disposable by design.
 
 The manifest's `python` pin must match the interpreter embedded in the
 running rikki (major.minor); a mismatch is a compile-time error naming

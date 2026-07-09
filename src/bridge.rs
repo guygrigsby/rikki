@@ -28,11 +28,16 @@ static INIT: Once = Once::new();
 /// site-packages should be importable; None means bare interpreter.
 pub fn init(venv: Option<&Path>) {
     INIT.call_once(|| {
-        // UTF-8 mode regardless of host locale: rikki strings are UTF-8
-        // and a C-locale box (a bare Linux rig) otherwise trips the
-        // embedded interpreter's filesystem encoding on non-ASCII.
+        // UTF-8 regardless of host locale: rikki strings are UTF-8 and a
+        // C-locale box (a bare Linux rig) otherwise trips the embedded
+        // interpreter on non-ASCII. PYTHONUTF8 covers the filesystem
+        // encoding but empirically does NOT reach embedded stdio (lmtk's
+        // mlflow emoji abort); PYTHONIOENCODING is what stdio honors.
         if std::env::var_os("PYTHONUTF8").is_none() {
             std::env::set_var("PYTHONUTF8", "1");
+        }
+        if std::env::var_os("PYTHONIOENCODING").is_none() {
+            std::env::set_var("PYTHONIOENCODING", "utf-8");
         }
         // A wheel-installed binary embeds a python-build-standalone CPython
         // whose baked prefix does not exist on this machine; without help,

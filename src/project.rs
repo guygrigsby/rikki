@@ -258,13 +258,18 @@ impl Project {
                     return Ok(());
                 }
             }
-        } else {
-            self.uv(
-                uv_bin,
-                &["venv", ".rikki/venv", "--python", &self.python],
-                None,
-            )?;
+            // the lock changed: an in-place sync cannot be trusted across
+            // package overlaps (removing full mlflow deletes the mlflow/
+            // tree that mlflow-skinny also owns, leaving it half-installed).
+            // Rebuild from scratch; uv's cache makes this cheap.
+            std::fs::remove_dir_all(self.venv())
+                .map_err(|e| format!("rebuild venv: {e}"))?;
         }
+        self.uv(
+            uv_bin,
+            &["venv", ".rikki/venv", "--python", &self.python],
+            None,
+        )?;
         let py = self.venv().join("bin").join("python");
         self.uv(
             uv_bin,
@@ -413,11 +418,16 @@ mod tests {
             },
         );
         p.save().unwrap();
+        // canary: a lock change must rebuild the venv, not sync in place
+        // (package overlaps corrupt in-place syncs)
+        std::fs::write(p.venv().join("canary"), "x").unwrap();
         std::fs::write(d.join("uv-calls.log"), "").unwrap();
         p.ensure_env(&uv).unwrap();
         let log = std::fs::read_to_string(d.join("uv-calls.log")).unwrap();
         assert!(log.contains("pip compile"), "stale lock must re-resolve: {log}");
         assert!(log.contains("pip sync"), "{log}");
+        assert!(log.contains("venv .rikki/venv"), "must recreate the venv: {log}");
+        assert!(!p.venv().join("canary").exists(), "venv was synced in place");
         // the re-resolved lock is fresh: next provision is a no-op
         std::fs::write(d.join("uv-calls.log"), "").unwrap();
         p.ensure_env(&uv).unwrap();
