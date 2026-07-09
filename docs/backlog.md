@@ -11,12 +11,9 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
 - Rethink strict copies everywhere: DONE 2026-07-02 as the Go model
   wholesale (ADR 0010, spec chapter 11): reference lists/maps, reference
   capture, structs and scalars staying value.
-- Context managers, from the training project (2026-07-02):
-  torch.no_grad() / autocast() currently need set_grad_enabled or explicit
-  __enter__/__exit__ calls. Design approved 2026-07-09
-  (docs/specs/2026-07-09-context-managers-design.md): py-only
-  `with expr { }`; __exit__ sees a synthesized exception on error-carrying
-  returns, None otherwise; faults skip it.
+- Context managers: DONE 2026-07-09 (`with expr { }`, py-only, spec 8.9;
+  design in docs/specs/2026-07-09-context-managers-design.md). Deferred
+  from it: binding form (`with x := expr`), __exit__ on faults.
 
 ## v2
 
