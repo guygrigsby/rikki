@@ -55,11 +55,20 @@ fn golden() {
         let res = rikki::run_source(rk);
         let out_f = rk.with_extension("out");
         let err_f = rk.with_extension("err");
+        if out_f.exists() && err_f.exists() {
+            failures.push(format!("{rel}: has both .out and .err; pick one"));
+            continue;
+        }
         let ok = if out_f.exists() {
             let want = fs::read_to_string(&out_f).unwrap();
             matches!(res.exit, rikki::ExitKind::Ok) && res.stdout == want
         } else if err_f.exists() {
             let want = fs::read_to_string(&err_f).unwrap();
+            // an empty .err would match anything, including success
+            if want.lines().all(|l| l.trim().is_empty()) {
+                failures.push(format!("{rel}: .err has no expected substrings"));
+                continue;
+            }
             let got = match &res.exit {
                 rikki::ExitKind::CompileError(m) | rikki::ExitKind::RuntimeError(m) => m.clone(),
                 rikki::ExitKind::Ok => String::new(),
