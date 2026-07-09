@@ -12,7 +12,8 @@ class Rikki < Formula
   def install
     python = Formula["python@3.12"].opt_bin/"python3.12"
     system python, "-m", "venv", libexec
-    system libexec/"bin/pip", "install", "--no-cache-dir", "rikki==#{version}"
+    # the PyPI name is rikki-lang (bare rikki was taken); binaries stay rikki/tk
+    system libexec/"bin/pip", "install", "--no-cache-dir", "rikki-lang==#{version}"
     bin.install_symlink libexec/"bin/rikki", libexec/"bin/tk"
   end
 

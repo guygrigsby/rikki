@@ -3,7 +3,7 @@ requires = ["maturin>=1.7,<2"]
 build-backend = "maturin"
 
 [project]
-name = "rikki"
+name = "rikki-lang"
 description = "Interpreted language with Go's discipline and CPython's ecosystem; ships the rikki and tk binaries"
 requires-python = ">=3.10"
 license = "MIT"
