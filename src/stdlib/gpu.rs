@@ -1,26 +1,21 @@
 //! GPU sharing: rikki speaks the gputex lock protocol directly
-//! (gputex docs/PROTOCOL.md), so a .rk program takes the card without
-//! wrapping itself in the gputex CLI. The lock is an flock on
-//! $GPUTEX_DIR/<gpu>.lock (default ~/.gputex); it releases when this
-//! process exits, however it exits, so a crash never strands the card.
+//! (gputex docs/PROTOCOL.md), so a .rk program takes a card without
+//! wrapping itself in the gputex CLI. Each lock is an flock on
+//! $GPUTEX_DIR/<card>.lock (default ~/.gputex); it releases when this
+//! process exits, however it exits, so a crash never strands a card.
 //! Holding is per-interpreter: one program run (or one REPL session)
-//! is one holder.
+//! is one holder. A program may hold several cards at once (train on
+//! one while embedding on another), one hold per card.
 
 use std::fs::File;
 
 use crate::interp::{Fault, Interp};
 use crate::value::{ErrVal, Value};
 
-// ponytail: one card per host today ("default", gputex's default id too);
-// grow a gpu-id argument when a host with a second card exists
-#[cfg(unix)]
-const CARD: &str = "default";
-
 /// An acquired card: the flock lives exactly as long as the fd.
 pub struct Held {
     #[allow(dead_code)] // wasm builds never construct one
     file: File,
-    gpu: String,
 }
 
 fn err(msg: impl Into<String>) -> Value {
@@ -38,32 +33,38 @@ pub fn call(interp: &mut Interp, name: &str, _args: Vec<Value>) -> Result<Value,
 #[cfg(unix)]
 pub fn call(interp: &mut Interp, name: &str, args: Vec<Value>) -> Result<Value, Fault> {
     let v = match (name, args.as_slice()) {
-        ("lock", [Value::Str(label)]) => match acquire(interp, label, libc::LOCK_EX, false) {
-            Ok(None) => Value::NoneV,
-            Ok(Some(busy)) => err(busy), // unreachable: blocking acquire never reports busy
-            Err(e) => err(e),
-        },
+        ("lock", [Value::Str(card), Value::Str(label)]) => {
+            match acquire(interp, card, label, libc::LOCK_EX, false) {
+                Ok(None) => Value::NoneV,
+                Ok(Some(busy)) => err(busy), // unreachable: blocking acquire never reports busy
+                Err(e) => err(e),
+            }
+        }
         // a probe, not a demand: holding it ourselves is just "busy"
-        ("trylock", [Value::Str(_)]) if interp.gpu_hold.is_some() => {
+        ("trylock", [Value::Str(card), Value::Str(_)])
+            if interp.gpu_holds.contains_key(card.as_str()) =>
+        {
             Value::Tuple(vec![Value::Bool(false), Value::NoneV])
         }
-        ("trylock", [Value::Str(label)]) => {
-            match acquire(interp, label, libc::LOCK_EX | libc::LOCK_NB, false) {
+        ("trylock", [Value::Str(card), Value::Str(label)]) => {
+            match acquire(interp, card, label, libc::LOCK_EX | libc::LOCK_NB, false) {
                 Ok(None) => Value::Tuple(vec![Value::Bool(true), Value::NoneV]),
                 Ok(Some(_)) => Value::Tuple(vec![Value::Bool(false), Value::NoneV]),
                 Err(e) => Value::Tuple(vec![Value::Bool(false), err(e)]),
             }
         }
-        ("shared", [Value::Str(label)]) => match acquire(interp, label, libc::LOCK_SH, true) {
-            Ok(None) => Value::NoneV,
-            Ok(Some(busy)) => err(busy),
-            Err(e) => err(e),
-        },
-        ("unlock", []) => match interp.gpu_hold.take() {
-            None => err("gpu: nothing held"),
-            Some(h) => {
-                let _ = std::fs::remove_file(holder_file(&h.gpu));
-                // dropping h closes the fd, which releases the flock
+        ("shared", [Value::Str(card), Value::Str(label)]) => {
+            match acquire(interp, card, label, libc::LOCK_SH, true) {
+                Ok(None) => Value::NoneV,
+                Ok(Some(busy)) => err(busy),
+                Err(e) => err(e),
+            }
+        }
+        ("unlock", [Value::Str(card)]) => match interp.gpu_holds.remove(card.as_str()) {
+            None => err(format!("gpu: not holding {card}")),
+            Some(_h) => {
+                let _ = std::fs::remove_file(holder_file(card));
+                // dropping the hold closes the fd, which releases the flock
                 Value::NoneV
             }
         },
@@ -72,21 +73,26 @@ pub fn call(interp: &mut Interp, name: &str, args: Vec<Value>) -> Result<Value, 
     Ok(v)
 }
 
-/// Take the card. Ok(None) = acquired; Ok(Some(msg)) = busy (only under
+/// Take a card. Ok(None) = acquired; Ok(Some(msg)) = busy (only under
 /// LOCK_NB); Err = a real failure worth an error value.
 #[cfg(unix)]
 fn acquire(
     interp: &mut Interp,
+    card: &str,
     label: &str,
     op: i32,
     preemptible: bool,
 ) -> Result<Option<String>, String> {
-    if interp.gpu_hold.is_some() {
-        return Err("gpu: already holding the card; unlock first".into());
+    // the card id becomes a filename in the shared state dir
+    if card.is_empty() || card.contains(['/', '\0']) {
+        return Err(format!("gpu: bad card id {card:?}"));
+    }
+    if interp.gpu_holds.contains_key(card) {
+        return Err(format!("gpu: already holding {card}; unlock first"));
     }
     let dir = state_dir();
     std::fs::create_dir_all(&dir).map_err(|e| format!("gpu: {}: {e}", dir.display()))?;
-    let path = dir.join(format!("{CARD}.lock"));
+    let path = dir.join(format!("{card}.lock"));
     let file = std::fs::OpenOptions::new()
         .create(true)
         .read(true)
@@ -100,18 +106,15 @@ fn acquire(
         }
         let e = std::io::Error::last_os_error();
         match e.raw_os_error() {
-            Some(libc::EWOULDBLOCK) => return Ok(Some("gpu: busy".into())),
+            Some(libc::EWOULDBLOCK) => return Ok(Some(format!("gpu: {card} busy"))),
             Some(libc::EINTR) => continue, // a signal woke the wait; keep waiting
-            _ => return Err(format!("gpu: lock: {e}")),
+            _ => return Err(format!("gpu: lock {card}: {e}")),
         }
     }
     // self-report who holds it; advisory, so a failed write is not fatal
-    let _ = write_holder(label, preemptible);
+    let _ = write_holder(card, label, preemptible);
     inject_env();
-    interp.gpu_hold = Some(Held {
-        file,
-        gpu: CARD.into(),
-    });
+    interp.gpu_holds.insert(card.to_string(), Held { file });
     Ok(None)
 }
 
@@ -125,15 +128,15 @@ fn state_dir() -> std::path::PathBuf {
     }
 }
 
-fn holder_file(gpu: &str) -> std::path::PathBuf {
+fn holder_file(card: &str) -> std::path::PathBuf {
     state_dir()
-        .join(format!("{gpu}.holders"))
+        .join(format!("{card}.holders"))
         .join(format!("{}.json", std::process::id()))
 }
 
 #[cfg(unix)]
-fn write_holder(label: &str, preemptible: bool) -> std::io::Result<()> {
-    let f = holder_file(CARD);
+fn write_holder(card: &str, label: &str, preemptible: bool) -> std::io::Result<()> {
+    let f = holder_file(card);
     std::fs::create_dir_all(f.parent().unwrap())?;
     let cmd: Vec<String> = std::env::args().collect();
     let json = format!(
@@ -239,8 +242,8 @@ mod tests {
         assert_eq!(jstr("x\ny"), "\"x\\u000ay\"");
     }
 
-    // one test, not three: GPUTEX_DIR is process-global and lib tests run in
-    // parallel, so everything that pins it lives in a single sequence
+    // one test, not several: GPUTEX_DIR is process-global and lib tests run
+    // in parallel, so everything that pins it lives in a single sequence
     #[test]
     fn lock_registers_conflicts_and_releases() {
         use crate::ast::Program;
@@ -248,29 +251,47 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::env::set_var("GPUTEX_DIR", &dir);
 
+        let card = || Value::Str("cardX".into());
         let prog = Program::default();
         let mut interp = Interp::new(&prog);
         let ok = call(
             &mut interp,
             "lock",
-            vec![Value::Str("unit \"test\"".into())],
+            vec![card(), Value::Str("unit \"test\"".into())],
         )
         .map_err(|f| f.msg)
         .unwrap();
         assert!(matches!(ok, Value::NoneV));
 
-        let hf = holder_file(CARD);
+        let hf = holder_file("cardX");
         let json = std::fs::read_to_string(&hf).unwrap();
         assert!(json.contains(r#""framework":"rikki""#));
         assert!(json.contains(r#""label":"unit \"test\"""#));
         assert!(json.contains(&format!(r#""pid":{}"#, std::process::id())));
 
+        // a card id may not escape the state dir
+        match call(
+            &mut interp,
+            "lock",
+            vec![Value::Str("../oops".into()), Value::Str("escape".into())],
+        )
+        .map_err(|f| f.msg)
+        .unwrap()
+        {
+            Value::Err(e) => assert!(e.msg.contains("bad card id")),
+            v => panic!("{v:?}"),
+        }
+
         // a second interpreter (a would-be second holder) sees the card busy
         // through the kernel, not through our in-interp bookkeeping
         let mut other = Interp::new(&prog);
-        match call(&mut other, "trylock", vec![Value::Str("rival".into())])
-            .map_err(|f| f.msg)
-            .unwrap()
+        match call(
+            &mut other,
+            "trylock",
+            vec![card(), Value::Str("rival".into())],
+        )
+        .map_err(|f| f.msg)
+        .unwrap()
         {
             Value::Tuple(ts) => {
                 assert!(matches!(ts[0], Value::Bool(false)), "flock must conflict");
@@ -279,7 +300,7 @@ mod tests {
             v => panic!("{v:?}"),
         }
 
-        let ok = call(&mut interp, "unlock", vec![])
+        let ok = call(&mut interp, "unlock", vec![card()])
             .map_err(|f| f.msg)
             .unwrap();
         assert!(matches!(ok, Value::NoneV));
@@ -290,9 +311,13 @@ mod tests {
         // inherits our flock'd fd, so one probe can spuriously see busy.
         let deadline = std::time::Instant::now() + Duration::from_secs(2);
         loop {
-            match call(&mut other, "trylock", vec![Value::Str("rival".into())])
-                .map_err(|f| f.msg)
-                .unwrap()
+            match call(
+                &mut other,
+                "trylock",
+                vec![card(), Value::Str("rival".into())],
+            )
+            .map_err(|f| f.msg)
+            .unwrap()
             {
                 Value::Tuple(ts) if matches!(ts[0], Value::Bool(true)) => break,
                 Value::Tuple(_) if std::time::Instant::now() < deadline => {

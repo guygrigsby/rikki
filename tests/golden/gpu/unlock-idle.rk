@@ -1,6 +1,6 @@
 import "gpu"
 
 fn main() (error?) {
-    check gpu.unlock()
+    check gpu.unlock("default")
     return none
 }

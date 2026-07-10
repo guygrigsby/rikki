@@ -1,12 +1,12 @@
 import "gpu"
 
 fn main() (error?) {
-    check gpu.lock("golden cycle a")
+    check gpu.lock("default", "golden cycle a")
     print("locked")
-    check gpu.unlock()
-    check gpu.lock("golden cycle b")
+    check gpu.unlock("default")
+    check gpu.lock("default", "golden cycle b")
     print("locked again")
-    check gpu.unlock()
+    check gpu.unlock("default")
     print("done")
     return none
 }

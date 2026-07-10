@@ -1,0 +1,21 @@
+import "gpu"
+
+fn main() (error?) {
+    check gpu.lock("cuda0", "train")
+    check gpu.lock("cuda1", "embed")
+    print("holding both")
+    ok, err := gpu.trylock("cuda0", "rival")
+    if err != none {
+        return err
+    }
+    print(ok)
+    check gpu.unlock("cuda0")
+    check gpu.unlock("cuda1")
+    ok2, err2 := gpu.trylock("cuda0", "rival")
+    if err2 != none {
+        return err2
+    }
+    print(ok2)
+    check gpu.unlock("cuda0")
+    return none
+}

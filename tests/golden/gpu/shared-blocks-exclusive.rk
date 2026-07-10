@@ -1,12 +1,12 @@
 import "gpu"
 
 fn main() (error?) {
-    check gpu.shared("low holder")
-    ok, err := gpu.trylock("training probe")
+    check gpu.shared("default", "low holder")
+    ok, err := gpu.trylock("default", "training probe")
     if err != none {
         return err
     }
     print(ok)
-    check gpu.unlock()
+    check gpu.unlock("default")
     return none
 }

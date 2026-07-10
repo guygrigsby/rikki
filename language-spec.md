@@ -2161,25 +2161,33 @@ the contract is documented in the gputex repository), so a rikki program
 coordinates with every other job on the host — wrapped in the gputex CLI
 or not — without an external wrapper.
 
-- `gpu.lock(label str) error?` — take the card exclusively, blocking in
-  the kernel until it is free. Errors if this program already holds the
-  card.
-- `gpu.trylock(label str) (bool, error?)` — non-blocking probe: `true`
-  and hold the card if it was free, `false` if it is busy (including
-  when held by this program). Busy is data, not an error; the error slot
-  is for real failures (an unwritable state directory).
-- `gpu.shared(label str) error?` — take the card as a shared,
+Every function takes the card id first (`"default"` on single-card
+hosts; multi-card hosts name their cards, e.g. `"cuda0"`); `label` names
+the job for status displays. A card id that is empty or contains a path
+separator is an error value ("bad card id"): ids become file names in
+the shared state directory.
+
+- `gpu.lock(card str, label str) error?` — take the card exclusively,
+  blocking in the kernel until it is free. Errors if this program
+  already holds that card.
+- `gpu.trylock(card str, label str) (bool, error?)` — non-blocking
+  probe: `true` and hold the card if it was free, `false` if it is busy
+  (including when held by this program). Busy is data, not an error; the
+  error slot is for real failures (an unwritable state directory).
+- `gpu.shared(card str, label str) error?` — take the card as a shared,
   lowest-priority holder: many coexist, all yield to an exclusive
   acquirer, which may terminate them (the gputex `--low` semantics).
-- `gpu.unlock() error?` — release. Errors if nothing is held.
+- `gpu.unlock(card str) error?` — release. Errors if that card is not
+  held.
 
 Behavior:
 
-- A program holds at most one card at a time; `label` names the job for
-  status displays, it does not select a card.
-- The hold lasts until `gpu.unlock()` or process exit — any exit. The
+- A program may hold several cards at once (training on one while
+  embedding on another), one hold per card; a second acquire of a held
+  card is an error.
+- A hold lasts until `gpu.unlock(card)` or process exit — any exit. The
   kernel releases the flock when the process dies, so a fault, kill, or
-  crash never strands the card.
+  crash never strands a card.
 - Acquiring also injects the managed environment (`/etc/gputex/env`,
   `KEY=VALUE` lines) into the process environment, existing values
   winning: taking the card and getting the metrics contract
@@ -2191,11 +2199,11 @@ Behavior:
 import "gpu"
 
 fn main() (error?) {
-    check gpu.lock("tinyllama eval")
+    check gpu.lock("default", "tinyllama eval")
     // the card is ours until unlock or exit
-    check gpu.unlock()
+    check gpu.unlock("default")
 
-    ok, err := gpu.trylock("opportunistic sweep")
+    ok, err := gpu.trylock("default", "opportunistic sweep")
     if err != none {
         return err
     }
@@ -2203,7 +2211,7 @@ fn main() (error?) {
         print("card busy; skipping")
         return none
     }
-    check gpu.unlock()
+    check gpu.unlock("default")
     return none
 }
 ```

@@ -1,7 +1,7 @@
 import "gpu"
 
 fn main() (error?) {
-    check gpu.lock("first")
-    check gpu.lock("second")
+    check gpu.lock("default", "first")
+    check gpu.lock("default", "second")
     return none
 }

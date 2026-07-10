@@ -20,8 +20,12 @@ pub(super) fn std_member(module: &str, name: &str) -> Option<Member> {
     let ctx = || Struct("Ctx".into());
     let resp = || Struct("Response".into());
     let m = match (module, name) {
-        ("math", "sqrt") | ("math", "cos") | ("math", "sin") | ("math", "tan")
-        | ("math", "exp") | ("math", "ln") => Member::Fn(vec![Float], vec![Float]),
+        ("math", "sqrt")
+        | ("math", "cos")
+        | ("math", "sin")
+        | ("math", "tan")
+        | ("math", "exp")
+        | ("math", "ln") => Member::Fn(vec![Float], vec![Float]),
         ("math", "pow") | ("math", "log") => Member::Fn(vec![Float, Float], vec![Float]),
         ("math", "floor") | ("math", "ceil") | ("math", "round") => {
             Member::Fn(vec![Float], vec![Int])
@@ -38,9 +42,9 @@ pub(super) fn std_member(module: &str, name: &str) -> Option<Member> {
         ("file", "exists") => Member::Fn(vec![Str], vec![Bool]),
         ("file", "list") => Member::Fn(vec![Str], vec![List(Box::new(Str)), err_opt()]),
         ("file", "remove") | ("file", "mkdir") => Member::Fn(vec![Str], vec![err_opt()]),
-        ("gpu", "lock") | ("gpu", "shared") => Member::Fn(vec![Str], vec![err_opt()]),
-        ("gpu", "trylock") => Member::Fn(vec![Str], vec![Bool, err_opt()]),
-        ("gpu", "unlock") => Member::Fn(vec![], vec![err_opt()]),
+        ("gpu", "lock") | ("gpu", "shared") => Member::Fn(vec![Str, Str], vec![err_opt()]),
+        ("gpu", "trylock") => Member::Fn(vec![Str, Str], vec![Bool, err_opt()]),
+        ("gpu", "unlock") => Member::Fn(vec![Str], vec![err_opt()]),
         ("ctx", "background") => Member::Fn(vec![], vec![ctx()]),
         ("ctx", "timeout") => Member::Fn(vec![ctx(), Float], vec![ctx()]),
         ("ctx", "interrupt") => Member::Fn(vec![ctx()], vec![ctx()]),
