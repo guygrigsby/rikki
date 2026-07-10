@@ -1,0 +1,1 @@
+a multi-value cannot be returned as a unit; bind it first: v, err := f(); return v, err

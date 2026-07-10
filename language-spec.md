@@ -1009,7 +1009,10 @@ only:
 - by a `check` expression (which strips the error slot; section 7.8).
 
 In particular, a multi-value cannot be forwarded by a `return` statement as
-a unit; each result is returned by listing expressions (section 8.5).
+a unit; each result is returned by listing expressions (section 8.5). When
+a `return` holds a single multi-value whose count matches the function's
+result list, the diagnostic is "a multi-value cannot be returned as a unit"
+and names the binding idiom.
 
 Using a multi-value in a single-value context is a compile-time error
 ("multiple values in single-value context"), and binding it to the wrong

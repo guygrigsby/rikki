@@ -46,6 +46,11 @@ fn quarter(n int) (int, error?) {
 }
 ```
 
+A multi-value never travels as a unit, so Go's `return half(n)` is a
+compile error here. Propagate early with `return check half(n), none`,
+or bind and decide: `v, err := half(n); return v, err`. The error slot
+stays visible at every hop.
+
 Handle errors at the layer that can do something about them; propagate
 only when the caller owns the decision.
 

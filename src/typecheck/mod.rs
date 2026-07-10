@@ -498,10 +498,19 @@ impl Checker {
                     // allow bare `return` only when everything has a zero... no: require values
                     self.diag(span, format!("expected {} return values", want.len()));
                 } else if exprs.len() != want.len() {
-                    self.diag(
-                        span,
-                        format!("expected {} return values, got {}", want.len(), exprs.len()),
-                    );
+                    let unit_multi = exprs.len() == 1
+                        && matches!(&self.check_expr(&exprs[0], None), ExprTy::Multi(ts) if ts.len() == want.len());
+                    if unit_multi {
+                        self.diag(
+                            span,
+                            "a multi-value cannot be returned as a unit; bind it first: v, err := f(); return v, err",
+                        );
+                    } else {
+                        self.diag(
+                            span,
+                            format!("expected {} return values, got {}", want.len(), exprs.len()),
+                        );
+                    }
                 } else {
                     for (e, w) in exprs.iter().zip(&want) {
                         let t = self.expr_one(e, Some(w));

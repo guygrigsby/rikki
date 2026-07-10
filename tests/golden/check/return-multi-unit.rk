@@ -1,0 +1,16 @@
+fn two() (int, error?) {
+    return 1, none
+}
+
+fn pass() (int, error?) {
+    return two()
+}
+
+fn main() {
+    v, err := pass()
+    if err != none {
+        print("err")
+    } else {
+        print(v)
+    }
+}
