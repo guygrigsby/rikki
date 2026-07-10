@@ -34,7 +34,8 @@ pre { position: relative; }
 button.rikki-run {
     position: absolute;
     top: 0.4rem;
-    right: 0.4rem;
+    right: 3rem; /* clear of mdBook's hover clipboard button (right: 0, ~2.7rem wide) */
+    z-index: 101; /* above pre > .buttons (100) so it stays clickable */
     font: 600 0.75rem system-ui, sans-serif;
     padding: 0.2rem 0.7rem;
     border-radius: 5px;
