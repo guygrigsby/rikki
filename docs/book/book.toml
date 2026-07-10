@@ -7,3 +7,6 @@ src = "src"
 [output.html]
 git-repository-url = "https://github.com/guygrigsby/rikki"
 site-url = "/book/"
+
+[preprocessor.runnable]
+command = "python3 preprocess.py"
