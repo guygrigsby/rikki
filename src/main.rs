@@ -19,6 +19,13 @@ enum Cmd {
     },
     /// Typecheck only (defaults to the project's src/main.rk)
     Check { file: Option<PathBuf> },
+    /// Run Test functions in *_test.rk files (defaults to the project)
+    Test {
+        paths: Vec<PathBuf>,
+        /// Parallel test workers (default: one per core; 1 serializes)
+        #[arg(short, long)]
+        jobs: Option<usize>,
+    },
     /// Rewrite source in the one true style (defaults to the project's src/)
     Fmt {
         paths: Vec<PathBuf>,
@@ -62,6 +69,7 @@ fn main() -> ExitCode {
         }),
         Cmd::Check { file } => with_entry(file, |f| rikki::report(rikki::check_source(f))),
         Cmd::Fmt { paths, check } => fmt_cmd(paths, check),
+        Cmd::Test { paths, jobs } => test_cmd(paths, jobs.unwrap_or(0)),
         Cmd::Py {
             cmd: PyCmd::Add { package, module },
         } => py_add(&package, module.as_deref()),
@@ -187,6 +195,89 @@ if r.returncode != 0:
     sys.stderr.write(r.stdout + r.stderr)
     sys.exit(2)  # exit 2 returns stderr to the agent as feedback
 "#;
+
+fn test_cmd(paths: Vec<PathBuf>, jobs: usize) -> ExitCode {
+    let mut files = vec![];
+    if paths.is_empty() {
+        let cwd = std::env::current_dir().unwrap_or_default();
+        let Some(root) = rikki::project::Project::find(&cwd) else {
+            eprintln!("error: no paths given and no rikki project found");
+            return ExitCode::FAILURE;
+        };
+        collect_rk(&root.join("src"), &mut files);
+        files.retain(|f| {
+            f.file_name()
+                .is_some_and(|n| n.to_string_lossy().ends_with("_test.rk"))
+        });
+    } else {
+        for p in paths {
+            if p.is_dir() {
+                let mut all = vec![];
+                collect_rk(&p, &mut all);
+                all.retain(|f| {
+                    f.file_name()
+                        .is_some_and(|n| n.to_string_lossy().ends_with("_test.rk"))
+                });
+                files.extend(all);
+            } else {
+                files.push(p);
+            }
+        }
+    }
+    files.sort();
+    if files.is_empty() {
+        eprintln!("no *_test.rk files found");
+        return ExitCode::FAILURE;
+    }
+    let (mut passed, mut failed, mut skipped) = (0u32, 0u32, 0u32);
+    for f in &files {
+        let short = f
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| f.display().to_string());
+        match rikki::run_test_file(f, jobs) {
+            Err(e) => {
+                println!("FAIL {short}");
+                println!("     {e}");
+                failed += 1;
+            }
+            Ok(outcomes) => {
+                for o in outcomes {
+                    match o.status {
+                        rikki::TestStatus::Pass => {
+                            passed += 1;
+                            println!("ok   {short}  {}", o.name);
+                        }
+                        rikki::TestStatus::Skip => {
+                            skipped += 1;
+                            println!("skip {short}  {}  ({})", o.name, o.message);
+                        }
+                        rikki::TestStatus::Fail => {
+                            failed += 1;
+                            println!("FAIL {short}  {}", o.name);
+                            for line in o.message.lines() {
+                                println!("     {line}");
+                            }
+                            for line in o.stdout.lines() {
+                                println!("     | {line}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let mut summary = format!("{passed} passed, {failed} failed");
+    if skipped > 0 {
+        summary.push_str(&format!(", {skipped} skipped"));
+    }
+    println!("{summary}");
+    if failed > 0 {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
+}
 
 fn fmt_cmd(paths: Vec<PathBuf>, check: bool) -> ExitCode {
     let mut files = vec![];

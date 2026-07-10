@@ -10,10 +10,10 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
   docs/specs/2026-07-09-fmt-design.md). Corpus-proven lossless (AST and
   comments preserved, idempotent over every golden); `rikki fmt --check`
   for gates; Format button in the playground.
-- `rikki test` (decided 2026-07-09): fast follow after fmt. A test runner
-  for rikki programs; convention (test_*.rk files vs fn Test* in-module)
-  and assertion story get their own design round. The biggest unlisted
-  hole: users currently cannot write tests at all.
+- `rikki test`: DONE 2026-07-09 (design: the book's testing chapter,
+  spec 15.6/17.7). Tests are fallible functions; error origins landed
+  with it (spec 5.7). Deferred with re-entry paths: soft failures,
+  test.run subtests, test.tmpdir, --json output.
 - Version pinning (decided 2026-07-09): rikki.toml gains a rikki version
   stamp written by rikki new, with a warning on mismatch so future breaks
   say "built against 0.1.5" instead of mystifying compile errors; and

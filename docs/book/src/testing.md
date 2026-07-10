@@ -1,8 +1,8 @@
 # Testing
 
-> Status: design. This chapter is the design document for `rikki test`;
-> the implementation follows it, not the other way around. Anything here
-> that ships differently is a bug in one of the two.
+> This chapter was written first as the design document for `rikki test`
+> and the implementation follows it. Anything that behaves differently is
+> a bug in one of the two.
 
 A test is a fallible function. There is no test framework type, no
 assertion keyword, and no new control flow: a test fails by returning an

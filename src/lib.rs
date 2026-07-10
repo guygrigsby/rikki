@@ -92,7 +92,9 @@ fn on_interp_thread(f: impl FnOnce() -> RunResult + Send + 'static) -> RunResult
     };
     let Ok(handle) = std::thread::Builder::new()
         .name("rikki-interp".into())
-        .stack_size(64 * 1024 * 1024)
+        // headroom over the recursion cap: 1000 rikki frames nest deep
+        // Rust frames in debug builds, and the reserve is virtual memory
+        .stack_size(128 * 1024 * 1024)
         .spawn(f)
     else {
         return RunResult {
@@ -145,6 +147,140 @@ pub fn resolve_entry(file: Option<std::path::PathBuf>) -> Result<std::path::Path
     Ok(main)
 }
 
+#[derive(Debug, PartialEq)]
+pub enum TestStatus {
+    Pass,
+    Fail,
+    Skip,
+}
+
+#[derive(Debug)]
+pub struct TestOutcome {
+    pub name: String,
+    pub status: TestStatus,
+    /// failure or skip report: "file:line: msg" when the error has an origin
+    pub message: String,
+    /// captured per test; the CLI shows it only on failure
+    pub stdout: String,
+}
+
+/// Run every Test function in one `_test.rk` file, each in a fresh
+/// interpreter, `jobs` at a time (0 = one per core). Per the testing
+/// chapter: pass = returned none, skip = the test.skip sentinel, fail =
+/// any other error or a fault; the run always continues.
+pub fn run_test_file(path: &Path, jobs: usize) -> Result<Vec<TestOutcome>, String> {
+    let prog = loader::load(path).map_err(|d| d.to_string())?;
+    provision_py(&prog, path, true)?;
+    typecheck::check_no_main(&prog).map_err(|ds| {
+        ds.iter()
+            .map(|d| d.to_string())
+            .collect::<Vec<_>>()
+            .join("\n")
+    })?;
+    let root = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let mut tests = vec![];
+    for d in &prog.decls {
+        if let ast::Decl::Fn(f) = d {
+            if f.file.as_deref() == Some(root.as_str()) && f.name.starts_with("Test") {
+                let ret_ok = matches!(
+                    f.ret.as_slice(),
+                    [ast::TypeExpr::Opt(t)]
+                        if matches!(&**t, ast::TypeExpr::Named(n) if n == "error")
+                );
+                if !f.params.is_empty() || !ret_ok {
+                    return Err(format!(
+                        "{root}: {} must have the shape fn {}() (error?)",
+                        f.name, f.name
+                    ));
+                }
+                tests.push(f.name.clone());
+            }
+        }
+    }
+    let jobs = if jobs == 0 {
+        std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1)
+    } else {
+        jobs
+    }
+    .clamp(1, tests.len().max(1));
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let results: Vec<std::sync::Mutex<Option<TestOutcome>>> =
+        tests.iter().map(|_| std::sync::Mutex::new(None)).collect();
+    std::thread::scope(|scope| {
+        for _ in 0..jobs {
+            let next = &next;
+            let results = &results;
+            let tests = &tests;
+            let prog = &prog;
+            std::thread::Builder::new()
+                .stack_size(128 * 1024 * 1024)
+                .spawn_scoped(scope, move || loop {
+                    let i = next.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    if i >= tests.len() {
+                        break;
+                    }
+                    let name = tests[i].clone();
+                    let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        let mut interp = interp::Interp::new(prog);
+                        let r = interp.run_named(&name);
+                        (r, interp.take_out())
+                    }));
+                    let (status, message, stdout) = match run {
+                        Err(_) => (
+                            TestStatus::Fail,
+                            "internal interpreter panic".to_string(),
+                            String::new(),
+                        ),
+                        Ok((Ok(None), so)) => (TestStatus::Pass, String::new(), so),
+                        Ok((Ok(Some(e)), so)) => {
+                            if e.pytype == stdlib::test::SKIP_MARKER {
+                                (TestStatus::Skip, e.msg, so)
+                            } else {
+                                (TestStatus::Fail, error_report(&e), so)
+                            }
+                        }
+                        Ok((Err(f), so)) => {
+                            let mut msg = f.msg;
+                            for frame in f.stack.iter().rev() {
+                                msg.push_str(&format!("\n  at {frame}"));
+                            }
+                            (TestStatus::Fail, msg, so)
+                        }
+                    };
+                    *results[i].lock().unwrap() = Some(TestOutcome {
+                        name,
+                        status,
+                        message,
+                        stdout,
+                    });
+                })
+                .expect("spawn test worker");
+        }
+    });
+    Ok(results
+        .into_iter()
+        .map(|m| m.into_inner().unwrap().expect("worker filled every slot"))
+        .collect())
+}
+
+/// "origin: msg", then the cause chain.
+fn error_report(e: &value::ErrVal) -> String {
+    let mut msg = if e.origin.is_empty() {
+        e.msg.clone()
+    } else {
+        format!("{}: {}", e.origin, e.msg)
+    };
+    let mut cause = e.cause.as_deref();
+    while let Some(c) = cause {
+        msg.push_str(&format!("\n  caused by: {}", c.msg));
+        cause = c.cause.as_deref();
+    }
+    msg
+}
+
 /// Typecheck only; never provisions an environment or runs code.
 pub fn check_source(path: &Path) -> RunResult {
     let path = path.to_path_buf();
@@ -166,7 +302,15 @@ fn compile_and(path: &Path, mode: Mode, args: Vec<String>, out: Output) -> RunRe
         Ok(p) => p,
         Err(d) => return compile_err(d.to_string()),
     };
-    // python imports: validate against the project manifest, provision the env
+    if let Err(e) = provision_py(&prog, path, mode == Mode::Run) {
+        return compile_err(e);
+    }
+    check_then_run(&prog, mode, args, out)
+}
+
+/// Python imports: validate against the project manifest and, when the
+/// program will actually run, provision the env (spec 17.5).
+fn provision_py(prog: &ast::Program, path: &Path, will_run: bool) -> Result<(), String> {
     let py_imports: Vec<String> = prog
         .decls
         .iter()
@@ -175,39 +319,34 @@ fn compile_and(path: &Path, mode: Mode, args: Vec<String>, out: Output) -> RunRe
             _ => None,
         })
         .collect();
-    if !py_imports.is_empty() {
-        if let Some(root) = project::Project::find(path) {
-            let proj = match project::Project::load(&root) {
-                Ok(p) => p,
-                Err(e) => return compile_err(e),
-            };
-            let embedded = bridge::embedded_python();
-            if proj.python != embedded {
-                return compile_err(format!(
-                    "project pins python {} but this rikki embeds {embedded}; set python = {embedded:?} in rikki.toml and rerun rikki py add",
-                    proj.python
-                ));
-            }
-            let provision =
-                mode == Mode::Run && (!proj.py_deps.is_empty() || root.join("rikki.lock").exists());
-            if provision {
-                if let Err(e) = proj.ensure_env("uv") {
-                    return compile_err(e);
-                }
-                bridge::init(Some(&proj.venv()));
-            }
-            for m in &py_imports {
-                let top = m.split('.').next().unwrap_or(m);
-                if !dep_declared(&proj, top) && !bridge::is_stdlib(top) {
-                    return compile_err(format!(
-                        "import py {m:?}: not declared in rikki.toml; run: rikki py add {top}"
-                    ));
-                }
-            }
-        }
-        // no project: bare interpreter, stdlib python only
+    if py_imports.is_empty() {
+        return Ok(());
     }
-    check_then_run(&prog, mode, args, out)
+    let Some(root) = project::Project::find(path) else {
+        // no project: bare interpreter, stdlib python only
+        return Ok(());
+    };
+    let proj = project::Project::load(&root)?;
+    let embedded = bridge::embedded_python();
+    if proj.python != embedded {
+        return Err(format!(
+            "project pins python {} but this rikki embeds {embedded}; set python = {embedded:?} in rikki.toml and rerun rikki py add",
+            proj.python
+        ));
+    }
+    if will_run && (!proj.py_deps.is_empty() || root.join("rikki.lock").exists()) {
+        proj.ensure_env("uv")?;
+        bridge::init(Some(&proj.venv()));
+    }
+    for m in &py_imports {
+        let top = m.split('.').next().unwrap_or(m);
+        if !dep_declared(&proj, top) && !bridge::is_stdlib(top) {
+            return Err(format!(
+                "import py {m:?}: not declared in rikki.toml; run: rikki py add {top}"
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// The back half of every entry point: typecheck, then interpret.

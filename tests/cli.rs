@@ -173,6 +173,101 @@ fn claude_hook_feeds_diagnostics_back() {
 }
 
 #[test]
+fn rikki_test_runs_the_suite() {
+    let d = tempdir("rikki-test");
+    let out = Command::new(bin())
+        .args(["new", "proj"])
+        .current_dir(&d)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let src = d.join("proj/src");
+    std::fs::write(
+        src.join("util.rk"),
+        "fn double(x int) int {\n    return x * 2\n}\nfn Half(n int) (int, error?) {\n    if n % 2 != 0 {\n        return 0, error.new(\"odd number\")\n    }\n    return n / 2, none\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        src.join("util_test.rk"),
+        r#"import "test"
+import "util.rk"
+
+fn TestDoubleWhitebox() (error?) {
+    check test.eq(util.double(21), 42)
+    return none
+}
+
+fn TestHalfFails() (error?) {
+    v, _ := util.Half(42)
+    check test.eq(v, 20)
+    return none
+}
+
+fn TestSkipped() (error?) {
+    check test.skip("no gpu here")
+    print("unreachable")
+    return none
+}
+
+fn TestFaults() (error?) {
+    xs := [1]
+    print(xs[9])
+    return none
+}
+
+fn TestErrAsserts() (error?) {
+    _, err := util.Half(7)
+    check test.err(err)
+    return none
+}
+"#,
+    )
+    .unwrap();
+    let out = Command::new(bin())
+        .arg("test")
+        .current_dir(d.join("proj"))
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(!out.status.success(), "a failing test must fail the run");
+    assert!(stdout.contains("ok   util_test.rk  TestDoubleWhitebox"), "{stdout}");
+    assert!(stdout.contains("ok   util_test.rk  TestErrAsserts"), "{stdout}");
+    assert!(stdout.contains("FAIL util_test.rk  TestHalfFails"), "{stdout}");
+    // origin points at the failing check's line in the test file
+    assert!(stdout.contains("util_test.rk:11: expected 20, got 21"), "{stdout}");
+    assert!(stdout.contains("skip util_test.rk  TestSkipped  (no gpu here)"), "{stdout}");
+    assert!(!stdout.contains("unreachable"), "{stdout}");
+    assert!(stdout.contains("FAIL util_test.rk  TestFaults"), "{stdout}");
+    assert!(stdout.contains("index out of bounds"), "{stdout}");
+    assert!(stdout.contains("3 passed, 2 failed, 1 skipped") || stdout.contains("2 passed"), "{stdout}");
+    // serial run agrees
+    let out = Command::new(bin())
+        .args(["test", "-j", "1"])
+        .current_dir(d.join("proj"))
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+
+    // a wrong-shaped Test fn is a hard error, not a silent skip
+    std::fs::write(
+        src.join("bad_test.rk"),
+        "fn TestWrong(x int) (error?) {\n    return none\n}\n",
+    )
+    .unwrap();
+    let out = Command::new(bin())
+        .arg("test")
+        .current_dir(d.join("proj"))
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(
+        String::from_utf8_lossy(&out.stdout).contains("must have the shape"),
+        "{}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+}
+
+#[test]
 fn fmt_rewrites_and_check_reports() {
     let d = tempdir("fmt");
     let f = d.join("ugly.rk");

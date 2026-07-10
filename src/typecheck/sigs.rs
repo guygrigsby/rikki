@@ -4,7 +4,7 @@
 
 use super::*;
 
-pub(super) const STD_MODULES: &[&str] = &["math", "error", "file", "ctx", "http"];
+pub(super) const STD_MODULES: &[&str] = &["math", "error", "file", "ctx", "http", "test"];
 
 pub(super) enum Member {
     Fn(Vec<Type>, Vec<Type>),
@@ -28,6 +28,9 @@ pub(super) fn std_member(module: &str, name: &str) -> Option<Member> {
         }
         ("math", "pi") | ("math", "e") => Member::Const(Float),
         // abs/min/max are polymorphic; handled in method checking directly
+        // test.eq/neq are polymorphic, handled in method checking directly
+        ("test", "err") => Member::Fn(vec![err_opt()], vec![err_opt()]),
+        ("test", "skip") => Member::Fn(vec![Str], vec![err_opt()]),
         ("error", "new") => Member::Fn(vec![Str], vec![Error]),
         ("error", "wrap") => Member::Fn(vec![Error, Str], vec![Error]),
         ("file", "read") => Member::Fn(vec![Str], vec![Str, err_opt()]),

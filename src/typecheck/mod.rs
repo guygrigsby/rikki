@@ -19,7 +19,18 @@ pub enum ExprTy {
 }
 
 pub fn check(prog: &Program) -> Result<(), Vec<Diag>> {
+    check_with(prog, true)
+}
+
+/// Test files have no main (the runner calls Test functions directly);
+/// everything else checks identically.
+pub fn check_no_main(prog: &Program) -> Result<(), Vec<Diag>> {
+    check_with(prog, false)
+}
+
+fn check_with(prog: &Program, require_main: bool) -> Result<(), Vec<Diag>> {
     let mut c = Checker::default();
+    c.require_main = require_main;
     c.collect(prog);
     c.check_program(prog);
     if c.diags.is_empty() {
@@ -38,6 +49,7 @@ struct Scope {
 
 #[derive(Default)]
 struct Checker {
+    require_main: bool,
     structs: HashMap<String, Vec<(String, Type)>>,
     fns: HashMap<String, (Vec<Type>, Vec<Type>)>,
     imports: HashMap<String, ImportKind>,
@@ -309,6 +321,7 @@ impl Checker {
 
     fn check_program(&mut self, prog: &Program) {
         match self.fns.get("main") {
+            None if !self.require_main => {}
             None => self.diag(Span::new(1, 1), "missing fn main"),
             Some((params, rets)) => {
                 let ok = params.is_empty() && (rets.is_empty() || rets == &[err_opt()]);

@@ -380,6 +380,7 @@ the fields:
 | `cause` | `error?` | wrapped inner error, or `none` |
 | `pytype` | `str` | Python exception type name; `""` for non-bridge errors |
 | `traceback` | `str` | Python traceback text; `""` for non-bridge errors |
+| `origin` | `str` | `file:line` of the statement where the error was born (`error.new`, `error.wrap`, a `test` helper, or a py exception entering value space); `""` when unknown |
 
 Error values are constructed with `error.new` and `error.wrap`
 (section 15.1) and by the Python bridge (chapter 13). Error values do not
@@ -1950,6 +1951,19 @@ Methods on `Ctx`:
 | `done` | `() bool` | whether the deadline has passed or the interrupt fired |
 | `err` | `() error?` | `none` while live; `"deadline exceeded"` or `"interrupted"` when done |
 
+### 15.6 test
+
+Importing `"test"` provides the helpers `rikki test` is built around
+(section 17.7); each returns `error?` so it composes with `check`, and
+each failure carries an origin (section 5.7).
+
+| Function | Signature | Behavior |
+|----------|-----------|----------|
+| `test.eq` | `(any, any) error?` | `none` when the two values are structurally equal (the comparison of section 11.2's `contains`); otherwise an error naming both sides. Comparing values deeper than the implementation limit faults |
+| `test.neq` | `(any, any) error?` | the negation |
+| `test.err` | `(error?) error?` | `none` when given an error; an error when given `none` |
+| `test.skip` | `(str) error?` | an error the test runner reports as skipped rather than failed |
+
 ### 15.5 http
 
 Importing `"http"` also declares two struct types:
@@ -2074,7 +2088,8 @@ compile-time rule; the REPL is unchecked (section 17.6).
 Program execution begins at `fn main`. `main` must be declared, must take no
 parameters, and must declare either no results or the single result
 `(error?)`. Any other signature, or a missing `main`, is a compile-time
-error.
+error. The exception is a test file run by `rikki test` (section 17.7),
+whose entry points are its test functions and which needs no `main`.
 
 Before `main` runs, all `import py` modules are imported; a failing Python
 import terminates the program as a runtime error.
@@ -2103,8 +2118,10 @@ never terminate by crashing the host process.
   (defaulting to the enclosing project's `src/main.rk`); `rikki check
   [file]` typechecks only and never runs code or provisions an environment;
   `rikki new <name>` scaffolds a project; `rikki py add <pkg>` declares
-  a Python dependency and syncs the environment; `rikki repl` starts the
-  REPL.
+  a Python dependency and syncs the environment; `rikki fmt [paths]`
+  rewrites source in the canonical style (`--check` reports instead);
+  `rikki test [paths]` runs test functions (section 17.7); `rikki repl`
+  starts the REPL.
 - `tk` is the runner: `tk file.rk` typechecks and runs the file; bare `tk`
   starts the REPL.
 
@@ -2188,6 +2205,27 @@ registered; any other line is executed as a statement, and an expression
 statement's value, if any, is printed in canonical rendering. Bindings and
 declarations persist for the session. REPL behavior beyond this paragraph is
 unspecified in v1.
+
+### 17.7 rikki test
+
+`rikki test` discovers `*_test.rk` files (the whole project's `src/` when
+bare, or the given files and directories) and runs their test functions.
+A test function's name starts with `Test`, takes no parameters, and
+returns `(error?)`; any other `Test`-prefixed shape in a test file is an
+error. Test files need no `main` (section 17.1) and may use the
+unexported names of the module their stem pairs with (section 16.3).
+
+Each test function runs in a fresh interpreter instance; tests run in
+parallel (`-j N` bounds the workers, `-j 1` serializes). A test passes
+when it returns `none`, is reported skipped when it returns `test.skip`'s
+sentinel, and fails otherwise; a runtime fault fails its test with the
+rikki stack trace and the run continues. Failure reports lead with the
+error's origin (section 5.7). `print` output is captured per test and
+shown only for failures. The exit status is nonzero when any test fails.
+
+The embedded CPython and the filesystem are shared across tests; python
+module state persists and parallel tests race on shared paths exactly as
+any two programs would.
 
 ## 18. Implementation limits
 

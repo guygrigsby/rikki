@@ -165,6 +165,7 @@ fn errval(py: Python<'_>, e: PyErr) -> ErrVal {
         cause: None,
         pytype,
         traceback,
+        origin: String::new(),
     }
 }
 

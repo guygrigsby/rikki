@@ -1,0 +1,22 @@
+import "test"
+
+fn main() {
+    ok := test.eq(2, 2)
+    print(ok == none)
+    bad := test.eq(2, 3)
+    if bad != none {
+        print(bad.msg)
+    }
+    e := test.err(none)
+    if e != none {
+        print(e.msg)
+    }
+    s := test.skip("no gpu here")
+    if s != none {
+        print(s.msg)
+    }
+    deep := test.eq([[1], [2, 3]], [[1], [2, 3]])
+    print(deep == none)
+    ne := test.neq([1], [2])
+    print(ne == none)
+}

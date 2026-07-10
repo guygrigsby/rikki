@@ -94,6 +94,10 @@ pub struct Interp<'p> {
     /// Return types of the active function, for zero-filling check returns.
     ret_stack: Vec<Vec<TypeExpr>>,
     call_stack: Vec<String>,
+    /// (file of the executing fn, line of the executing statement),
+    /// maintained for error origins (spec 10.1)
+    pub(crate) cur_pos: (Option<String>, u32),
+    pos_stack: Vec<(Option<String>, u32)>,
     pub out: Out,
     pub(crate) prog_args: Vec<String>,
 }
@@ -134,9 +138,29 @@ impl<'p> Interp<'p> {
             saved: vec![],
             ret_stack: vec![],
             call_stack: vec![],
+            cur_pos: (None, 0),
+            pos_stack: vec![],
             out: Out::Buf(String::new()),
             prog_args: vec![],
         }
+    }
+
+    /// "file:line" (or "line N") of the executing statement, for error
+    /// origins (spec 10.1).
+    pub(crate) fn origin(&self) -> String {
+        match &self.cur_pos {
+            (Some(f), l) => format!("{f}:{l}"),
+            (None, l) => format!("line {l}"),
+        }
+    }
+
+    /// Stamp an origin onto a bridge error the moment it enters value
+    /// space, once (spec 10.1).
+    fn stamped(&self, mut e: ErrVal) -> ErrVal {
+        if e.origin.is_empty() {
+            e.origin = self.origin();
+        }
+        e
     }
 
     pub(crate) fn fault(&self, msg: impl Into<String>) -> Fault {
@@ -176,6 +200,12 @@ impl<'p> Interp<'p> {
 
     /// Run fn main. Returns main's error value if it returned one.
     pub fn run_main(&mut self) -> Result<Option<ErrVal>, Fault> {
+        self.run_named("main")
+    }
+
+    /// Import py modules, then call one nullary function by name: main, or
+    /// a Test function under `rikki test`.
+    pub fn run_named(&mut self, entry: &str) -> Result<Option<ErrVal>, Fault> {
         for m in self.py_imports.clone() {
             // import the full dotted path (loading the submodule), then bind
             // the top segment, Python's own semantics (spec 13.1)
@@ -190,7 +220,7 @@ impl<'p> Interp<'p> {
                 Err(e) => return Err(self.fault(format!("import py \"{m}\": {}", e.msg))),
             }
         }
-        let v = self.call_named("main", vec![])?;
+        let v = self.call_named(entry, vec![])?;
         Ok(match v {
             Value::Err(e) => Some(e),
             _ => None,
@@ -235,7 +265,9 @@ impl<'p> Interp<'p> {
         for (p, a) in f.params.iter().zip(args) {
             scope.insert(p.name.clone(), Rc::new(RefCell::new(a)));
         }
+        let file = f.file.clone();
         self.enter(name.to_string(), vec![scope], f.ret.clone());
+        self.cur_pos.0 = file;
         let flow = self.exec_block_no_scope(&f.body);
         self.leave();
         match flow? {
@@ -296,9 +328,15 @@ impl<'p> Interp<'p> {
         self.call_stack.push(name);
         self.ret_stack.push(ret);
         self.saved.push(std::mem::replace(&mut self.scopes, scopes));
+        // heap-side, not a Rust-frame local: the recursion golden rides
+        // the interpreter thread's stack budget closely
+        self.pos_stack.push(self.cur_pos.clone());
     }
 
     fn leave(&mut self) {
+        if let Some(p) = self.pos_stack.pop() {
+            self.cur_pos = p;
+        }
         self.scopes = self.saved.pop().unwrap_or_default();
         self.ret_stack.pop();
         self.call_stack.pop();
@@ -389,6 +427,7 @@ impl<'p> Interp<'p> {
     }
 
     fn exec_stmt(&mut self, s: &Stmt) -> Result<Flow, Fault> {
+        self.cur_pos.1 = s.span.line;
         match &s.kind {
             StmtKind::Let { names, expr } => {
                 let v = match self.eval(expr)? {
@@ -951,7 +990,7 @@ impl<'p> Interp<'p> {
                 if matches!(l, Value::Py(_)) || matches!(r, Value::Py(_)) {
                     return Ok(match crate::bridge::binop(*op, &l, &r) {
                         Ok(v) => Ev::V(v),
-                        Err(e) => Ev::PyErr(e),
+                        Err(e) => Ev::PyErr(self.stamped(e)),
                     });
                 }
                 self.binop(*op, l, r).map(Ev::V)
@@ -984,7 +1023,7 @@ impl<'p> Interp<'p> {
                     }
                     return Ok(match crate::bridge::call(h, &vals, &kws) {
                         Ok(v) => Ev::V(v),
-                        Err(e) => Ev::PyErr(e),
+                        Err(e) => Ev::PyErr(self.stamped(e)),
                     });
                 }
                 if !kwargs.is_empty() {
@@ -1017,7 +1056,7 @@ impl<'p> Interp<'p> {
                 if let Value::Py(h) = &r {
                     let f = match crate::bridge::getattr(h, name) {
                         Ok(v) => v,
-                        Err(e) => return Ok(Ev::PyErr(e)),
+                        Err(e) => return Ok(Ev::PyErr(self.stamped(e))),
                     };
                     let Value::Py(fh) = &f else { unreachable!() };
                     let mut kws = vec![];
@@ -1026,7 +1065,7 @@ impl<'p> Interp<'p> {
                     }
                     return Ok(match crate::bridge::call(fh, &vals, &kws) {
                         Ok(v) => Ev::V(v),
-                        Err(e) => Ev::PyErr(e),
+                        Err(e) => Ev::PyErr(self.stamped(e)),
                     });
                 }
                 if !kwargs.is_empty() {
@@ -1039,7 +1078,7 @@ impl<'p> Interp<'p> {
                 if let Value::Py(h) = &r {
                     return Ok(match crate::bridge::getattr(h, name) {
                         Ok(v) => Ev::V(v),
-                        Err(e) => Ev::PyErr(e),
+                        Err(e) => Ev::PyErr(self.stamped(e)),
                     });
                 }
                 self.field(&r, name).map(Ev::V)
@@ -1050,7 +1089,7 @@ impl<'p> Interp<'p> {
                 if let Value::Py(h) = &r {
                     return Ok(match crate::bridge::index(h, &i) {
                         Ok(v) => Ev::V(v),
-                        Err(e) => Ev::PyErr(e),
+                        Err(e) => Ev::PyErr(self.stamped(e)),
                     });
                 }
                 self.index(&r, i).map(Ev::V)
@@ -1203,6 +1242,7 @@ impl<'p> Interp<'p> {
                 .ok_or_else(|| self.fault(format!("{sname} has no field {name}"))),
             Value::Err(e) => Ok(match name {
                 "msg" => Value::Str(e.msg.clone()),
+                "origin" => Value::Str(e.origin.clone()),
                 "pytype" => Value::Str(e.pytype.clone()),
                 "traceback" => Value::Str(e.traceback.clone()),
                 "cause" => match &e.cause {
@@ -1280,6 +1320,7 @@ impl<'p> Interp<'p> {
             "new" => match args.pop() {
                 Some(Value::Str(msg)) => Ok(Value::Err(ErrVal {
                     msg,
+                    origin: self.origin(),
                     ..Default::default()
                 })),
                 _ => Err(self.fault("error.new needs a str")),
@@ -1291,6 +1332,7 @@ impl<'p> Interp<'p> {
                 };
                 Ok(Value::Err(ErrVal {
                     msg,
+                    origin: self.origin(),
                     cause: Some(Box::new(cause)),
                     ..Default::default()
                 }))

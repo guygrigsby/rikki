@@ -85,6 +85,10 @@ pub struct ErrVal {
     pub cause: Option<Box<ErrVal>>,
     pub pytype: String,
     pub traceback: String,
+    /// "file:line" (or "line N") where this error was born: error.new,
+    /// error.wrap, a test helper, or a py exception crossing the bridge
+    /// (spec 10.1). Empty when unknown.
+    pub origin: String,
 }
 
 #[derive(Debug, Clone)]

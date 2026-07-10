@@ -736,6 +736,17 @@ impl Checker {
                 }
             }
             Type::Module(m) => {
+                // test.eq/neq compare any two values structurally
+                if m == "test" && matches!(name, "eq" | "neq") {
+                    if args.len() != 2 {
+                        self.diag(span, format!("test.{name} takes 2 arguments"));
+                        return ExprTy::One(Type::Unknown);
+                    }
+                    for a in args {
+                        self.expr_one(a, None);
+                    }
+                    return ExprTy::One(err_opt());
+                }
                 // polymorphic math members
                 if m == "math" && matches!(name, "abs" | "min" | "max") {
                     let want = if name == "abs" { 1 } else { 2 };
@@ -851,7 +862,7 @@ impl Checker {
                 }
             },
             Type::Error => match name {
-                "msg" | "pytype" | "traceback" => Type::Str,
+                "msg" | "pytype" | "traceback" | "origin" => Type::Str,
                 "cause" => err_opt(),
                 _ => {
                     self.diag(span, format!("error has no field {name}"));
