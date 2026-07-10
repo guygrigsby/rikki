@@ -1,0 +1,145 @@
+// Graft libpython into a bin-bindings wheel so its binaries run on
+// machines without the build python. The build links libpython at an
+// absolute path that only exists on the build machine; this copies the
+// shared library into <prefix>/lib and points the binaries at it:
+// @executable_path/../lib + re-sign on macOS, $ORIGIN/../lib on Linux
+// (needs patchelf on PATH). The RECORD is rewritten by hand because this
+// runs on the embedded interpreter, stdlib python only.
+//
+// Usage: tk packaging/repair-wheel.rk WHEEL LIBPYTHON
+import "file"
+import py "sys"
+import py "os"
+import py "shutil"
+import py "subprocess"
+import py "tempfile"
+import py "zipfile"
+import py "hashlib"
+import py "base64"
+import py "builtins"
+
+fn run(cmd []str) (error?) {
+    r := check subprocess.run(cmd, capture_output: true, text: true)
+    rc := check int(r.returncode)
+    if rc != 0 {
+        return error.new(cmd[0] + " failed: " + check str(r.stderr))
+    }
+    return none
+}
+
+fn runOut(cmd []str) (str, error?) {
+    r := check subprocess.run(cmd, capture_output: true, text: true)
+    rc := check int(r.returncode)
+    if rc != 0 {
+        return "", error.new(cmd[0] + " failed: " + check str(r.stderr))
+    }
+    return check str(r.stdout), none
+}
+
+// the absolute libpython path in the binary's load commands (macOS)
+fn libpythonRef(binPath str) (str, error?) {
+    out := check runOut(["otool", "-L", binPath])
+    for _, line := range out.lines() {
+        if line.contains("libpython") || line.contains("Python.framework") {
+            t := line.trim()
+            sp := t.find(" ")
+            if sp != none {
+                return t[0:sp], none
+            }
+            return t, none
+        }
+    }
+    return "", error.new("no libpython load command in " + binPath)
+}
+
+// PEP 427 RECORD: path,sha256=<urlsafe b64, no padding>,size per file
+fn rewriteRecord(root str, distInfo str) (error?) {
+    lines := []str{}
+    for _, trip := range os.walk(root) {
+        dirpath := check str(trip[0])
+        for _, f := range trip[2] {
+            full := dirpath + "/" + check str(f)
+            rel := check str(os.path.relpath(full, root))
+            if rel == distInfo + "/RECORD" {
+                continue
+            }
+            data := check builtins.open(full, "rb").read()
+            b64 := check str(base64.urlsafe_b64encode(hashlib.sha256(data).digest()).decode())
+            for b64.ends_with("=") {
+                b64 = b64.trim_suffix("=")
+            }
+            size := check str(builtins.len(data))
+            lines = append(lines, rel + ",sha256=" + b64 + "," + size)
+        }
+    }
+    lines = lines.sorted()
+    rec := lines.join("\n") + "\n" + distInfo + "/RECORD,,\n"
+    check file.write(root + "/" + distInfo + "/RECORD", rec)
+    return none
+}
+
+fn main() (error?) {
+    argv := args()
+    if len(argv) != 2 {
+        return error.new("usage: tk repair-wheel.rk WHEEL LIBPYTHON")
+    }
+    wheel := argv[0]
+    libpython := argv[1]
+    lib := check str(os.path.basename(libpython))
+    tmp := check str(tempfile.mkdtemp())
+
+    zin := check zipfile.ZipFile(wheel)
+    check zin.extractall(tmp)
+    check zin.close()
+
+    scripts := ""
+    dataLib := ""
+    distInfo := ""
+    for _, name := range os.listdir(tmp) {
+        n := check str(name)
+        if n.ends_with(".data") {
+            scripts = tmp + "/" + n + "/scripts"
+            dataLib = tmp + "/" + n + "/data/lib"
+        }
+        if n.ends_with(".dist-info") {
+            distInfo = n
+        }
+    }
+    if scripts == "" || distInfo == "" {
+        return error.new("not a bin-bindings wheel: " + wheel)
+    }
+
+    // data/lib installs to <prefix>/lib, out of bin/ so installers do not
+    // list the library as an executable
+    check os.makedirs(dataLib, exist_ok: true)
+    check shutil.copy2(libpython, dataLib)
+    check os.chmod(dataLib + "/" + lib, 493)  // 0o755; rikki has no octal literals
+
+    platform := check str(sys.platform)
+    for _, exe := range ["rikki", "tk"] {
+        p := scripts + "/" + exe
+        if platform == "darwin" {
+            old := check libpythonRef(p)
+            check run(["install_name_tool", "-change", old, "@executable_path/../lib/" + lib, p])
+            // editing load commands invalidates the ad-hoc signature
+            check run(["codesign", "-f", "-s", "-", p])
+        } else {
+            check run(["patchelf", "--set-rpath", "$ORIGIN/../lib", p])
+        }
+    }
+
+    check rewriteRecord(tmp, distInfo)
+
+    zout := check zipfile.ZipFile(wheel, "w", zipfile.ZIP_DEFLATED)
+    for _, trip := range os.walk(tmp) {
+        dirpath := check str(trip[0])
+        for _, f := range trip[2] {
+            full := dirpath + "/" + check str(f)
+            check zout.write(full, os.path.relpath(full, tmp))
+        }
+    }
+    check zout.close()
+    check shutil.rmtree(tmp)
+    print("repaired " + wheel)
+    return none
+}

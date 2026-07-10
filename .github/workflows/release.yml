@@ -32,11 +32,12 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - name: graft libpython
         run: |
+          sudo apt-get update -q && sudo apt-get install -y -q patchelf
           uv python install ${{ matrix.python }}
           P=$(uv python find ${{ matrix.python }})
           LIBDIR=$(dirname "$P")/../lib
-          uvx --with wheel --with patchelf python packaging/repair-wheel.py \
-            dist/*.whl "$LIBDIR/libpython${{ matrix.python }}.so.1.0"
+          TK=$(find target -type f -name tk -path '*release*' | head -1)
+          "$TK" packaging/repair-wheel.rk dist/*.whl "$LIBDIR/libpython${{ matrix.python }}.so.1.0"
       - uses: actions/upload-artifact@v4
         with:
           name: wheels-linux-py${{ matrix.python }}
@@ -61,8 +62,8 @@ jobs:
         run: |
           P=$(uv python find ${{ matrix.python }})
           LIBDIR=$(dirname "$P")/../lib
-          uvx --with wheel python packaging/repair-wheel.py \
-            dist/*.whl "$LIBDIR/libpython${{ matrix.python }}.dylib"
+          TK=$(find target -type f -name tk -path '*release*' | head -1)
+          "$TK" packaging/repair-wheel.rk dist/*.whl "$LIBDIR/libpython${{ matrix.python }}.dylib"
       - uses: actions/upload-artifact@v4
         with:
           name: wheels-macos-py${{ matrix.python }}

@@ -77,11 +77,6 @@ playground links automatically.
   reader's digest of the ADRs.
 - Gotchas / FAQ: the primer's list expanded (append is pure, map reads
   are optional, int/float don't mix, py comparisons yield py, ...).
-- packaging/repair-wheel.py is the last python in the repo (the book
-  tooling and the scaffolded hook are rikki now). Convert it too: py
-  zipfile/hashlib through the bridge can rewrite wheel RECORDs, and the
-  release job already builds the binaries. Riskiest to touch (release
-  path), so it waits for a calm moment, not a release day.
 - Reference generation, later stages (2026-07-09): the book's Builtins
   and Standard library chapters are generated from spec ch 14/15 at
   build time. Stage two is sigs.rs becoming a declarative table feeding
