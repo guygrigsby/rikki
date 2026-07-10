@@ -23,6 +23,11 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
   source line with a caret under file:line:col. Humans and the playground
   see it immediately; the agent hook feedback gets richer for free.
 - Repl typechecking (currently unchecked).
+- Gate the brew formula's python pin (2026-07-09): the tap formula pins
+  python@3.12 by hand while the release matrix builds 3.10-3.13, a
+  hand-synced pair (nothing-remembered rule). Either assert the pin
+  appears in the matrix before publish, or generate the pin into the
+  formula during the tap bump.
 - Rethink strict copies everywhere: DONE 2026-07-02 as the Go model
   wholesale (ADR 0010, spec chapter 11): reference lists/maps, reference
   capture, structs and scalars staying value.
