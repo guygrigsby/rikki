@@ -10,6 +10,10 @@ clap = { version = "4", features = ["derive"] }
 indexmap = "2"
 toml = "1.1.2"
 
+# flock + gethostname for the gputex lock protocol (stdlib/gpu.rs)
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 # native-only: the py bridge, http, and SIGINT handling have no wasm story;
 # the playground build stubs them (src/bridge_wasm.rs, cfg gates)
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

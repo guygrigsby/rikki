@@ -2153,6 +2153,61 @@ Behavior:
 - Response header names are as received; values that are not valid strings
   read as `""`.
 
+### 15.7 gpu
+
+GPU sharing. The module speaks the gputex lock protocol (an advisory
+flock plus a holder registry under `$GPUTEX_DIR`, default `~/.gputex`;
+the contract is documented in the gputex repository), so a rikki program
+coordinates with every other job on the host — wrapped in the gputex CLI
+or not — without an external wrapper.
+
+- `gpu.lock(label str) error?` — take the card exclusively, blocking in
+  the kernel until it is free. Errors if this program already holds the
+  card.
+- `gpu.trylock(label str) (bool, error?)` — non-blocking probe: `true`
+  and hold the card if it was free, `false` if it is busy (including
+  when held by this program). Busy is data, not an error; the error slot
+  is for real failures (an unwritable state directory).
+- `gpu.shared(label str) error?` — take the card as a shared,
+  lowest-priority holder: many coexist, all yield to an exclusive
+  acquirer, which may terminate them (the gputex `--low` semantics).
+- `gpu.unlock() error?` — release. Errors if nothing is held.
+
+Behavior:
+
+- A program holds at most one card at a time; `label` names the job for
+  status displays, it does not select a card.
+- The hold lasts until `gpu.unlock()` or process exit — any exit. The
+  kernel releases the flock when the process dies, so a fault, kill, or
+  crash never strands the card.
+- Acquiring also injects the managed environment (`/etc/gputex/env`,
+  `KEY=VALUE` lines) into the process environment, existing values
+  winning: taking the card and getting the metrics contract
+  (`MLFLOW_TRACKING_URI`) are one step, as with the CLI.
+- On non-unix builds (the playground) every `gpu` function faults
+  ("gpu.lock is not available in this build").
+
+```rikki
+import "gpu"
+
+fn main() (error?) {
+    check gpu.lock("tinyllama eval")
+    // the card is ours until unlock or exit
+    check gpu.unlock()
+
+    ok, err := gpu.trylock("opportunistic sweep")
+    if err != none {
+        return err
+    }
+    if !ok {
+        print("card busy; skipping")
+        return none
+    }
+    check gpu.unlock()
+    return none
+}
+```
+
 ## 16. Modules and multi-file programs
 
 ### 16.1 File imports

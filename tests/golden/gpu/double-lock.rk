@@ -1,0 +1,7 @@
+import "gpu"
+
+fn main() (error?) {
+    check gpu.lock("first")
+    check gpu.lock("second")
+    return none
+}

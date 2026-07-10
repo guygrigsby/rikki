@@ -1,0 +1,6 @@
+import "gpu"
+
+fn main() (error?) {
+    check gpu.unlock()
+    return none
+}

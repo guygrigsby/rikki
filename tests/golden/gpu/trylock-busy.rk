@@ -1,0 +1,18 @@
+import "gpu"
+
+fn main() (error?) {
+    check gpu.lock("holder")
+    ok, err := gpu.trylock("probe while held")
+    if err != none {
+        return err
+    }
+    print(ok)
+    check gpu.unlock()
+    ok2, err2 := gpu.trylock("probe while free")
+    if err2 != none {
+        return err2
+    }
+    print(ok2)
+    check gpu.unlock()
+    return none
+}

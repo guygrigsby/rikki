@@ -423,6 +423,7 @@ dependencies = [
  "clap",
  "ctrlc",
  "indexmap",
+ "libc",
  "pyo3",
  "toml",
  "ureq",

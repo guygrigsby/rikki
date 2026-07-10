@@ -1,0 +1,12 @@
+import "gpu"
+
+fn main() (error?) {
+    check gpu.lock("golden cycle a")
+    print("locked")
+    check gpu.unlock()
+    check gpu.lock("golden cycle b")
+    print("locked again")
+    check gpu.unlock()
+    print("done")
+    return none
+}

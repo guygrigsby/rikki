@@ -4,7 +4,7 @@
 
 use super::*;
 
-pub(super) const STD_MODULES: &[&str] = &["math", "error", "file", "ctx", "http", "test"];
+pub(super) const STD_MODULES: &[&str] = &["math", "error", "file", "ctx", "gpu", "http", "test"];
 
 pub(super) enum Member {
     Fn(Vec<Type>, Vec<Type>),
@@ -38,6 +38,9 @@ pub(super) fn std_member(module: &str, name: &str) -> Option<Member> {
         ("file", "exists") => Member::Fn(vec![Str], vec![Bool]),
         ("file", "list") => Member::Fn(vec![Str], vec![List(Box::new(Str)), err_opt()]),
         ("file", "remove") | ("file", "mkdir") => Member::Fn(vec![Str], vec![err_opt()]),
+        ("gpu", "lock") | ("gpu", "shared") => Member::Fn(vec![Str], vec![err_opt()]),
+        ("gpu", "trylock") => Member::Fn(vec![Str], vec![Bool, err_opt()]),
+        ("gpu", "unlock") => Member::Fn(vec![], vec![err_opt()]),
         ("ctx", "background") => Member::Fn(vec![], vec![ctx()]),
         ("ctx", "timeout") => Member::Fn(vec![ctx(), Float], vec![ctx()]),
         ("ctx", "interrupt") => Member::Fn(vec![ctx()], vec![ctx()]),

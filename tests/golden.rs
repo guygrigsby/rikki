@@ -32,6 +32,10 @@ fn pending(root: &Path) -> Vec<String> {
 
 #[test]
 fn golden() {
+    // gpu/ cases speak the gputex protocol; point its state dir at a scratch
+    // dir so tests never touch real locks (~/.gputex)
+    let gputex = std::env::temp_dir().join(format!("rikki-golden-gputex-{}", std::process::id()));
+    std::env::set_var("GPUTEX_DIR", &gputex);
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
     let skip = pending(&root);
     let mut cases = vec![];

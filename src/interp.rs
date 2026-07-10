@@ -100,6 +100,9 @@ pub struct Interp<'p> {
     pos_stack: Vec<(Option<String>, u32)>,
     pub out: Out,
     pub(crate) prog_args: Vec<String>,
+    /// The GPU card this program holds via the gputex protocol, if any
+    /// (stdlib/gpu.rs). Dropping it releases the flock.
+    pub(crate) gpu_hold: Option<crate::stdlib::gpu::Held>,
 }
 
 impl<'p> Interp<'p> {
@@ -142,6 +145,7 @@ impl<'p> Interp<'p> {
             pos_stack: vec![],
             out: Out::Buf(String::new()),
             prog_args: vec![],
+            gpu_hold: None,
         }
     }
 
