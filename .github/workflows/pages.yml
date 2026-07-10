@@ -53,6 +53,10 @@ jobs:
           sed -i "s|style.css|style.css?v=$v|; s|main.js|main.js?v=$v|" dist/play/index.html
           sed -i "s|./pkg/nevla_playground.js|./pkg/nevla_playground.js?v=$v|" dist/play/main.js
           sed -i "s|nevla_playground_bg.wasm|nevla_playground_bg.wasm?v=$v|" dist/play/pkg/nevla_playground.js
+          # the ref book links the shared theme css unhashed (mdBook only
+          # hashes additional-css living inside the book); bust it too or
+          # the spec wears last deploy's styles for ten minutes
+          find dist/ref/spec -name '*.html' -exec sed -i "s|book/theme/nevla.css|book/theme/nevla.css?v=$v|g" {} +
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
