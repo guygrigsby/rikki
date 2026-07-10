@@ -1,11 +1,35 @@
-# Rikki the mongoose
+# Nevla the mongoose
 
-<img src="rikki.png" alt="Rikki the mongoose" width="280">
+<img src="nevla.png" alt="Nevla the mongoose" width="280">
 
-Rikki is the mascot and the namesake. The language borrows his
-disposition: small, fast, and fatal to snakes.
+Nevla is the mascot and the namesake: nevla (नेवला) is Hindi for
+mongoose. The language borrows the animal's disposition: small, fast,
+and fatal to snakes.
 
-<!-- TODO(guy): the full background story goes here -->
+## The name this project gave up
 
-The artwork lives in [`art/`](https://github.com/guygrigsby/rikki/tree/main/art)
-(CC BY 4.0; the code is MIT and stays that way).
+This language spent its first week named rikki, with a runner called
+tk, after Rikki-Tikki-Tavi in Kipling's Jungle Book. The story was
+loved in childhood and the homage was sincere.
+
+It was also naive. Read as an adult, Rikki-Tikki-Tavi is imperial
+allegory: a domesticated mongoose loyally defending an English family's
+bungalow garden against the native cobras, the garden standing in for
+colonized India kept safe for its colonizers. This is the mainstream
+scholarly reading, not a stretch; Kipling is the poet of "The White
+Man's Burden", and the politics are in the story's bones. A project
+name is an endorsement renewed every time it is typed, and this project
+will not carry that one.
+
+So it was renamed, days after the naming, while the cost was near zero
+([ADR 0014](https://github.com/guygrigsby/nevla/blob/main/docs/adr/0014-rename-to-nevla.md)
+records the decision). The new name walks the other direction: the
+story's failure was the colonial gaze on India, and nevla returns the
+animal to its own language.
+
+The mongoose himself stays. The animal was never the problem, and no
+story owns him.
+
+The artwork lives in
+[`art/`](https://github.com/guygrigsby/nevla/tree/main/art) (CC BY 4.0;
+the code is MIT and stays that way).

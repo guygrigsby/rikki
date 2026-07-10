@@ -18,3 +18,7 @@
 
 - [Builtins](builtins.md)
 - [Standard library](stdlib.md)
+
+---
+
+- [Nevla the mongoose](mascot.md)

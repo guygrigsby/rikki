@@ -11,6 +11,10 @@ Designer). The mascot is the brand: it appears in the README (top right,
 playground header. Licensed CC BY 4.0 (see `art/LICENSE`); the code is MIT
 and stays that way.
 
+Named Rikki until 2026-07-10; renamed with the language over the Kipling
+story's colonial subtext (ADR 0014, and the book's mascot page has the
+full account). Same artwork: the animal was never the problem.
+
 ## Color
 
 - Brand: `#C86FB9` (decided 2026-07-09), the mascot's purple. Use it for

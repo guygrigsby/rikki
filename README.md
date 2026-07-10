@@ -61,3 +61,12 @@ The gate is `NEVLA_TEST_PY=1 cargo test`, green before every commit (the py gold
 ## Where things live
 
 `language-spec.md` is the normative spec. `tests/golden/` is the executable spec; every language-visible behavior has a golden test. Design rationale is in `docs/specs/`, decisions in `docs/adr/`. There's an nvim plugin under `editors/` with syntax highlighting and check-on-save.
+
+## The name
+
+Nevla (नेवला) is Hindi for mongoose. The project was briefly named for
+Kipling's Rikki-Tikki-Tavi and renamed once the story's colonial
+subtext was pointed at directly; [ADR 0014](docs/adr/0014-rename-to-nevla.md)
+and [the book's mascot page](docs/book/src/mascot.md) give the full
+account. Same purple mongoose: the animal was never the
+problem.
