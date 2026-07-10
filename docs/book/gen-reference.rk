@@ -1,0 +1,56 @@
+// Generate the book's reference chapters from the language spec, the
+// single source of truth for builtins and stdlib. Run from the repo
+// root: tk docs/book/gen-reference.rk
+// Output files are gitignored and rebuilt on every book build.
+import "file"
+
+fn sliceChapter(spec str, start str, end str) (str, error?) {
+    a := spec.find(start)
+    if a == none {
+        return "", error.new("spec slice not found: " + start)
+    }
+    rest := spec[a + len(start):len(spec)]
+    b := rest.find(end)
+    if b == none {
+        return "", error.new("spec slice end not found: " + end)
+    }
+    return rest[0:b], none
+}
+
+// spec subsections ("### 14.1 print") become book sections ("## print")
+fn demote(body str) str {
+    out := []str{}
+    for _, line := range body.lines() {
+        if line.starts_with("### ") {
+            rest := line[4:len(line)]
+            sp := rest.find(" ")
+            if sp != none {
+                out = append(out, "## " + rest[sp + 1:len(rest)])
+            } else {
+                out = append(out, "## " + rest)
+            }
+        } else {
+            out = append(out, line)
+        }
+    }
+    return out.join("\n")
+}
+
+fn gen(spec str, fname str, title str, start str, end str) (error?) {
+    body, err := sliceChapter(spec, start, end)
+    if err != none {
+        return err
+    }
+    banner := "<!-- GENERATED from language-spec.md by gen-reference.rk; do not edit -->\n> Generated from [the language spec](https://github.com/guygrigsby/rikki/blob/main/language-spec.md), which is normative.\n\n"
+    path := "docs/book/src/" + fname
+    check file.write(path, title + "\n\n" + banner + demote(body).trim() + "\n")
+    print("wrote " + path)
+    return none
+}
+
+fn main() (error?) {
+    spec := check file.read("language-spec.md")
+    check gen(spec, "builtins.md", "# Builtins", "## 14. Builtin functions\n", "\n## 15. ")
+    check gen(spec, "stdlib.md", "# Standard library", "## 15. Standard library\n", "\n## 16. ")
+    return none
+}

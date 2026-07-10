@@ -121,7 +121,7 @@ fn new_project(name: &str, claude_hook: bool) -> ExitCode {
         if claude_hook {
             std::fs::create_dir_all(root.join(".claude/hooks"))?;
             std::fs::write(root.join(".claude/settings.json"), HOOK_SETTINGS)?;
-            std::fs::write(root.join(".claude/hooks/rikki-check.py"), HOOK_CHECK)?;
+            std::fs::write(root.join(".claude/hooks/rikki-check.rk"), HOOK_CHECK)?;
         }
         Ok(())
     };
@@ -154,7 +154,7 @@ const HOOK_SETTINGS: &str = r#"{
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/rikki-check.py\""
+            "command": "tk \"$CLAUDE_PROJECT_DIR/.claude/hooks/rikki-check.rk\""
           }
         ]
       }
@@ -163,37 +163,58 @@ const HOOK_SETTINGS: &str = r#"{
 }
 "#;
 
-const HOOK_CHECK: &str = r#"#!/usr/bin/env python3
-"""PostToolUse hook: typecheck after every .rk edit, feed diagnostics back."""
-import json
-import os
-import subprocess
-import sys
+const HOOK_CHECK: &str = r#"// PostToolUse hook: typecheck after every .rk edit, feed diagnostics back.
+import "file"
+import py "sys"
+import py "json"
+import py "os"
+import py "subprocess"
 
-d = json.load(sys.stdin)
-path = d.get("tool_input", {}).get("file_path", "")
-if not path.endswith(".rk"):
-    sys.exit(0)
-# inside a project, check the whole program from its entrypoint; a lone
-# module file has no main and cannot be checked standalone
-workdir = os.path.dirname(os.path.abspath(path))
-cmd = ["rikki", "check", path]
-probe = workdir
-while True:
-    if os.path.exists(os.path.join(probe, "rikki.toml")):
-        cmd = ["rikki", "check"]
-        break
-    parent = os.path.dirname(probe)
-    if parent == probe:
-        break
-    probe = parent
-try:
-    r = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True, timeout=30)
-except (FileNotFoundError, subprocess.TimeoutExpired):
-    sys.exit(0)  # no rikki on PATH or a wedged check: stay out of the way
-if r.returncode != 0:
-    sys.stderr.write(r.stdout + r.stderr)
-    sys.exit(2)  # exit 2 returns stderr to the agent as feedback
+fn main() (error?) {
+    raw := check str(sys.stdin.read())
+    d := check json.loads(raw)
+    ti, tierr := d["tool_input"]
+    if tierr != none {
+        return none
+    }
+    pathv, perr := ti["file_path"]
+    if perr != none {
+        return none
+    }
+    path := check str(pathv)
+    if !path.ends_with(".rk") {
+        return none
+    }
+    // inside a project, check the whole program from its entrypoint; a
+    // lone module file has no main and cannot be checked standalone
+    workdir := check str(os.path.dirname(os.path.abspath(path)))
+    cmd := ["rikki", "check", path]
+    probe := workdir
+    for {
+        if file.exists(probe + "/rikki.toml") {
+            cmd = ["rikki", "check"]
+            break
+        }
+        parent := check str(os.path.dirname(probe))
+        if parent == probe {
+            break
+        }
+        probe = parent
+    }
+    // no rikki on PATH or a wedged check: stay out of the way
+    r, rerr := subprocess.run(cmd, cwd: workdir, capture_output: true, text: true, timeout: 30)
+    if rerr != none {
+        return none
+    }
+    rc := check int(r.returncode)
+    if rc != 0 {
+        check sys.stderr.write(check str(r.stdout) + check str(r.stderr))
+        check sys.stderr.flush()
+        // exit 2 returns stderr to the agent as blocking feedback
+        check os._exit(2)
+    }
+    return none
+}
 "#;
 
 fn test_cmd(paths: Vec<PathBuf>, jobs: usize) -> ExitCode {

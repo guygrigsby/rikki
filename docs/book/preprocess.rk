@@ -1,0 +1,75 @@
+// mdBook preprocessor: every complete-program ```rikki block gains a
+// playground link with the program base64url-encoded into the URL
+// fragment, so link and code cannot drift apart. Fragments (no fn main)
+// are left alone; tests/book.rs keeps the blocks themselves compiling.
+// mdBook invokes this as: tk preprocess.rk [supports <renderer>]
+import py "sys"
+import py "json"
+import py "base64"
+import py "builtins"
+
+fn linkify(content str) (str, error?) {
+    out := ""
+    rest := content
+    for {
+        i := rest.find("```rikki\n")
+        if i == none {
+            break
+        }
+        headEnd := i + len("```rikki\n")
+        out = out + rest[0:headEnd]
+        rest = rest[headEnd:len(rest)]
+        j := rest.find("```")
+        if j == none {
+            break
+        }
+        code := rest[0:j]
+        out = out + rest[0:j + 3]
+        rest = rest[j + 3:len(rest)]
+        if code.contains("fn main") {
+            enc := check str(base64.urlsafe_b64encode(builtins.bytes(code, "utf-8")).decode())
+            for enc.ends_with("=") {
+                enc = enc.trim_suffix("=")
+            }
+            out = out + "\n\n[**▸ run it in the playground**](https://rikki.aeryx.ai/#" + enc + ")\n"
+        }
+    }
+    return out + rest, none
+}
+
+fn walk(items py) (error?) {
+    for _, it := range items {
+        ch, notChapter := it["Chapter"]
+        if notChapter != none {
+            continue
+        }
+        content := check str(ch["content"])
+        linked, err := linkify(content)
+        if err != none {
+            return err
+        }
+        ch["content"] = linked
+        check walk(check ch["sub_items"])
+    }
+    return none
+}
+
+fn main() (error?) {
+    argv := args()
+    if len(argv) > 0 {
+        if argv[0] == "supports" {
+            return none
+        }
+    }
+    raw := check str(sys.stdin.read())
+    both := check json.loads(raw)
+    book := check both[1]
+    sections, missing := book["sections"]
+    if missing == none {
+        check walk(sections)
+    } else {
+        check walk(check book["items"])
+    }
+    print(check str(json.dumps(book)))
+    return none
+}

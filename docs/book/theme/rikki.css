@@ -1,0 +1,30 @@
+/* rikki brand for mdBook (palette: art/DESIGN.md) */
+:root {
+    --rikki: #C86FB9;
+    --rikki-deep: #a94f9a;
+}
+
+.light,
+.rust {
+    --links: #a94f9a;
+    --sidebar-active: #a94f9a;
+    --search-mark-bg: #f3d9ee;
+    --bg: #faf7f9;
+    --sidebar-bg: #f2ebf0;
+}
+
+.navy,
+.coal,
+.ayu {
+    --links: #C86FB9;
+    --sidebar-active: #C86FB9;
+    --search-mark-bg: #5c3355;
+    --bg: #1a1418;
+    --content-bg: #1a1418;
+    --sidebar-bg: #241c22;
+    --fg: #ece5ea;
+}
+
+#menu-bar {
+    border-bottom: 2px solid var(--rikki);
+}

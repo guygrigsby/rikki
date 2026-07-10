@@ -70,8 +70,8 @@ fn new_then_run() {
         String::from_utf8_lossy(&out.stderr)
     );
     let settings = std::fs::read_to_string(d.join("hooked/.claude/settings.json")).unwrap();
-    assert!(settings.contains("rikki-check.py"), "{settings}");
-    assert!(d.join("hooked/.claude/hooks/rikki-check.py").exists());
+    assert!(settings.contains("rikki-check.rk"), "{settings}");
+    assert!(d.join("hooked/.claude/hooks/rikki-check.rk").exists());
     let out = Command::new(bin())
         .args(["run", "src/main.rk"])
         .current_dir(d.join("hello"))
@@ -127,10 +127,10 @@ fn claude_hook_feeds_diagnostics_back() {
         String::from_utf8_lossy(&out.stderr)
     );
     let proj = d.join("h");
-    let hook = proj.join(".claude/hooks/rikki-check.py");
+    let hook = proj.join(".claude/hooks/rikki-check.rk");
     let bin_dir = PathBuf::from(bin()).parent().unwrap().to_path_buf();
     let run_hook = |file: PathBuf| {
-        let mut child = Command::new("python3")
+        let mut child = Command::new(tk())
             .arg(&hook)
             .env(
                 "PATH",

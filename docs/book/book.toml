@@ -7,6 +7,8 @@ src = "src"
 [output.html]
 git-repository-url = "https://github.com/guygrigsby/rikki"
 site-url = "/book/"
+additional-css = ["theme/rikki.css"]
+preferred-dark-theme = "navy"
 
 [preprocessor.runnable]
-command = "python3 preprocess.py"
+command = "../../target/debug/tk preprocess.rk"
