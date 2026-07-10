@@ -14,11 +14,10 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
   spec 15.6/17.7). Tests are fallible functions; error origins landed
   with it (spec 5.7). Deferred with re-entry paths: soft failures,
   test.run subtests, test.tmpdir, --json output.
-- Version pinning (decided 2026-07-09): rikki.toml gains a rikki version
-  stamp written by rikki new, with a warning on mismatch so future breaks
-  say "built against 0.1.5" instead of mystifying compile errors; and
-  `rikki py add` records the resolved version instead of "*" so the
-  manifest reads true (rikki.lock already pins exactly).
+- Version pinning, rikki half: DONE 2026-07-09 (spec 17.4 area; rikki
+  new stamps `rikki = "x.y.z"`, mismatch warns, never blocks). Still
+  open: `rikki py add` recording the resolved version instead of "*" —
+  needs an upgrade-path decision first (does re-adding refresh the pin?).
 - Source snippets in diagnostics (decided 2026-07-09): show the offending
   source line with a caret under file:line:col. Humans and the playground
   see it immediately; the agent hook feedback gets richer for free.

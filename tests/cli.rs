@@ -47,6 +47,9 @@ fn new_then_run() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(d.join("hello/rikki.toml").exists());
+    // built-against stamp: future breaks say which rikki made the project
+    let toml = std::fs::read_to_string(d.join("hello/rikki.toml")).unwrap();
+    assert!(toml.contains("rikki = \""), "{toml}");
     // agent docs scaffold by default; the executable hook is opt-in
     let primer = std::fs::read_to_string(d.join("hello/AGENTS.md")).unwrap();
     assert!(primer.contains("py bridge"), "primer content missing");
@@ -170,6 +173,52 @@ fn claude_hook_feeds_diagnostics_back() {
     // non-.rk files are ignored
     let out = run_hook(proj.join("notes.md"));
     assert_eq!(out.status.code(), Some(0), "non-rk file must exit 0");
+}
+
+#[test]
+fn stale_rikki_stamp_warns() {
+    let d = tempdir("stamp");
+    let out = Command::new(bin())
+        .args(["new", "old"])
+        .current_dir(&d)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let toml_path = d.join("old/rikki.toml");
+    let toml = std::fs::read_to_string(&toml_path).unwrap();
+    let stamped = regex_lite_replace(&toml);
+    std::fs::write(&toml_path, stamped).unwrap();
+    // the warning only fires on the project py path; give it a py import
+    std::fs::write(
+        d.join("old/src/main.rk"),
+        "import py \"json\"\n\nfn main() (error?) {\n    x := check json.loads(\"1\")\n    print(x)\n    return none\n}\n",
+    )
+    .unwrap();
+    let out = Command::new(bin())
+        .args(["check"])
+        .current_dir(d.join("old"))
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("built against rikki 0.0.1"),
+        "{stderr}"
+    );
+}
+
+/// Swap the stamped version for an ancient one without a regex dep.
+fn regex_lite_replace(toml: &str) -> String {
+    let mut out = String::new();
+    for line in toml.lines() {
+        if line.starts_with("rikki = ") {
+            out.push_str("rikki = \"0.0.1\"\n");
+        } else {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out
 }
 
 #[test]

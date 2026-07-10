@@ -10,6 +10,10 @@ pub struct Project {
     pub root: PathBuf,
     pub name: String,
     pub python: String,
+    /// the rikki version the project was built against (spec 17.4);
+    /// mismatches warn so breaks say "built against 0.1.5" instead of
+    /// producing mystifying compile errors
+    pub rikki: Option<String>,
     pub py_deps: BTreeMap<String, PyDep>,
 }
 
@@ -74,6 +78,11 @@ impl Project {
             .and_then(|v| v.as_str())
             .map(str::to_string)
             .unwrap_or_else(crate::bridge::embedded_python);
+        let rikki = doc
+            .get("project")
+            .and_then(|p| p.get("rikki"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
         let mut py_deps = BTreeMap::new();
         if let Some(deps) = doc.get("py-deps").and_then(|v| v.as_table()) {
             for (k, v) in deps {
@@ -101,6 +110,7 @@ impl Project {
             root: root.to_path_buf(),
             name,
             python,
+            rikki,
             py_deps,
         })
     }
@@ -110,6 +120,9 @@ impl Project {
         let mut project = toml::Table::new();
         project.insert("name".into(), s(&self.name));
         project.insert("python".into(), s(&self.python));
+        if let Some(r) = &self.rikki {
+            project.insert("rikki".into(), s(r));
+        }
         let mut doc = toml::Table::new();
         doc.insert("project".into(), toml::Value::Table(project));
         if !self.py_deps.is_empty() {
@@ -336,6 +349,7 @@ mod tests {
             root: d.clone(),
             name: "hello".into(),
             python: "3.12".into(),
+            rikki: None,
             py_deps: [("torch".to_string(), PyDep::any())].into(),
         };
         p.save().unwrap();
@@ -354,6 +368,7 @@ mod tests {
             root: d.clone(),
             name: "hello".into(),
             python: "3.12".into(),
+            rikki: None,
             py_deps: [(
                 "ruamel.yaml".to_string(),
                 PyDep {
@@ -378,6 +393,7 @@ mod tests {
             root: d.clone(),
             name: "hello".into(),
             python: "3.12".into(),
+            rikki: None,
             py_deps: [(
                 "mlflow-skinny".to_string(),
                 PyDep {
@@ -404,6 +420,7 @@ mod tests {
             root: d.clone(),
             name: "h".into(),
             python: "3.12".into(),
+            rikki: None,
             py_deps: BTreeMap::new(),
         };
         p.save().unwrap();
@@ -443,6 +460,7 @@ mod tests {
             root: d.clone(),
             name: "h".into(),
             python: "3.12".into(),
+            rikki: None,
             py_deps: BTreeMap::new(),
         };
         p.py_deps.insert(
@@ -495,6 +513,7 @@ mod tests {
             root: d.clone(),
             name: "hello".into(),
             python: "3.12".into(),
+            rikki: None,
             py_deps: BTreeMap::new(),
         };
         p.save().unwrap();

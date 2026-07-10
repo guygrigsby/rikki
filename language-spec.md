@@ -2143,6 +2143,12 @@ The layout:
   Disposable; deleting it is always safe, it regenerates on the next run.
 - `src/main.rk`: the default entry point for bare `rikki run`.
 
+A project's `rikki.toml` may carry `rikki = "x.y.z"`, the version the
+project was built against; `rikki new` writes it. Running or checking
+the project under a different rikki prints a warning naming both
+versions, so a language change surfaces as "built against 0.1.5" rather
+than a mystifying compile error. The pin never blocks execution.
+
 ### 17.5 The manifest rule for py imports
 
 When the compiled file lies inside a project, every `import py "m"` is

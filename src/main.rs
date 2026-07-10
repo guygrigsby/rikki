@@ -104,8 +104,9 @@ fn new_project(name: &str, claude_hook: bool) -> ExitCode {
         std::fs::write(
             root.join("rikki.toml"),
             format!(
-                "[project]\nname = {name:?}\npython = {:?}\n",
-                rikki::bridge::embedded_python()
+                "[project]\nname = {name:?}\npython = {:?}\nrikki = {:?}\n",
+                rikki::bridge::embedded_python(),
+                rikki::PKG_VERSION
             ),
         )?;
         std::fs::write(

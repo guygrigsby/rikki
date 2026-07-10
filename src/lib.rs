@@ -327,6 +327,13 @@ fn provision_py(prog: &ast::Program, path: &Path, will_run: bool) -> Result<(), 
         return Ok(());
     };
     let proj = project::Project::load(&root)?;
+    if let Some(built) = &proj.rikki {
+        if built != PKG_VERSION {
+            eprintln!(
+                "warning: project was built against rikki {built}; this is {PKG_VERSION} (update the rikki pin in rikki.toml after verifying)"
+            );
+        }
+    }
     let embedded = bridge::embedded_python();
     if proj.python != embedded {
         return Err(format!(
@@ -465,6 +472,7 @@ mod tests {
             root: std::path::PathBuf::new(),
             name: "x".into(),
             python: "3.12".into(),
+            rikki: None,
             py_deps: [(
                 "sentence-transformers".to_string(),
                 project::PyDep::any(),
@@ -483,6 +491,7 @@ mod tests {
             root: std::path::PathBuf::new(),
             name: "x".into(),
             python: "3.12".into(),
+            rikki: None,
             py_deps: [(
                 "mlflow-skinny".to_string(),
                 project::PyDep {
