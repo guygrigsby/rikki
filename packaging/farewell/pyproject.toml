@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rikki-lang"
+version = "0.1.13"
+description = "rikki is now nevla. pip install nevla; https://nevla.dev"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.8"
+
+[project.scripts]
+rikki = "rikki_lang_farewell:main"
+tk = "rikki_lang_farewell:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["rikki_lang_farewell"]

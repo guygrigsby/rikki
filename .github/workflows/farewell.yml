@@ -1,0 +1,26 @@
+# One-shot: publish the final rikki-lang release, a stub whose binaries
+# and README point at nevla (ADR 0014). Requires the rikki-lang trusted
+# publisher on PyPI to name this workflow file. Delete after it runs.
+name: farewell
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv build
+        working-directory: packaging/farewell
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packaging/farewell/dist
