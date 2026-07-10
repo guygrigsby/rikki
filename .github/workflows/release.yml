@@ -37,9 +37,14 @@ jobs:
           P=$(uv python find ${{ matrix.python }})
           LIBDIR=$(dirname "$P")/../lib
           TK=$(find target -type f -name tk -path '*release*' | head -1)
-          # pin the embedded stdlib to the python tk was built against;
-          # the runner has three pythons on PATH and probing is a gamble
+          # pin BOTH halves of the embedded python to the build python:
+          # PYTHONHOME for the stdlib, LD_LIBRARY_PATH for the loader (the
+          # runner has three pythons and tk's NEEDED libpython has no rpath)
           export PYTHONHOME="$(python${{ matrix.python }} -c 'import sys; print(sys.base_prefix)')"
+          export LD_LIBRARY_PATH="$PYTHONHOME/lib:$LD_LIBRARY_PATH"
+          echo "tk=$TK home=$PYTHONHOME"
+          ldd "$TK" | grep -i python || true
+          "$TK" --version
           "$TK" packaging/repair-wheel.rk dist/*.whl "$LIBDIR/libpython${{ matrix.python }}.so.1.0"
       - uses: actions/upload-artifact@v4
         with:
