@@ -13,12 +13,22 @@ It's basically a wrapper around Python with proper error handling and typing. Wh
 ```nevla
 import py "torch"
 
-fn main() (error?) {
+// check propagates: the caller decides
+fn logits(n int) (str, error?) {
     w := check torch.randn([784, 10], requires_grad: true)
-    x := check torch.randn([32, 784])
-    logits := check (x @ w)
-    print(check str(logits.shape))
-    return none
+    x := check torch.randn([n, 784])
+    y := check (x @ w)
+    return check str(y.shape), none
+}
+
+// main can act, so it handles
+fn main() {
+    shape, err := logits(32)
+    if err != none {
+        print("torch failed: " + err.msg)
+        return
+    }
+    print("logits: " + shape)
 }
 ```
 
