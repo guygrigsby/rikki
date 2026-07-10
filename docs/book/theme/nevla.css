@@ -52,3 +52,8 @@ pre.nevla-out {
     white-space: pre-wrap;
 }
 pre.nevla-out.err { border-left-color: #d4526e; color: #d4526e; }
+
+/* a sidebar that hits its end must not scroll the page under the cursor */
+.sidebar .sidebar-scrollbox {
+    overscroll-behavior: contain;
+}
