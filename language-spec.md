@@ -535,7 +535,8 @@ ImportDecl = "import" [ "py" ] string_lit .
 Three forms exist, distinguished by the `py` marker and the path string:
 
 - `import "name"` where `name` is one of the standard library modules
-  `math`, `error`, `file`, `ctx`, `http` imports that module (chapter 15).
+  `math`, `error`, `file`, `ctx`, `gpu`, `http`, `test` imports that
+  module (chapter 15).
 - `import "path.rk"` where the path ends in `.rk` imports another rikki
   source file as a module (chapter 16).
 - `import py "modname"` imports a Python module through the bridge
