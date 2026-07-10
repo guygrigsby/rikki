@@ -27,7 +27,7 @@ jobs:
           workspaces: playground
       - uses: taiki-e/install-action@v2
         with:
-          tool: wasm-pack
+          tool: wasm-pack,mdbook
       - name: build the playground
         run: |
           cd playground
@@ -36,6 +36,7 @@ jobs:
           cp site/index.html site/style.css site/main.js ../dist/
           cp pkg/rikki_playground.js pkg/rikki_playground_bg.wasm ../dist/pkg/
           cp ../art/logo.png ../dist/
+          mdbook build ../docs/book -d "$(pwd)/../dist/book"
           # cache-bust every asset chain with the commit: Pages caches for
           # ten minutes and a fresh html over stale css shears the layout
           v="${GITHUB_SHA::8}"

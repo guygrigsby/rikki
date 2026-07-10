@@ -1,0 +1,9 @@
+[book]
+title = "The rikki book"
+authors = ["Guy J Grigsby"]
+language = "en"
+src = "src"
+
+[output.html]
+git-repository-url = "https://github.com/guygrigsby/rikki"
+site-url = "/book/"

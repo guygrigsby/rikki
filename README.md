@@ -36,7 +36,7 @@ fn main() (error?) {
 
 Split like uv and python. `rikki` does setup: `rikki new`, `rikki py add torch`, `rikki check`, `rikki run`. `tk` runs code: `tk train.rk`, and bare `tk` is the repl. Python deps live in the project manifest and every `import py` is validated against it at compile time, so a missing dep is a compile error, not a stack trace twenty minutes into a training run.
 
-Try it without installing anything: [the playground](https://rikki.aeryx.ai/) runs the interpreter in your browser (the py bridge needs a real CPython, so that part is native-only).
+Try it without installing anything: [the playground](https://rikki.aeryx.ai/) runs the interpreter in your browser (the py bridge needs a real CPython, so that part is native-only). [The rikki book](https://rikki.aeryx.ai/book/) is the guide.
 
 ## Getting started
 
