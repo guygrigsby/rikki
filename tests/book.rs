@@ -23,7 +23,10 @@ fn book_examples_compile() {
         ));
     }
     for extra in ["README.md", "docs/rikki-primer.md", "language-spec.md"] {
-        sources.push((extra.to_string(), fs::read_to_string(root.join(extra)).unwrap()));
+        sources.push((
+            extra.to_string(),
+            fs::read_to_string(root.join(extra)).unwrap(),
+        ));
     }
     for (name, text) in &sources {
         let (name, text) = (name.clone(), text.clone());
@@ -68,7 +71,9 @@ fn book_examples_compile() {
                         ));
                     }
                 }
-                Err(d) => failures.push(format!("main.js example does not parse: {d}\n---\n{part}")),
+                Err(d) => {
+                    failures.push(format!("main.js example does not parse: {d}\n---\n{part}"))
+                }
             }
         }
     }

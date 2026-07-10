@@ -31,7 +31,9 @@ impl Checker {
     /// Stem of the file this code lives in; foreign-module accesses are
     /// the ones whose qualified prefix differs (section 16.3).
     fn current_module(&self) -> Option<&str> {
-        self.current_file.as_deref().and_then(|f| f.strip_suffix(".rk"))
+        self.current_file
+            .as_deref()
+            .and_then(|f| f.strip_suffix(".rk"))
     }
 
     /// Whether this file may touch `module`'s unexported names: its own,
@@ -846,10 +848,7 @@ impl Checker {
                     if !Self::is_exported(name) {
                         if let Some((module, _)) = s.rsplit_once('.') {
                             if !self.trusts(module) {
-                                self.diag(
-                                    span,
-                                    format!("field {name} of {s} is not exported"),
-                                );
+                                self.diag(span, format!("field {name} of {s} is not exported"));
                                 return Type::Unknown;
                             }
                         }

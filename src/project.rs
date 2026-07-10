@@ -93,10 +93,7 @@ impl Project {
                             .and_then(|x| x.as_str())
                             .unwrap_or("*")
                             .to_string(),
-                        module: t
-                            .get("module")
-                            .and_then(|x| x.as_str())
-                            .map(str::to_string),
+                        module: t.get("module").and_then(|x| x.as_str()).map(str::to_string),
                     },
                     None => PyDep {
                         version: v.as_str().unwrap_or("*").to_string(),
@@ -275,8 +272,7 @@ impl Project {
             // package overlaps (removing full mlflow deletes the mlflow/
             // tree that mlflow-skinny also owns, leaving it half-installed).
             // Rebuild from scratch; uv's cache makes this cheap.
-            std::fs::remove_dir_all(self.venv())
-                .map_err(|e| format!("rebuild venv: {e}"))?;
+            std::fs::remove_dir_all(self.venv()).map_err(|e| format!("rebuild venv: {e}"))?;
         }
         self.uv(
             uv_bin,
@@ -441,10 +437,19 @@ mod tests {
         std::fs::write(d.join("uv-calls.log"), "").unwrap();
         p.ensure_env(&uv).unwrap();
         let log = std::fs::read_to_string(d.join("uv-calls.log")).unwrap();
-        assert!(log.contains("pip compile"), "stale lock must re-resolve: {log}");
+        assert!(
+            log.contains("pip compile"),
+            "stale lock must re-resolve: {log}"
+        );
         assert!(log.contains("pip sync"), "{log}");
-        assert!(log.contains("venv .rikki/venv"), "must recreate the venv: {log}");
-        assert!(!p.venv().join("canary").exists(), "venv was synced in place");
+        assert!(
+            log.contains("venv .rikki/venv"),
+            "must recreate the venv: {log}"
+        );
+        assert!(
+            !p.venv().join("canary").exists(),
+            "venv was synced in place"
+        );
         // the re-resolved lock is fresh: next provision is a no-op
         std::fs::write(d.join("uv-calls.log"), "").unwrap();
         p.ensure_env(&uv).unwrap();

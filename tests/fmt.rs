@@ -46,7 +46,11 @@ fn corpus_roundtrip() {
     let mut checked = 0;
     let mut failures = vec![];
     for rk in &cases {
-        let rel = rk.strip_prefix(&root).unwrap().to_string_lossy().to_string();
+        let rel = rk
+            .strip_prefix(&root)
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
         let src = fs::read_to_string(rk).unwrap();
         // syntax-error fixtures cannot be formatted; fmt must refuse, not mangle
         let Ok(once) = rikki::format::fmt_source(&src) else {
@@ -90,8 +94,10 @@ fn canonical_style() {
 
 #[test]
 fn comments_and_blanks_survive() {
-    let src = "// leading\nfn main() {\n    x := 1  // trailing\n\n\n    // own line\n    print(x)\n}\n";
+    let src =
+        "// leading\nfn main() {\n    x := 1  // trailing\n\n\n    // own line\n    print(x)\n}\n";
     let got = rikki::format::fmt_source(src).unwrap();
-    let want = "// leading\nfn main() {\n    x := 1  // trailing\n\n    // own line\n    print(x)\n}\n";
+    let want =
+        "// leading\nfn main() {\n    x := 1  // trailing\n\n    // own line\n    print(x)\n}\n";
     assert_eq!(got, want, "{got}");
 }

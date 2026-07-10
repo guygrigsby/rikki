@@ -143,7 +143,10 @@ fn find_python_home(ver: &str) -> Option<String> {
         }
         let text = String::from_utf8_lossy(&out.stdout);
         let mut lines = text.lines();
-        (lines.next()? == ver).then(|| lines.next())??.to_string().into()
+        (lines.next()? == ver)
+            .then(|| lines.next())??
+            .to_string()
+            .into()
     };
     if let Some(home) = probe(&format!("python{ver}")).or_else(|| probe("python3")) {
         return Some(home);

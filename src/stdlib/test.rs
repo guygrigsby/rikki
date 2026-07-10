@@ -27,10 +27,7 @@ pub fn call(interp: &mut Interp, name: &str, args: Vec<Value>) -> Result<Value, 
         },
         ("neq", [got, unwanted]) => match got.eq_value(unwanted, 0) {
             Some(false) => Ok(Value::NoneV),
-            Some(true) => Ok(fail(
-                interp,
-                format!("both sides equal {}", render(got)),
-            )),
+            Some(true) => Ok(fail(interp, format!("both sides equal {}", render(got)))),
             None => Err(interp.fault("value too deep or cyclic")),
         },
         ("err", [v]) => match v {

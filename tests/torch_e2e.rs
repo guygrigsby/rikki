@@ -113,7 +113,10 @@ fn tiny_cpu_pretrain() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(out.status.success(), "run failed:\n{stdout}\n{stderr}");
-    assert!(stdout.contains("trained"), "loss did not collapse:\n{stdout}");
+    assert!(
+        stdout.contains("trained"),
+        "loss did not collapse:\n{stdout}"
+    );
     assert!(stdout.contains("converged"), "w missed 3.0:\n{stdout}");
 
     // same provisioned project, second program: attention both ways

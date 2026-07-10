@@ -132,7 +132,9 @@ fn new_project(name: &str, claude_hook: bool) -> ExitCode {
                 println!("created {name}/ (rikki.toml, src/main.rk, AGENTS.md, .claude/)");
             } else {
                 println!("created {name}/ (rikki.toml, src/main.rk, AGENTS.md)");
-                println!("tip: --claude-hook adds a Claude Code hook that typechecks after every edit");
+                println!(
+                    "tip: --claude-hook adds a Claude Code hook that typechecks after every edit"
+                );
             }
             ExitCode::SUCCESS
         }

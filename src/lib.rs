@@ -6,8 +6,8 @@ pub mod bridge;
 pub mod bridge;
 pub mod builtins;
 pub mod diag;
-pub mod format;
 mod fmt;
+pub mod format;
 pub mod interp;
 pub mod lexer;
 pub mod loader;
@@ -201,7 +201,9 @@ pub fn run_test_file(path: &Path, jobs: usize) -> Result<Vec<TestOutcome>, Strin
         }
     }
     let jobs = if jobs == 0 {
-        std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1)
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1)
     } else {
         jobs
     }
@@ -413,7 +415,10 @@ pub fn run_snippet(src: &str) -> RunResult {
             Err(d) => return compile_err(d.to_string()),
         };
         for d in &prog.decls {
-            if let ast::Decl::Import { path, py: false, .. } = d {
+            if let ast::Decl::Import {
+                path, py: false, ..
+            } = d
+            {
                 if path.ends_with(".rk") {
                     return compile_err(format!(
                         "import {path:?}: file imports are not available here"
@@ -473,11 +478,7 @@ mod tests {
             name: "x".into(),
             python: "3.12".into(),
             rikki: None,
-            py_deps: [(
-                "sentence-transformers".to_string(),
-                project::PyDep::any(),
-            )]
-            .into(),
+            py_deps: [("sentence-transformers".to_string(), project::PyDep::any())].into(),
         };
         assert!(dep_declared(&proj, "sentence_transformers"));
         assert!(dep_declared(&proj, "sentence-transformers"));

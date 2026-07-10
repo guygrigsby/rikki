@@ -143,10 +143,7 @@ impl Printer {
                 let imports = matches!(p, Decl::Import { .. }) && matches!(d, Decl::Import { .. });
                 if imports {
                     // import groups follow the source's blank lines
-                    let has_comment = self
-                        .comments
-                        .get(self.ci)
-                        .is_some_and(|c| c.line < line);
+                    let has_comment = self.comments.get(self.ci).is_some_and(|c| c.line < line);
                     if !has_comment {
                         self.maybe_blank(line);
                     } else {
@@ -180,10 +177,7 @@ impl Printer {
                 self.last_line = span.line;
             }
             Decl::Struct {
-                name,
-                fields,
-                span,
-                ..
+                name, fields, span, ..
             } => {
                 self.out.push_str("struct ");
                 self.out.push_str(name);
@@ -774,12 +768,18 @@ fn expr_max(e: &Expr) -> u32 {
             kids.push(lhs);
             kids.push(rhs);
         }
-        ExprKind::Call { callee, args, kwargs } => {
+        ExprKind::Call {
+            callee,
+            args,
+            kwargs,
+        } => {
             kids.push(callee);
             kids.extend(args);
             kids.extend(kwargs.iter().map(|(_, v)| v));
         }
-        ExprKind::Method { recv, args, kwargs, .. } => {
+        ExprKind::Method {
+            recv, args, kwargs, ..
+        } => {
             kids.push(recv);
             kids.extend(args);
             kids.extend(kwargs.iter().map(|(_, v)| v));

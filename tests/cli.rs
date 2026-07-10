@@ -96,8 +96,15 @@ fn new_refuses_existing_dir_and_touches_nothing() {
     std::fs::write(proj.join("CLAUDE.md"), "precious\n").unwrap();
     std::fs::write(proj.join("AGENTS.md"), "mine\n").unwrap();
     for args in [vec!["new", "mine"], vec!["new", "mine", "--claude-hook"]] {
-        let out = Command::new(bin()).args(&args).current_dir(&d).output().unwrap();
-        assert!(!out.status.success(), "{args:?} must refuse an existing dir");
+        let out = Command::new(bin())
+            .args(&args)
+            .current_dir(&d)
+            .output()
+            .unwrap();
+        assert!(
+            !out.status.success(),
+            "{args:?} must refuse an existing dir"
+        );
         assert!(
             String::from_utf8_lossy(&out.stderr).contains("already exists"),
             "{args:?}"
@@ -167,7 +174,11 @@ fn claude_hook_feeds_diagnostics_back() {
         String::from_utf8_lossy(&out.stderr)
     );
     // a clean edit is silent success
-    std::fs::write(proj.join("src/main.rk"), "fn main() {\n    print(\"ok\")\n}\n").unwrap();
+    std::fs::write(
+        proj.join("src/main.rk"),
+        "fn main() {\n    print(\"ok\")\n}\n",
+    )
+    .unwrap();
     let out = run_hook(proj.join("src/main.rk"));
     assert_eq!(out.status.code(), Some(0), "clean edit must exit 0");
     // non-.rk files are ignored
@@ -201,10 +212,7 @@ fn stale_rikki_stamp_warns() {
         .unwrap();
     assert!(out.status.success());
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(
-        stderr.contains("built against rikki 0.0.1"),
-        "{stderr}"
-    );
+    assert!(stderr.contains("built against rikki 0.0.1"), "{stderr}");
 }
 
 /// Swap the stamped version for an ancient one without a regex dep.
@@ -279,16 +287,34 @@ fn TestErrAsserts() (error?) {
         .unwrap();
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(!out.status.success(), "a failing test must fail the run");
-    assert!(stdout.contains("ok   util_test.rk  TestDoubleWhitebox"), "{stdout}");
-    assert!(stdout.contains("ok   util_test.rk  TestErrAsserts"), "{stdout}");
-    assert!(stdout.contains("FAIL util_test.rk  TestHalfFails"), "{stdout}");
+    assert!(
+        stdout.contains("ok   util_test.rk  TestDoubleWhitebox"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("ok   util_test.rk  TestErrAsserts"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("FAIL util_test.rk  TestHalfFails"),
+        "{stdout}"
+    );
     // origin points at the failing check's line in the test file
-    assert!(stdout.contains("util_test.rk:11: expected 20, got 21"), "{stdout}");
-    assert!(stdout.contains("skip util_test.rk  TestSkipped  (no gpu here)"), "{stdout}");
+    assert!(
+        stdout.contains("util_test.rk:11: expected 20, got 21"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("skip util_test.rk  TestSkipped  (no gpu here)"),
+        "{stdout}"
+    );
     assert!(!stdout.contains("unreachable"), "{stdout}");
     assert!(stdout.contains("FAIL util_test.rk  TestFaults"), "{stdout}");
     assert!(stdout.contains("index out of bounds"), "{stdout}");
-    assert!(stdout.contains("3 passed, 2 failed, 1 skipped") || stdout.contains("2 passed"), "{stdout}");
+    assert!(
+        stdout.contains("3 passed, 2 failed, 1 skipped") || stdout.contains("2 passed"),
+        "{stdout}"
+    );
     // serial run agrees
     let out = Command::new(bin())
         .args(["test", "-j", "1"])
