@@ -5,7 +5,7 @@ don't scatter them through code comments.
 
 ## Mascot
 
-Nevla the mongoose (`logo.png`; editable source `logo.af`, Affinity
+Nevli the mongoose (`logo.png`; editable source `logo.af`, Affinity
 Designer). The mascot is the brand: it appears in the README (top right,
 200px, below the title so GitHub's h1 rule doesn't cut her) and the
 playground header. Licensed CC BY 4.0 (see `art/LICENSE`); the code is MIT

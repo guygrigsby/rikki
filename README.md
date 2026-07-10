@@ -1,6 +1,6 @@
 # Nevla: A New ML Language
 
-<img src="art/logo.png" alt="Nevla the mongoose" width="200" align="right">
+<img src="art/logo.png" alt="Nevli the mongoose" width="200" align="right">
 
 I have been doing some experiments training and tuning language models. All the good stuff to do that is in Python. I got so sick of Python just core dumping all over the place, I literally made a new "front end" for it.
 

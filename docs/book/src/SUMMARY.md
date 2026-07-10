@@ -21,4 +21,4 @@
 
 ---
 
-- [Nevla the mongoose](mascot.md)
+- [Nevli the mongoose](mascot.md)

@@ -1,10 +1,11 @@
-# Nevla the mongoose
+# Nevli the mongoose
 
-<img src="nevla.png" alt="Nevla the mongoose" width="280">
+<img src="nevli.png" alt="Nevli the mongoose" width="280">
 
-Nevla is the mascot and the namesake: nevla (नेवला) is Hindi for
-mongoose. The language borrows the animal's disposition: small, fast,
-and fatal to snakes.
+Nevli is the mascot; nevla is the language. Both are the mongoose in
+Hindi: नेवला (nevlā) is the noun, and नेवली (nevlī) is a female
+mongoose, which she is. The language borrows her disposition: small,
+fast, and fatal to snakes.
 
 ## The name this project gave up
 
