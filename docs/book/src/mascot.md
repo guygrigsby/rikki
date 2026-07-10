@@ -27,8 +27,8 @@ records the decision). The new name walks the other direction: the
 story's failure was the colonial gaze on India, and nevla returns the
 animal to its own language.
 
-The mongoose himself stays. The animal was never the problem, and no
-story owns him.
+The mongoose herself stays. The animal was never the problem, and no
+story owns her.
 
 The artwork lives in
 [`art/`](https://github.com/guygrigsby/nevla/tree/main/art) (CC BY 4.0;
