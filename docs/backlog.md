@@ -22,6 +22,11 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
   source line with a caret under file:line:col. Humans and the playground
   see it immediately; the agent hook feedback gets richer for free.
 - Repl typechecking (currently unchecked).
+- Graceful bridge startup (2026-07-09): a missing CPython stdlib at py
+  init is a fatal abort today (with an actionable warning printed above
+  it since 0.1.13). Full fix is PyConfig-based init through the ffi,
+  which returns a status instead of aborting, so the failure can become
+  an ordinary runtime error.
 - Gate the brew formula's python pin (2026-07-09): the tap formula pins
   python@3.12 by hand while the release matrix builds 3.10-3.13, a
   hand-synced pair (nothing-remembered rule). Either assert the pin
