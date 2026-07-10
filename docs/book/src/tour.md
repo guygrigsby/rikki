@@ -118,8 +118,31 @@ fn main() (error?) {
 A chain of Python operations is one fallible unit: any exception anywhere
 in `model(x).loss.item()` becomes one rikki error at the point of
 consumption. Keyword arguments pass through, `@` is matrix
-multiplication, `for range` iterates any Python iterable, and
-`with torch.no_grad() { }` runs context managers. Inside a project,
-every `import py` must be declared (`rikki py add torch`), so a missing
-dependency is a compile error rather than a crash twenty minutes into a
-run.
+multiplication, and `for range` iterates any Python iterable. Inside a
+project, every `import py` must be declared (`rikki py add torch`), so a
+missing dependency is a compile error rather than a crash twenty minutes
+into a run.
+
+## with: Python context managers
+
+```rikki
+import py "torch"
+
+fn main() (error?) {
+    x := check torch.randn([4, 4])
+    with torch.no_grad() {
+        y := check (x * 2)
+        print(check str(y.shape))
+    }
+    return none
+}
+```
+
+`with expr { }` runs the block under a Python context manager: `__enter__`
+before, `__exit__` on every exit from the block. A return that carries an
+error reaches `__exit__` as an exception, so a manager that branches on
+exception state (a transaction's commit/rollback) sees the error path
+exactly as Python would. The statement itself has no error slot —
+fallible acquisition belongs before it (`db := check connect(...)`,
+then `with db.transaction() { }`), and an exception raised by the manager
+itself is a fault. One manager per statement; nest for more.
