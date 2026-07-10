@@ -2057,7 +2057,12 @@ unaffected.
 
 An exported function may mention unexported types: its results flow, and
 their exported fields read fine; the importer just cannot write the type
-in a literal or touch its unexported fields. Standard library modules
+in a literal or touch its unexported fields.
+
+One file is inside another's boundary: a file whose stem is the other's
+plus `_test` (`util_test.rk` for `util.rk`) may use the paired module's
+unexported names through the ordinary qualified syntax. Test files are
+same-module code, as in Go. Standard library modules
 (chapter 15) are exempt — their members are defined by this specification
 — as are py values, whose access rules are Python's. Visibility is a
 compile-time rule; the REPL is unchecked (section 17.6).

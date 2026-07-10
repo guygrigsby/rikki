@@ -1,0 +1,5 @@
+import "util_test.rk"
+
+fn main() {
+    print(util_test.CheckHelper())
+}

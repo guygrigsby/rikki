@@ -1,0 +1,6 @@
+fn helper(x int) int {
+    return x * 3
+}
+fn Public(x int) int {
+    return helper(x)
+}

@@ -34,6 +34,16 @@ impl Checker {
         self.current_file.as_deref().and_then(|f| f.strip_suffix(".rk"))
     }
 
+    /// Whether this file may touch `module`'s unexported names: its own,
+    /// or the module its `_test` stem pairs with (util_test.rk is inside
+    /// util.rk's trust boundary, Go's same-package tests; section 16.3).
+    fn trusts(&self, module: &str) -> bool {
+        match self.current_module() {
+            Some(c) => c == module || c.strip_suffix("_test") == Some(module),
+            None => false,
+        }
+    }
+
     /// Like expr_one but lets a py chain through as `py` (for contexts that
     /// absorb its fallibility: conversions, operators, further chain links).
     pub(super) fn expr_pyish(&mut self, e: &Expr, expected: Option<&Type>) -> Type {
@@ -134,7 +144,7 @@ impl Checker {
                 // foreign struct literals: the type and every field must be
                 // exported (literals require every field; section 16.3)
                 if let Some((module, member)) = name.rsplit_once('.') {
-                    if self.current_module() != Some(module) {
+                    if !self.trusts(module) {
                         if !Self::is_exported(member) {
                             self.diag(span, format!("{member} is not exported by {module}"));
                             return one(Type::Unknown);
@@ -712,7 +722,7 @@ impl Checker {
                 let mangled = crate::loader::qualified(m, name);
                 match self.fns.get(&mangled).cloned() {
                     Some((params, rets)) => {
-                        if !Self::is_exported(name) {
+                        if !Self::is_exported(name) && !self.trusts(m) {
                             self.diag(span, format!("{name} is not exported by {m}"));
                             return ExprTy::One(Type::Unknown);
                         }
@@ -824,7 +834,7 @@ impl Checker {
                 Some(t) => {
                     if !Self::is_exported(name) {
                         if let Some((module, _)) = s.rsplit_once('.') {
-                            if self.current_module() != Some(module) {
+                            if !self.trusts(module) {
                                 self.diag(
                                     span,
                                     format!("field {name} of {s} is not exported"),

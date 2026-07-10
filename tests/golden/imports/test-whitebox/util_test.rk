@@ -1,0 +1,5 @@
+import "util.rk"
+
+fn CheckHelper() int {
+    return util.helper(7)
+}

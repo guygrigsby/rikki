@@ -128,9 +128,13 @@ for failures. A passing test is silent.
 - **Benchmarks and fuzzing**: out of scope for v1; the `Test` name
   prefix leaves room for siblings.
 
-## Black box by design
+## White box, Go's way
 
-A `_test.rk` file is an ordinary module: it imports what it tests and
-sees only exported names. Test the API you ship. If white-box access to
-unexported helpers becomes a real need, that will be its own design
-round rather than a quiet hole in the visibility rules.
+`util_test.rk` sits inside `util.rk`'s trust boundary: the `_test` stem
+pairing lets the test file touch `util`'s unexported names — functions,
+struct fields, literals — through the ordinary qualified syntax
+(`util.helper(...)` just compiles there). This is Go's same-package
+testing translated to file modules: decomposed internals are unit-testable
+without exporting them, while every other file still sees only the API.
+The pairing follows the file name, so it holds anywhere a `_test.rk`
+file appears, and nothing else about visibility changes.
