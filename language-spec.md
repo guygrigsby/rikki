@@ -2163,7 +2163,8 @@ coordinates with every other job on the host — wrapped in the gputex CLI
 or not — without an external wrapper.
 
 Every function takes the card id first (`"default"` on single-card
-hosts; multi-card hosts name their cards, e.g. `"cuda0"`); `label` names
+hosts; multi-card hosts name their cards, e.g. `"cuda0"` — the host's
+convention is whatever `gputex status` lists); `label` names
 the job for status displays. A card id that is empty or contains a path
 separator is an error value ("bad card id"): ids become file names in
 the shared state directory.
@@ -2189,10 +2190,14 @@ Behavior:
 - A hold lasts until `gpu.unlock(card)` or process exit — any exit. The
   kernel releases the flock when the process dies, so a fault, kill, or
   crash never strands a card.
-- Acquiring also injects the managed environment (`/etc/gputex/env`,
-  `KEY=VALUE` lines) into the process environment, existing values
-  winning: taking the card and getting the metrics contract
-  (`MLFLOW_TRACKING_URI`) are one step, as with the CLI.
+- Acquiring also injects the managed environment (`$GPUTEX_ENV_FILE` if
+  set, else `/etc/gputex/env`; `KEY=VALUE` lines) into the process
+  environment, existing values winning: taking the card and getting the
+  metrics contract (`MLFLOW_TRACKING_URI`) are one step, as with the
+  CLI.
+- Two environment variables configure the module, mirroring gputex:
+  `GPUTEX_DIR` relocates the state directory (tests, sandboxes) and
+  `GPUTEX_ENV_FILE` relocates the managed environment file.
 - On non-unix builds (the playground) every `gpu` function faults
   ("gpu.lock is not available in this build").
 
