@@ -82,7 +82,7 @@ Try it in [the playground](https://nevla.aeryx.ai/) without installing
 anything, or install it:
 
 ```sh
-uv tool install nevla-lang      # or: brew install guygrigsby/tap/nevla
+uv tool install nevla      # or: brew install guygrigsby/tap/nevla
 nevla new hello && cd hello
 nevla run
 ```

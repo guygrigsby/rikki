@@ -43,7 +43,7 @@ Try it without installing anything: [the playground](https://nevla.aeryx.ai/) ru
 nevla ships as a python wheel carrying both binaries, so [uv](https://docs.astral.sh/uv/) is the whole story:
 
 ```sh
-uv tool install nevla-lang
+uv tool install nevla
 nevla new hello && cd hello
 nevla run                 # hello, nevla
 nevla py add numpy        # declare a Python dep; uv builds .nevla/venv

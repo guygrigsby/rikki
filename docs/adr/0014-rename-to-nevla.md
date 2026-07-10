@@ -43,7 +43,7 @@ mistake in miniature.
 ## Consequences
 
 - Every user-facing surface renames: crate, binaries, extension, PyPI
-  package (`nevla-lang`), Homebrew formula, playground, book, spec.
+  package (`nevla`), Homebrew formula, playground, book, spec.
 - The old PyPI package `rikki-lang` gets one final release whose
   description points here and says why.
 - The playground domain moves off `rikki.aeryx.ai`; DNS is manual.

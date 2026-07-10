@@ -60,7 +60,7 @@ fn main() {
 }
 `,
   "py bridge (native only)": `// the bridge needs a real CPython; install nevla
-// (uv tool install nevla-lang) to run this one
+// (uv tool install nevla) to run this one
 import py "json"
 
 fn main() (error?) {

@@ -12,8 +12,8 @@ class Nevla < Formula
   def install
     python = Formula["python@3.12"].opt_bin/"python3.12"
     system python, "-m", "venv", libexec
-    # the PyPI name is nevla-lang (bare nevla was taken); binaries stay nevla/nv
-    system libexec/"bin/pip", "install", "--no-cache-dir", "nevla-lang==#{version}"
+    # PyPI package and both binaries share the name
+    system libexec/"bin/pip", "install", "--no-cache-dir", "nevla==#{version}"
     bin.install_symlink libexec/"bin/nevla", libexec/"bin/nv"
   end
 
