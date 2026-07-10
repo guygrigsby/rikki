@@ -36,6 +36,7 @@ jobs:
           cp site/index.html site/style.css site/main.js ../dist/
           cp pkg/rikki_playground.js pkg/rikki_playground_bg.wasm ../dist/pkg/
           cp ../art/logo.png ../dist/
+          python3 ../docs/book/gen-reference.py
           mdbook build ../docs/book -d "$(pwd)/../dist/book"
           # cache-bust every asset chain with the commit: Pages caches for
           # ten minutes and a fresh html over stale css shears the layout

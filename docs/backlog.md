@@ -77,6 +77,13 @@ playground links automatically.
   reader's digest of the ADRs.
 - Gotchas / FAQ: the primer's list expanded (append is pure, map reads
   are optional, int/float don't mix, py comparisons yield py, ...).
+- Reference generation, later stages (2026-07-09): the book's Builtins
+  and Standard library chapters are generated from spec ch 14/15 at
+  build time. Stage two is sigs.rs becoming a declarative table feeding
+  both the checker and the docs (everything-is-data applied to the
+  stdlib surface). Stage three is `rikki doc`: doc comments in .rk
+  source generating package docs, the true godoc analog, when packages
+  exist.
 
 ## v2
 
