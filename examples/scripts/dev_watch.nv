@@ -21,11 +21,13 @@
 //
 //   cd ~/code/foo && nv dev_watch.nv
 //   ARGS="-addr :9000" nv dev_watch.nv
-import "ctx"
-import "file"
-import "os"
-import "proc"
-import "time"
+import (
+    "ctx"
+    "file"
+    "os"
+    "proc"
+    "time"
+)
 
 fn env(name str, fallback str) str {
     v := os.env(name)

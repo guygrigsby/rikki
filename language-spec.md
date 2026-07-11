@@ -532,14 +532,15 @@ The recursive-struct restriction of section 5.6 applies.
 ### 6.4 Import declarations
 
 ```
-ImportDecl = "import" [ "py" ] string_lit .
+ImportDecl = "import" ( ImportSpec | "(" { newline } [ ImportSpec { newline { newline } ImportSpec } ] { newline } ")" ) .
+ImportSpec = [ "py" ] string_lit .
 ```
 
 Three forms exist, distinguished by the `py` marker and the path string:
 
 - `import "name"` where `name` is one of the standard library modules
-  `math`, `error`, `file`, `ctx`, `gpu`, `http`, `test` imports that
-  module (chapter 15).
+  `math`, `error`, `file`, `ctx`, `gpu`, `http`, `test`, `time`, `os`,
+  `regex`, `flag`, `proc` imports that module (chapter 15).
 - `import "path.nv"` where the path ends in `.nv` imports another nevla
   source file as a module (chapter 16).
 - `import py "modname"` imports a Python module through the bridge
@@ -547,6 +548,29 @@ Three forms exist, distinguished by the `py` marker and the path string:
 
 An import path that is none of these is a compile-time error
 ("unknown module").
+
+The factored form groups any number of specs, one per line, each
+optionally `py`-marked, and means exactly the same sequence of single
+imports:
+
+```nevla
+import (
+    "ctx"
+    "os"
+    "time"
+    py "torch"
+)
+
+fn main() {
+    print(len(os.args()))
+}
+```
+
+The one true style (17.6) renders two or more imports as one factored
+block in source order; `nevla tidy` additionally manages the set
+itself, adding missing standard library imports, removing unused
+imports, and sorting (plain paths first, then `py`, alphabetical
+within).
 
 ### 6.5 Blocks and scope
 
@@ -2622,8 +2646,9 @@ never terminate by crashing the host process.
   `nevla new <name>` scaffolds a project; `nevla py add <pkg>` declares
   a Python dependency and syncs the environment; `nevla fmt [paths]`
   rewrites source in the canonical style (`--check` reports instead);
-  `nevla test [paths]` runs test functions (section 17.7); `nevla repl`
-  starts the REPL.
+  `nevla tidy [paths]` manages imports (add missing stdlib, drop
+  unused, sort) and then formats; `nevla test [paths]` runs test
+  functions (section 17.7); `nevla repl` starts the REPL.
 - `nv` is the runner: `nv file.nv` typechecks and runs the file; bare `nv`
   starts the REPL.
 

@@ -9,8 +9,10 @@ fix.
 ## Shape of a program
 
 ```nevla
-import "error"
-import py "torch"
+import (
+    "error"
+    py "torch"
+)
 
 struct Config {
     lr float
@@ -43,6 +45,9 @@ fn main() (error?) {
 
 ## Syntax deltas from Go
 
+- Imports: `import "os"` alone, or the factored block
+  `import (\n    "os"\n    py "torch"\n)` for two or more; `nevla tidy`
+  adds missing stdlib imports, drops unused ones, and sorts.
 - `:=` declares, `=` assigns. No `var`, no semicolons, one statement per line.
 - One loop keyword: `for { }`, `for cond { }`, `for i, v := range xs { }`.
   `range` covers int, lists, maps, strings, and py iterables.

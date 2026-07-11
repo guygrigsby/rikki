@@ -130,28 +130,54 @@ impl Parser {
         let mut decls = vec![];
         self.skip_nl();
         while !self.at_end() {
-            decls.push(self.decl()?);
+            if self.peek() == Some(&Token::Import) {
+                self.imports(&mut decls)?;
+            } else {
+                decls.push(self.decl()?);
+            }
             self.skip_nl();
         }
         Ok(Program { decls })
     }
 
+    /// One import declaration: a single spec, or Go's factored block,
+    /// which desugars to one Decl::Import per spec.
+    fn imports(&mut self, decls: &mut Vec<Decl>) -> Result<(), Diag> {
+        let span = self.here();
+        self.bump(); // import
+        if !self.eat(&Token::LParen) {
+            decls.push(self.import_spec(span)?);
+            return Ok(());
+        }
+        self.skip_nl();
+        while self.peek() != Some(&Token::RParen) {
+            let span = self.here();
+            decls.push(self.import_spec(span)?);
+            if self.peek() != Some(&Token::RParen) {
+                self.expect(&Token::Newline, "newline")?;
+                self.skip_nl();
+            }
+        }
+        self.expect(&Token::RParen, ")")?;
+        Ok(())
+    }
+
+    fn import_spec(&mut self, span: Span) -> Result<Decl, Diag> {
+        let py = self.eat(&Token::Py);
+        match self.bump() {
+            Some(Token::Str(path)) => Ok(Decl::Import {
+                path,
+                py,
+                span,
+                file: None,
+            }),
+            _ => Err(self.err_here("expected import path string")),
+        }
+    }
+
     fn decl(&mut self) -> Result<Decl, Diag> {
         let span = self.here();
         match self.peek() {
-            Some(Token::Import) => {
-                self.bump();
-                let py = self.eat(&Token::Py);
-                match self.bump() {
-                    Some(Token::Str(path)) => Ok(Decl::Import {
-                        path,
-                        py,
-                        span,
-                        file: None,
-                    }),
-                    _ => Err(self.err_here("expected import path string")),
-                }
-            }
             Some(Token::Struct) => {
                 self.bump();
                 let name = self.ident("struct name")?;

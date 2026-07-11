@@ -1,0 +1,13 @@
+import (
+    "os"
+    "time"
+
+    py "json"
+)
+
+fn main() {
+    print(len(os.args()))
+    print(time.minute / time.second)
+    _, err := json.loads("{}")
+    print(err == none)
+}

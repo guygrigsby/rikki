@@ -15,10 +15,12 @@
 //   nv break_bridge.nv hostile-str      an exception whose __str__ itself raises
 //   nv break_bridge.nv os-exit          os._exit(7): no exception, no cleanup, exit 7
 //   nv break_bridge.nv segfault         ctypes reads address 0: SIGSEGV, core dump
-import "os"
-import py "builtins"
-import py "ctypes"
-import py "sys"
+import (
+    "os"
+    py "builtins"
+    py "ctypes"
+    py "sys"
+)
 
 fn report(tag str, err error?) {
     if err == none {

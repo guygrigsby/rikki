@@ -789,3 +789,41 @@ fn primer_inventory_stays_generated() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+/// tidy: unused imports drop, missing stdlib imports appear (receivers
+/// and injected struct names both count), and the block sorts.
+#[test]
+fn tidy_manages_imports() {
+    let d = tempdir("tidy");
+    let f = d.join("t.nv");
+    std::fs::write(
+        &f,
+        "import \"http\"\nimport \"time\"\n\nfn main() {\n    p := check flag.parse(os.args(), [flag.value(\"n\", \"n\", \"1\", \"count\")])\n    print(flag.get(p, \"n\"))\n}\n",
+    )
+    .unwrap();
+    let out = Command::new(bin()).args(["tidy"]).arg(&f).output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let tidied = std::fs::read_to_string(&f).unwrap();
+    assert!(
+        tidied.starts_with("import (\n    \"flag\"\n    \"os\"\n)\n"),
+        "unexpected tidy output:\n{tidied}"
+    );
+    assert!(!tidied.contains("http"), "unused import must drop");
+    assert!(!tidied.contains("time"), "unused import must drop");
+    // tidy --check reports without rewriting
+    std::fs::write(&f, "import \"http\"\n\nfn main() {\n    print(1)\n}\n").unwrap();
+    let out = Command::new(bin())
+        .args(["tidy", "--check"])
+        .arg(&f)
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "untidy file must fail --check");
+    assert!(
+        std::fs::read_to_string(&f).unwrap().contains("import \"http\""),
+        "--check must not rewrite"
+    );
+}

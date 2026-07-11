@@ -9,8 +9,15 @@ use crate::lexer::{self, Comment};
 use crate::token::Token;
 
 pub fn fmt_source(src: &str) -> Result<String, Diag> {
-    let (toks, trivia) = lexer::lex_trivia(src)?;
     let prog = crate::parser::parse(src)?;
+    fmt_program(&prog, src)
+}
+
+/// Print an (possibly edited) AST in the one true style, weaving the
+/// original source's comments and blank lines. `nevla tidy` edits the
+/// import set and renders through here.
+pub fn fmt_program(prog: &Program, src: &str) -> Result<String, Diag> {
+    let (toks, trivia) = lexer::lex_trivia(src)?;
     let mut p = Printer {
         out: String::new(),
         indent: 0,
@@ -137,30 +144,79 @@ impl Printer {
 
     fn program(&mut self, prog: &Program) {
         let mut prev: Option<&Decl> = None;
-        for d in &prog.decls {
-            let line = decl_line(d);
-            if let Some(p) = prev {
-                let imports = matches!(p, Decl::Import { .. }) && matches!(d, Decl::Import { .. });
-                if imports {
-                    // import groups follow the source's blank lines
-                    let has_comment = self.comments.get(self.ci).is_some_and(|c| c.line < line);
-                    if !has_comment {
-                        self.maybe_blank(line);
-                    } else {
-                        self.maybe_blank(self.comments[self.ci].line);
-                    }
-                } else {
+        let mut i = 0;
+        while i < prog.decls.len() {
+            let d = &prog.decls[i];
+            if matches!(d, Decl::Import { .. }) {
+                // a run of imports is one group: a single line alone, the
+                // factored block for two or more (the one true style)
+                let mut j = i;
+                while j < prog.decls.len() && matches!(prog.decls[j], Decl::Import { .. }) {
+                    j += 1;
+                }
+                if prev.is_some() {
                     self.out.push('\n');
                 }
+                let mut first = prev.is_none();
+                self.flush_comments_before(decl_line(d), &mut first);
+                self.import_group(&prog.decls[i..j]);
+                prev = Some(&prog.decls[j - 1]);
+                i = j;
+                continue;
+            }
+            let line = decl_line(d);
+            if prev.is_some() {
+                self.out.push('\n');
             }
             let mut first = prev.is_none();
             self.flush_comments_before(line, &mut first);
             self.decl(d);
             prev = Some(d);
+            i += 1;
         }
         // comments after the last declaration
         let mut first = prev.is_none();
         self.flush_comments_before(u32::MAX, &mut first);
+    }
+
+    /// Emit one import group in source order: a single line alone, the
+    /// factored block for two or more. fmt never reorders (its contract
+    /// is AST preservation); sorting is `nevla tidy`'s job, the gofmt
+    /// versus goimports split.
+    fn import_group(&mut self, group: &[Decl]) {
+        let spec = |d: &Decl| match d {
+            Decl::Import { path, py, span, .. } => (path.clone(), *py, span.line),
+            _ => unreachable!("import group holds only imports"),
+        };
+        if group.len() == 1 {
+            let (path, py, line) = spec(&group[0]);
+            self.out
+                .push_str(if py { "import py " } else { "import " });
+            self.push_str_lit(&path);
+            self.attach_trailing(line);
+            self.out.push('\n');
+            self.last_line = line;
+            return;
+        }
+        self.out.push_str("import (");
+        self.out.push('\n');
+        self.indent += 1;
+        for d in group {
+            let (path, py, line) = spec(d);
+            let mut f = true;
+            self.flush_comments_before(line, &mut f);
+            self.write_indent();
+            if py {
+                self.out.push_str("py ");
+            }
+            self.push_str_lit(&path);
+            self.attach_trailing(line);
+            self.out.push('\n');
+            self.last_line = line;
+        }
+        self.indent -= 1;
+        self.out.push_str(")\n");
+        self.last_line = spec(&group[group.len() - 1]).2;
     }
 
     fn decl(&mut self, d: &Decl) {

@@ -2,10 +2,12 @@
 // by path. Fully native: no import py anywhere.
 //   nv todos.nv
 //   nv todos.nv --ext .go,.rs --tags TODO,XXX src
-import "file"
-import "flag"
-import "os"
-import "regex"
+import (
+    "file"
+    "flag"
+    "os"
+    "regex"
+)
 
 fn main() (error?) {
     p := check flag.parse(os.args(), [

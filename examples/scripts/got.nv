@@ -3,11 +3,13 @@
 // the editor opens so the path survives after it closes.
 // Fully native: no import py anywhere.
 //   nv got.nv [name]
-import "ctx"
-import "file"
-import "os"
-import "proc"
-import "time"
+import (
+    "ctx"
+    "file"
+    "os"
+    "proc"
+    "time"
+)
 
 fn main() (error?) {
     bg := ctx.background()

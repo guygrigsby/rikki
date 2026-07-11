@@ -4,12 +4,14 @@
 // Fully native: no import py anywhere.
 //   nv httpcheck.nv https://example.com http://localhost:8080/health
 //   nv httpcheck.nv --timeout 3 urls.txt
-import "ctx"
-import "file"
-import "flag"
-import "http"
-import "os"
-import "time"
+import (
+    "ctx"
+    "file"
+    "flag"
+    "http"
+    "os"
+    "time"
+)
 
 fn main() (error?) {
     p := check flag.parse(os.args(), [

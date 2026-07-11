@@ -3,11 +3,13 @@
 //   nv chat.nv 10.0.0.5:11434 llama3.2
 // Errors are handled, not just propagated: a failed request reports its
 // cause chain and the session continues; three consecutive failures quit.
-import "http"
-import "ctx"
-import "os"
-import "time"
-import py "json"
+import (
+    "ctx"
+    "http"
+    "os"
+    "time"
+    py "json"
+)
 
 
 // Go-style address shorthand: ":8080" means localhost, scheme optional.

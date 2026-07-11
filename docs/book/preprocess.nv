@@ -3,10 +3,13 @@
 // fragment, so link and code cannot drift apart. Fragments (no fn main)
 // are left alone; tests/book.rs keeps the blocks themselves compiling.
 // mdBook invokes this as: nv preprocess.nv [supports <renderer>]
-import py "sys"
-import py "json"
-import py "base64"
-import py "builtins"
+import (
+    "os"
+    py "base64"
+    py "builtins"
+    py "json"
+    py "sys"
+)
 
 fn linkify(content str) (str, error?) {
     out := ""

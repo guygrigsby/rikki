@@ -5,9 +5,11 @@
 //   nv docs/book/gen-reference.nv check    exit nonzero if the primer drifted
 // The book chapters are gitignored and rebuilt per build; the primer is
 // tracked, so `check` runs in the gate (tests/cli.rs) and drift is red.
-import "file"
-import "os"
-import "regex"
+import (
+    "file"
+    "os"
+    "regex"
+)
 
 fn sliceChapter(spec str, start str, end str) (str, error?) {
     a := spec.index(start)

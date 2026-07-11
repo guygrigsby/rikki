@@ -33,6 +33,13 @@ enum Cmd {
         #[arg(long)]
         check: bool,
     },
+    /// Manage imports: add missing stdlib, drop unused, sort, then fmt
+    Tidy {
+        paths: Vec<PathBuf>,
+        /// List untidy files and exit nonzero instead of rewriting
+        #[arg(long)]
+        check: bool,
+    },
     /// Scaffold a new project
     New {
         name: String,
@@ -68,7 +75,8 @@ fn main() -> ExitCode {
             nevla::report(nevla::run_with(f, args.clone(), true))
         }),
         Cmd::Check { file } => with_entry(file, |f| nevla::report(nevla::check_source(f))),
-        Cmd::Fmt { paths, check } => fmt_cmd(paths, check),
+        Cmd::Fmt { paths, check } => rewrite_cmd(paths, check, "fmt", nevla::format::fmt_source),
+        Cmd::Tidy { paths, check } => rewrite_cmd(paths, check, "tidy", nevla::tidy::tidy_source),
         Cmd::Test { paths, jobs } => test_cmd(paths, jobs.unwrap_or(0)),
         Cmd::Py {
             cmd: PyCmd::Add { package, module },
@@ -303,7 +311,12 @@ fn test_cmd(paths: Vec<PathBuf>, jobs: usize) -> ExitCode {
     }
 }
 
-fn fmt_cmd(paths: Vec<PathBuf>, check: bool) -> ExitCode {
+fn rewrite_cmd(
+    paths: Vec<PathBuf>,
+    check: bool,
+    _verb: &str,
+    rewrite: fn(&str) -> Result<String, nevla::diag::Diag>,
+) -> ExitCode {
     let mut files = vec![];
     if paths.is_empty() {
         let cwd = std::env::current_dir().unwrap_or_default();
@@ -333,7 +346,7 @@ fn fmt_cmd(paths: Vec<PathBuf>, check: bool) -> ExitCode {
                 continue;
             }
         };
-        let formatted = match nevla::format::fmt_source(&src) {
+        let formatted = match rewrite(&src) {
             Ok(s) => s,
             Err(d) => {
                 // never rewrite what we cannot parse

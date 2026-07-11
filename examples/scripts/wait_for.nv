@@ -3,12 +3,14 @@
 // both end it promptly (one ctx carries both). Fully native.
 //   nv wait_for.nv --timeout 30 http://localhost:8080/health
 //   nv wait_for.nv --timeout 60 -- pg_isready -h db
-import "ctx"
-import "flag"
-import "http"
-import "os"
-import "proc"
-import "time"
+import (
+    "ctx"
+    "flag"
+    "http"
+    "os"
+    "proc"
+    "time"
+)
 
 
 // A URL is ready when it answers at all without a server error; a

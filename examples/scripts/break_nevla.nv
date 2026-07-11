@@ -1,5 +1,7 @@
-import "os"
-import "test"
+import (
+    "os"
+    "test"
+)
 
 struct Box {
     xs []int
@@ -134,6 +136,7 @@ fn fault_char() (error?) {
     print(char(-1))
     return none
 }
+
 
 // the delete-return probe retired 2026-07-10: binding m.delete's
 // result is a compile error now (it returns nothing), so the
