@@ -43,6 +43,8 @@ pub(super) fn std_member(module: &str, name: &str) -> Option<Member> {
         ("file", "exists") => Member::Fn(vec![Str], vec![Bool]),
         ("file", "list") => Member::Fn(vec![Str], vec![List(Box::new(Str)), err_opt()]),
         ("file", "remove") | ("file", "mkdir") => Member::Fn(vec![Str], vec![err_opt()]),
+        ("file", "glob") => Member::Fn(vec![Str], vec![List(Box::new(Str)), err_opt()]),
+        ("file", "modified") => Member::Fn(vec![Str], vec![Int, err_opt()]),
         ("gpu", "lock") | ("gpu", "shared") => Member::Fn(vec![Str, Str], vec![err_opt()]),
         ("gpu", "trylock") => Member::Fn(vec![Str, Str], vec![Bool, err_opt()]),
         ("gpu", "unlock") => Member::Fn(vec![Str], vec![err_opt()]),

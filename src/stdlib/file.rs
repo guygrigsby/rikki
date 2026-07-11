@@ -77,6 +77,43 @@ pub fn call(interp: &mut Interp, name: &str, args: Vec<Value>) -> Result<Value, 
             Ok(()) => Value::NoneV,
             Err(e) => err(format!("mkdir {path}: {e}")),
         },
+        // * stays in one directory and skips dotfiles (shell behavior);
+        // ** crosses directories; unreadable entries are skipped, also
+        // the shell's answer; results sorted
+        ("glob", [pattern]) => fallible(
+            glob::glob_with(
+                pattern,
+                glob::MatchOptions {
+                    require_literal_leading_dot: true,
+                    ..Default::default()
+                },
+            )
+            .map_err(|e| format!("glob {pattern}: {e}"))
+            .map(|paths| {
+                let mut out: Vec<String> = paths
+                    .filter_map(|p| p.ok())
+                    .map(|p| p.to_string_lossy().to_string())
+                    .collect();
+                out.sort();
+                Value::list(out.into_iter().map(Value::Str).collect())
+            }),
+            Value::list(vec![]),
+        ),
+        ("modified", [path]) => fallible(
+            fs::metadata(path)
+                .and_then(|m| m.modified())
+                .map_err(|e| format!("modified {path}: {e}"))
+                .and_then(|t| {
+                    t.duration_since(std::time::UNIX_EPOCH)
+                        .map_err(|_| format!("modified {path}: before the epoch"))
+                })
+                .and_then(|d| {
+                    i64::try_from(d.as_nanos())
+                        .map(Value::Int)
+                        .map_err(|_| format!("modified {path}: out of range"))
+                }),
+            Value::Int(0),
+        ),
         _ => return Err(interp.fault(format!("file.{name}: bad arguments"))),
     };
     Ok(v)

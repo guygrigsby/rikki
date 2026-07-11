@@ -1,0 +1,40 @@
+import "file"
+
+fn main() (error?) {
+    dir := "target/golden-glob"
+    check file.mkdir(dir + "/sub")
+    check file.write(dir + "/a.go", "a")
+    check file.write(dir + "/b.txt", "b")
+    check file.write(dir + "/.hidden.go", "h")
+    check file.write(dir + "/sub/c.go", "c")
+
+    // * stays in one directory and skips dotfiles
+    flat := check file.glob(dir + "/*.go")
+    print(flat)
+
+    // ** crosses directories; results sorted
+    deep := check file.glob(dir + "/**/*.go")
+    print(deep)
+
+    // zero matches is an empty list, not an error
+    none_found := check file.glob(dir + "/*.rs")
+    print(len(none_found))
+
+    // a bad pattern is an error
+    _, err := file.glob(dir + "/[")
+    print(err != none)
+
+    // modification time is epoch nanoseconds and moves forward
+    m1 := check file.modified(dir + "/a.go")
+    print(m1 > 0)
+    check file.write(dir + "/a.go", "aa")
+    m2 := check file.modified(dir + "/a.go")
+    print(m2 >= m1)
+    _, merr := file.modified(dir + "/definitely-absent")
+    print(merr != none)
+
+    for _, p := range [dir + "/a.go", dir + "/b.txt", dir + "/.hidden.go", dir + "/sub/c.go", dir + "/sub", dir] {
+        check file.remove(p)
+    }
+    return none
+}

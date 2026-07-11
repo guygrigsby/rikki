@@ -1,0 +1,7 @@
+[target/golden-glob/a.go]
+[target/golden-glob/a.go, target/golden-glob/sub/c.go]
+0
+true
+true
+true
+true

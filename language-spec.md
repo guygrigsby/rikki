@@ -1998,6 +1998,16 @@ Paths are `str`. Contents are UTF-8 `str`; there is no bytes type in v1.
 - `file.remove(path str) error?` — remove a file or an empty directory.
 - `file.mkdir(path str) error?` — create the directory and any missing
   parents.
+- `file.glob(pattern str) ([]str, error?)` — the paths matching a
+  shell-style pattern, sorted. `*` and `?` stay within one path
+  segment and do not match a leading dot; `**` crosses directories;
+  `[...]` matches a character class. Relative patterns resolve against
+  the process working directory. Zero matches is an empty list; only a
+  malformed pattern is an error. Unreadable directories along the way
+  are skipped, as in the shell.
+- `file.modified(path str) (int, error?)` — the file's last
+  modification time, epoch nanoseconds (the one time currency,
+  section 15.8).
 
 ```nevla
 import "file"
