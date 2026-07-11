@@ -1,0 +1,15 @@
+addr=:8080 model=default verbose=false rest=[]
+addr=:9000 model=default verbose=false rest=[]
+addr=:7000 model=llama verbose=false rest=[]
+addr=:8080 model=default verbose=true rest=[]
+addr=:8080 model=default verbose=true rest=[run, fast]
+addr=:1 model=default verbose=false rest=[--model, x]
+addr=:8080 model=default verbose=false rest=[train, --addr, :9]
+error: unknown flag --nope
+error: flag --verbose is a toggle and takes no value
+error: flag --model needs a value
+flags:
+  -a, --addr     listen address (default :8080)
+  -m, --model    model name (default default)
+  -v, --verbose  log more
+0

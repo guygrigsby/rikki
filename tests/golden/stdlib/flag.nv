@@ -1,0 +1,47 @@
+import "flag"
+
+fn defs() []Flag {
+    return [
+        flag.value("addr", "a", ":8080", "listen address"),
+        flag.value("model", "m", "default", "model name"),
+        flag.toggle("verbose", "v", "log more"),
+    ]
+}
+
+fn show(argv []str) {
+    p, err := flag.parse(argv, defs())
+    if err != none {
+        print("error: " + err.msg.lines()[0])
+        return
+    }
+    printf("addr=%s model=%s verbose=%s rest=%v\n",
+        flag.get(p, "addr"), flag.get(p, "model"), flag.get(p, "verbose"), p.rest)
+}
+
+fn main() {
+    // fallbacks fill in; lookups never miss
+    show([]str{})
+
+    // long, short, and = forms
+    show(["--addr", ":9000"])
+    show(["-a=:7000", "--model", "llama"])
+    show(["--verbose"])
+    show(["-v", "run", "fast"])
+
+    // -- hands everything after it to rest verbatim
+    show(["--addr", ":1", "--", "--model", "x"])
+
+    // the first bare argument stops parsing
+    show(["train", "--addr", ":9"])
+
+    // errors carry the usage text; the module never prints or exits
+    show(["--nope"])
+    show(["--verbose=yes"])
+    show(["--model"])
+
+    p, herr := flag.parse(["-h"], defs())
+    if herr != none {
+        print(herr.msg)
+    }
+    print(len(p.rest))
+}

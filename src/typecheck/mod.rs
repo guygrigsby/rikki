@@ -115,6 +115,9 @@ impl Checker {
                     if path == "regex" {
                         self.structs.extend(crate::stdlib::regex::struct_types());
                     }
+                    if path == "flag" {
+                        self.structs.extend(crate::stdlib::flag::struct_types());
+                    }
                 }
                 // file imports resolve after fns and structs are collected
             }

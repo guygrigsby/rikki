@@ -131,6 +131,9 @@ impl<'p> Interp<'p> {
                         if path == "regex" {
                             structs.extend(crate::stdlib::regex::struct_exprs());
                         }
+                        if path == "flag" {
+                            structs.extend(crate::stdlib::flag::struct_exprs());
+                        }
                     }
                     if *py {
                         py_imports.push(path.clone());

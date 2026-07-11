@@ -5,7 +5,7 @@
 use super::*;
 
 pub(super) const STD_MODULES: &[&str] =
-    &["math", "error", "file", "ctx", "gpu", "http", "test", "time", "os", "regex"];
+    &["math", "error", "file", "ctx", "gpu", "http", "test", "time", "os", "regex", "flag"];
 
 pub(super) enum Member {
     Fn(Vec<Type>, Vec<Type>),
@@ -65,6 +65,16 @@ pub(super) fn std_member(module: &str, name: &str) -> Option<Member> {
         ("os", "env") => Member::Fn(vec![Str], vec![Opt(Box::new(Str))]),
         ("os", "args") => Member::Fn(vec![], vec![List(Box::new(Str))]),
         ("regex", "compile") => Member::Fn(vec![Str], vec![Struct("Re".into()), err_opt()]),
+        ("flag", "value") => Member::Fn(vec![Str, Str, Str, Str], vec![Struct("Flag".into())]),
+        ("flag", "toggle") => Member::Fn(vec![Str, Str, Str], vec![Struct("Flag".into())]),
+        ("flag", "parse") => Member::Fn(
+            vec![
+                List(Box::new(Str)),
+                List(Box::new(Struct("Flag".into()))),
+            ],
+            vec![Struct("Parsed".into()), err_opt()],
+        ),
+        ("flag", "get") => Member::Fn(vec![Struct("Parsed".into()), Str], vec![Str]),
         ("time", "now") | ("time", "clock") => Member::Fn(vec![], vec![Int]),
         ("time", "sleep") => Member::Fn(vec![ctx(), Int], vec![err_opt()]),
         ("time", "parts") => Member::Fn(vec![Int], vec![Struct("Parts".into())]),

@@ -1,5 +1,6 @@
 pub mod ctx;
 pub mod file;
+pub mod flag;
 pub mod gpu;
 pub mod http;
 pub mod math;
@@ -27,6 +28,7 @@ pub fn call(
         "time" => time::call(interp, name, args),
         "os" => os::call(interp, name, args),
         "regex" => regex::call(interp, name, args),
+        "flag" => flag::call(interp, name, args),
         _ => Err(interp.fault(format!("{module}.{name} is not implemented yet"))),
     }
 }

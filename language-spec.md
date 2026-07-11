@@ -2362,6 +2362,60 @@ fn main() (error?) {
 }
 ```
 
+### 15.11 flag
+
+Command-line flags, data-shaped: no registry, no global state, no
+output. Importing `"flag"` also declares:
+
+```
+struct Flag { name str, short str, fallback str, usage str, toggle bool }
+struct Parsed { values map[str]str, rest []str }
+```
+
+- `flag.value(name str, short str, fallback str, usage str) Flag` — a
+  flag that takes a value.
+- `flag.toggle(name str, short str, usage str) Flag` — a presence
+  flag; parses to `"true"`, fallback `"false"`.
+- `flag.parse(argv []str, flags []Flag) (Parsed, error?)` — parse
+  argv (typically `os.args()`). Pure: same inputs, same outputs.
+- `flag.get(p Parsed, name str) str` — read a parsed value. Parse
+  fills every declared flag with its fallback first, so a lookup by
+  declared name always answers; an undeclared name reads `""`. Plain
+  map reads on `p.values` work too and narrow as options (7.6).
+
+Grammar, Go-shaped:
+
+- `--name value`, `--name=value`, `-s value`, `-s=value`.
+- A toggle takes no value; `--name=value` on a toggle is an error.
+- Parsing stops at `--` (consumed) or at the first argument that does
+  not begin with `-`; everything from there lands in `rest` verbatim.
+  A bare `-` is an argument, not a flag.
+- `-h` and `--help` are synthesized: parse returns an error whose
+  message is the usage text, one line per flag, value flags showing
+  their fallback. Declaring a flag named `help` or with short `h` is
+  itself an error. The module never writes output and never exits;
+  main decides what an error means (usually print it and return it).
+- An unknown flag, a toggle given a value, and a value flag at the end
+  of argv with nothing to take are errors carrying the usage text.
+- Values are strings; `int(x)` and `float(x)` conversions are the
+  typed layer, already mandatory-checked.
+
+```nevla
+import "flag"
+import "os"
+
+fn main() (error?) {
+    p := check flag.parse(os.args(), [
+        flag.value("addr", "a", ":8080", "listen address"),
+        flag.toggle("verbose", "v", "log more"),
+    ])
+    if flag.get(p, "verbose") == "true" {
+        print("listening on " + flag.get(p, "addr"))
+    }
+    return none
+}
+```
+
 ## 16. Modules and multi-file programs
 
 ### 16.1 File imports
