@@ -16,6 +16,9 @@ false
 true
 true
 false
+0
+5
+exit status 5
 true
 -1
 deadline exceeded

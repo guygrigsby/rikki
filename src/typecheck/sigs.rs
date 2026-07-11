@@ -83,6 +83,7 @@ pub(super) fn std_member(module: &str, name: &str) -> Option<Member> {
             vec![ctx(), Struct("Cmd".into())],
             vec![Struct("Result".into()), err_opt()],
         ),
+        ("proc", "attach") => Member::Fn(vec![ctx(), List(Box::new(Str))], vec![Int, err_opt()]),
         ("proc", "start") => Member::Fn(
             vec![Struct("Cmd".into())],
             vec![Struct("Proc".into()), err_opt()],

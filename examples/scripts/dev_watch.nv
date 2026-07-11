@@ -4,8 +4,9 @@
 // promptly: the poll sleep is ctx-aware, and holding the process handle
 // in-language replaces the shell version's PID files and lock file.
 //
-// Native except the process spawning, which waits for the proc module
-// (ADR 0016); subprocess and the log file handle still ride the bridge.
+// Fully native: no import py anywhere. The proc module owns the child
+// (its merged output pumps straight into the log), the poll sleep is
+// ctx-aware, and the Proc handle replaces PID files and lock files.
 //
 // Conventions: a Makefile in the current dir exposing `make build` that
 // produces ./<dirname>. Build output and the binary's output stream to
@@ -23,9 +24,8 @@
 import "ctx"
 import "file"
 import "os"
+import "proc"
 import "time"
-import py "builtins"
-import py "subprocess"
 
 fn env(name str, fallback str) str {
     v := os.env(name)
@@ -95,29 +95,23 @@ fn signature(root str, watch []str, exts []str) str {
     return sig
 }
 
-fn build(root str, log str) bool {
+fn build(c Ctx, root str, log str) bool {
     logline(log, "build...")
-    r, err := subprocess.run(
-        ["make", "build"],
-        cwd: root,
-        stdout: subprocess.PIPE,
-        stderr: subprocess.STDOUT,
-        text: true,
-    )
-    if err != none {
-        logline(log, "build error: " + err.msg)
-        return false
-    }
-    out, oerr := str(r.stdout)
-    if oerr == none && out != "" {
-        aerr := file.append(log, out)
+    r, err := proc.exec(c, Cmd{
+        argv: ["make", "build"],
+        dir: root,
+        env: map[str]str{},
+        stdin: "",
+        log: "",
+    })
+    if r.stdout + r.stderr != "" {
+        aerr := file.append(log, r.stdout + r.stderr)
         if aerr != none {
             printf("log write failed: %s\n", aerr.msg)
         }
     }
-    rc, rerr := int(r.returncode)
-    if rerr != none || rc != 0 {
-        logline(log, "BUILD FAILED")
+    if err != none {
+        logline(log, "BUILD FAILED: " + err.msg)
         return false
     }
     logline(log, "build ok")
@@ -125,41 +119,30 @@ fn build(root str, log str) bool {
 }
 
 
-// Callers confirm bin exists first: a (py, error?) error return would
-// need a zero py to put in the value slot, and there is no such literal.
-fn start(root str, bin str, argv []str, log str) (py, error?) {
+// check propagates the spawn failure, so no zero Proc is ever needed
+fn launch(root str, bin str, argv []str, log str) (Proc, error?) {
     cmd := []str{bin}
     for _, a := range argv {
         cmd = append(cmd, a)
     }
-    lf := check builtins.open(log, "a")
-    p := check subprocess.Popen(cmd, cwd: root, stdout: lf, stderr: subprocess.STDOUT)
-    pid, piderr := int(p.pid)
-    if piderr == none {
-        logline(log, sprintf("started pid %d", pid))
-    }
+    p := check proc.start(Cmd{
+        argv: cmd,
+        dir: root,
+        env: map[str]str{},
+        stdin: "",
+        log: log,
+    })
+    logline(log, sprintf("started pid %d", p.pid()))
     return p, none
 }
 
 
-// Terminate politely, escalate to kill if it lingers.
-fn stop(p py, log str) {
-    _, terr := p.terminate()
-    if terr != none {
-        return  // already gone
-    }
-    _, werr := p.wait(timeout: 3.0)
-    if werr != none {
-        logline(log, "did not exit in 3s; killing")
-        _, kerr := p.kill()
-        if kerr != none {
-            logline(log, "kill failed: " + kerr.msg)
-            return
-        }
-        _, werr2 := p.wait(timeout: 3.0)
-        if werr2 != none {
-            logline(log, "unkillable pid; giving up on it")
-        }
+// Terminate politely, escalate to kill if it lingers: proc.stop's
+// whole contract, one call.
+fn stop(p Proc, log str) {
+    serr := p.stop(3 * time.second)
+    if serr != none {
+        logline(log, "stop failed: " + serr.msg)
     }
 }
 
@@ -183,15 +166,15 @@ fn main() (error?) {
 
     check file.write(log, "")
     logline(log, "dev-watch starting for " + name + "; logs at " + log)
-    if !build(root, log) {
+    c := ctx.interrupt(ctx.background())
+    if !build(c, root, log) {
         return error.new("initial build failed; see " + log)
     }
     if !file.exists(bin) {
         return error.new("no binary at " + bin + "; set BIN if make names it differently")
     }
-    p := check start(root, bin, argv, log)
+    p := check launch(root, bin, argv, log)
 
-    c := ctx.interrupt(ctx.background())
     last := signature(root, watch, exts)
     logline(log, "watching (poll every 2s)")
     for !c.done() {
@@ -210,7 +193,7 @@ fn main() (error?) {
         last = signature(root, watch, exts)
         logline(log, "change detected")
         stop(p, log)
-        if !build(root, log) {
+        if !build(c, root, log) {
             logline(log, "nothing running until the next change builds")
             continue
         }
@@ -218,7 +201,7 @@ fn main() (error?) {
             logline(log, "no binary at " + bin + "; set BIN if make names it differently")
             continue
         }
-        np, serr2 := start(root, bin, argv, log)
+        np, serr2 := launch(root, bin, argv, log)
         if serr2 != none {
             logline(log, "start failed: " + serr2.msg)
             continue

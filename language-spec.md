@@ -2442,6 +2442,11 @@ reference semantics (section 11.1); `proc.start` makes them.
   collision (an empty map inherits unchanged; there is no way to drop
   the inherited environment in v1); a non-empty `cmd.stdin` is written
   to the child and closed.
+- `proc.attach(c Ctx, argv []str) (int, error?)` — run a child that
+  OWNS the terminal: stdin, stdout, and stderr are inherited, nothing
+  is captured, and the call blocks until the child exits, returning
+  its status with `run`'s exit semantics. For editors, REPLs, and
+  anything else interactive.
 - `proc.start(cmd Cmd) (Proc, error?)` — start a long-running child.
   Its stderr merges into stdout as one stream, interleaved at line
   granularity in arrival order. A non-empty `cmd.log` appends the

@@ -1,18 +1,28 @@
 // got: a scratch Go playground. Makes a temp dir holding main.go and a
 // test, inits a module, opens both split in nvim. The dir prints before
 // the editor opens so the path survives after it closes.
+// Fully native: no import py anywhere.
 //   nv got.nv [name]
+import "ctx"
 import "file"
 import "os"
-import py "tempfile"
-import py "subprocess"
+import "proc"
+import "time"
 
 fn main() (error?) {
+    bg := ctx.background()
     name := "scratch"
     if len(os.args()) > 0 {
         name = os.args()[0]
     }
-    dir := check str(tempfile.mkdtemp(prefix: "got-" + name + "."))
+
+    tmp := "/tmp"
+    t := os.env("TMPDIR")
+    if t != none {
+        tmp = t.trim_suffix("/")
+    }
+    dir := tmp + "/got-" + name + "." + str(time.now())
+    check file.mkdir(dir)
 
     maingo := "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"got\")\n}\n"
     testgo := "package main\n\nimport \"testing\"\n\nfunc TestIt(t *testing.T) {\n}\n"
@@ -20,12 +30,18 @@ fn main() (error?) {
     check file.write(dir + "/func_test.go", testgo)
 
     // a missing go toolchain still leaves a usable scratch dir: report, go on
-    _, err := subprocess.run(["go", "mod", "init", name], cwd: dir, capture_output: true)
+    _, err := proc.exec(bg, Cmd{
+        argv: ["go", "mod", "init", name],
+        dir: dir,
+        env: map[str]str{},
+        stdin: "",
+        log: "",
+    })
     if err != none {
         print("go mod init failed (no go toolchain?): " + err.msg)
     }
 
     print(dir)
-    check subprocess.run(["nvim", dir + "/main.go", dir + "/func_test.go", "-O"])
-    return none
+    _, aerr := proc.attach(bg, ["nvim", dir + "/main.go", dir + "/func_test.go", "-O"])
+    return aerr
 }

@@ -65,6 +65,15 @@ fn main() (error?) {
     print(sleeper.running())
     check sleeper.stop(time.second)
 
+    // attach: the child owns the terminal; status comes back with
+    // run's semantics (silent children keep the golden output clean)
+    print(check proc.attach(bg, ["true"]))
+    a2, aerr := proc.attach(bg, ["sh", "-c", "exit 5"])
+    print(a2)
+    if aerr != none {
+        print(aerr.msg)
+    }
+
     // a deadline kills a run mid-sleep, promptly, with the ctx error
     t1 := time.clock()
     r5, derr := proc.run(ctx.timeout(bg, 200 * time.millisecond), ["sleep", "30"])

@@ -282,6 +282,51 @@ mod native {
         }
     }
 
+    /// attach: the child owns the terminal (stdin, stdout, stderr all
+    /// inherited); block until it exits, ctx-bounded like run. For
+    /// editors, REPLs, and anything else interactive.
+    pub fn attach(c: &CtxInner, argv: &[String]) -> Value {
+        if let Some(e) = c.err() {
+            return fallible(Value::Int(0), Some(e));
+        }
+        let spec = Spec {
+            argv: argv.to_vec(),
+            dir: String::new(),
+            env: vec![],
+            stdin: String::new(),
+            log: String::new(),
+        };
+        let mut cmd = match command(&spec) {
+            Ok(c) => c,
+            Err(e) => return fallible(Value::Int(0), Some(e)),
+        };
+        cmd.stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit());
+        let mut child = match cmd.spawn() {
+            Ok(c) => c,
+            Err(e) => {
+                return fallible(Value::Int(0), Some(err(format!("proc: {}: {e}", spec.argv[0]))))
+            }
+        };
+        let pid = i64::from(child.id());
+        loop {
+            match child.try_wait() {
+                Ok(Some(st)) => {
+                    let (code, e) = status_code(st);
+                    return fallible(Value::Int(code), e.map(err));
+                }
+                Ok(None) => {}
+                Err(e) => return fallible(Value::Int(-1), Some(err(format!("proc: wait: {e}")))),
+            }
+            if let Some(ctx_err) = c.err() {
+                stop_child(&mut child, pid, Duration::from_secs(2));
+                return fallible(Value::Int(-1), Some(ctx_err));
+            }
+            std::thread::sleep(SLICE);
+        }
+    }
+
     /// start: merged stdout+stderr, one stream, line-granular interleave;
     /// cmd.log routes the stream to a file instead.
     pub fn start(spec: &Spec) -> Value {
@@ -483,6 +528,17 @@ mod native {
                         log: String::new(),
                     },
                 )
+            }
+            ("attach", [Value::Ctx(c), Value::List(argv)]) => {
+                let argv: Vec<String> = argv
+                    .borrow()
+                    .iter()
+                    .filter_map(|v| match v {
+                        Value::Str(s) => Some(s.clone()),
+                        _ => None,
+                    })
+                    .collect();
+                attach(c, &argv)
             }
             ("exec", [Value::Ctx(c), cmd @ Value::Struct { .. }]) => match spec_from(cmd) {
                 Ok(spec) => run(c, &spec),
