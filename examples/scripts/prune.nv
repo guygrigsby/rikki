@@ -1,0 +1,52 @@
+// prune: list, or with --delete remove, entries older than N days in a
+// directory. Dry run is the default; deleting is the flag you type on
+// purpose. Fully native: no import py anywhere.
+//   nv prune.nv --days 30 ~/Downloads
+//   nv prune.nv --days 30 --delete ~/Downloads
+import "file"
+import "flag"
+import "os"
+import "time"
+
+fn main() (error?) {
+    p := check flag.parse(os.args(), [
+        flag.value("days", "d", "30", "age threshold in days"),
+        flag.toggle("delete", "x", "actually delete; the default is a dry run"),
+    ])
+    if len(p.rest) != 1 {
+        return error.new("usage: nv prune.nv [--days n] [--delete] <dir>")
+    }
+    dir := p.rest[0].trim_suffix("/")
+    days := check int(flag.get(p, "days"))
+    cutoff := time.now() - days * 24 * time.hour
+    deleting := flag.get(p, "delete") == "true"
+
+    hits := 0
+    for _, path := range check file.glob(dir + "/*") {
+        m, merr := file.modified(path)
+        if merr != none {
+            continue
+        }
+        if m >= cutoff {
+            continue
+        }
+        age := (time.now() - m) / (24 * time.hour)
+        if deleting {
+            derr := file.remove(path)
+            if derr != none {
+                printf("failed: %s\n", derr.msg)
+                continue
+            }
+            printf("deleted %s (%d days old)\n", path, age)
+        } else {
+            printf("would delete %s (%d days old)\n", path, age)
+        }
+        hits = hits + 1
+    }
+    if hits == 0 {
+        printf("nothing older than %d days in %s\n", days, dir)
+    } else if !deleting {
+        printf("%d candidates; add --delete to act\n", hits)
+    }
+    return none
+}

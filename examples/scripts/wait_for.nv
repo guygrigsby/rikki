@@ -1,0 +1,51 @@
+// wait_for: block until a URL answers or a command exits zero, with a
+// deadline. The CI classic, minus the shell. Ctrl-C and the timeout
+// both end it promptly (one ctx carries both). Fully native.
+//   nv wait_for.nv --timeout 30 http://localhost:8080/health
+//   nv wait_for.nv --timeout 60 -- pg_isready -h db
+import "ctx"
+import "flag"
+import "http"
+import "os"
+import "proc"
+import "time"
+
+
+// A URL is ready when it answers at all without a server error; a
+// command is ready when it exits zero.
+fn ready(c Ctx, target []str) bool {
+    if len(target) == 1 && target[0].has_prefix("http") {
+        probe := ctx.timeout(c, 2 * time.second)
+        resp, err := http.get(probe, target[0])
+        return err == none && resp.status < 500
+    }
+    r, err := proc.run(c, target)
+    return err == none && r.status == 0
+}
+
+fn main() (error?) {
+    p := check flag.parse(os.args(), [
+        flag.value("timeout", "t", "30", "give up after this many seconds"),
+        flag.value("every", "e", "500", "poll interval, milliseconds"),
+    ])
+    if len(p.rest) == 0 {
+        return error.new("usage: nv wait_for.nv [--timeout s] [--every ms] <url | command ...>")
+    }
+    secs := check int(flag.get(p, "timeout"))
+    every := check int(flag.get(p, "every"))
+
+    c := ctx.timeout(ctx.interrupt(ctx.background()), secs * time.second)
+    t0 := time.clock()
+    tries := 0
+    for {
+        tries = tries + 1
+        if ready(c, p.rest) {
+            printf("ready after %d tries in %dms\n", tries, (time.clock() - t0) / time.millisecond)
+            return none
+        }
+        serr := time.sleep(c, every * time.millisecond)
+        if serr != none {
+            return error.wrap(serr, sprintf("not ready after %d tries", tries))
+        }
+    }
+}

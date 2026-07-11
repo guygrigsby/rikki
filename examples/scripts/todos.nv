@@ -1,0 +1,42 @@
+// todos: find TODO/FIXME/HACK comments across a tree, file:line, sorted
+// by path. Fully native: no import py anywhere.
+//   nv todos.nv
+//   nv todos.nv --ext .go,.rs --tags TODO,XXX src
+import "file"
+import "flag"
+import "os"
+import "regex"
+
+fn main() (error?) {
+    p := check flag.parse(os.args(), [
+        flag.value("ext", "e", ".go,.rs,.py,.ts,.nv,.md", "comma-separated file suffixes"),
+        flag.value("tags", "t", "TODO,FIXME,HACK", "comma-separated tags to hunt"),
+    ])
+    root := "."
+    if len(p.rest) > 0 {
+        root = p.rest[0].trim_suffix("/")
+    }
+
+    re := check regex.compile("\\b(" + flag.get(p, "tags").split(",").join("|") + ")\\b[: ]*(.*)")
+    count := 0
+    for _, ext := range flag.get(p, "ext").split(",") {
+        for _, path := range check file.glob(root + "/**/*" + ext) {
+            if path.contains("/node_modules/") || path.contains("/target/") || path.contains("/.git/") || path.contains("/dist/") {
+                continue
+            }
+            text, rerr := file.read(path)
+            if rerr != none {
+                continue  // unreadable or not text; not this script's problem
+            }
+            for i, line := range text.lines() {
+                m := re.find(line)
+                if m != none {
+                    printf("%s:%d: %s %s\n", path, i + 1, m.groups[0], m.groups[1].trim())
+                    count = count + 1
+                }
+            }
+        }
+    }
+    printf("%d found\n", count)
+    return none
+}
