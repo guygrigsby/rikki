@@ -36,11 +36,14 @@ Source files use the `.nv` extension.
 Nevla is a statically typed, interpreted language with Go's copy model
 (scalars and structs copy; lists, maps, and functions are references),
 errors as values, option types instead of nil, and an embedded Python bridge.
-A nevla program is checked in full before any of it runs; a program that
-passes the checker cannot crash the hosting process at runtime. The worst
-outcomes available to a running program are returning an error from `main`
-and a runtime fault, both of which terminate the program in a controlled way
-(chapter 12, chapter 17).
+A nevla program is checked in full before any of it runs; no crash can
+originate in nevla. The worst outcomes available to a running program are
+returning an error from `main` and a runtime fault, both of which terminate
+the program in a controlled way (chapter 12, chapter 17), and every Python
+exception crossing the bridge arrives as an error value (chapter 13). The
+guarantee has one documented boundary: the bridge embeds real CPython in
+this process, so native code inside a C extension that itself segfaults or
+aborts takes the process with it, as it would take any host that loaded it.
 
 Throughout this document, "must" states a requirement on conforming
 implementations or on valid programs, "may" states a permission, and
@@ -1552,7 +1555,9 @@ catchable in v1: no language construct observes or recovers one. A fault must
 terminate the program with a nonzero exit status and a diagnostic including a
 nevla call-stack trace, and must never crash the hosting process, raise a
 foreign exception, or trigger undefined behavior. An interpreter panic is an
-implementation bug, never specified program behavior.
+implementation bug, never specified program behavior. (Native code inside a
+C extension crashing below the bridge is outside this chapter's reach;
+section 1 documents that boundary.)
 
 The complete set of fault conditions reachable from checked programs:
 

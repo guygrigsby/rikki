@@ -34,13 +34,13 @@ fn main() {
 
 ## What you get
 
-- Statically typed, whole program checked before any of it runs. A program that passes the checker cannot crash the process. Worst case is an error returned from `main` or a controlled runtime fault with a nevla stack and a nonzero exit. No panics, no core dumps.
+- Statically typed, whole program checked before any of it runs. No crash originates in nevla: worst case is an error returned from `main` or a controlled runtime fault with a nevla stack and a nonzero exit, and every Python exception arrives as an error value. The one documented boundary: a C extension that itself segfaults takes the process down, as it would take down any host that loaded it.
 - Errors are values and handling is mandatory. `check` propagates, `v, err :=` handles locally, silently dropping one is a compile error. You *can* still avoid ever dealing with an error by growing `(error?)` on every function and `check`ing your way up to `main`, and that is strongly recommended against: it moves every failure to the top with no context and no recovery. Handle errors at the layer that can do something about them; propagate only when the caller owns the decision.
 - Option types (`T?`) instead of nil, with flow narrowing: `if err != none` gives you the narrowed value in that branch.
 - Go's copy model. Scalars, strings, and structs copy; lists, maps, functions, and py handles are references. Closures capture by reference.
 - Embedded CPython, not a subprocess. `import py "torch"` binds the real module. A chain of Python operations is one fallible unit: `check model(x).loss.item()` yields the value or the Python exception converted to a nevla error, with no per-step ceremony. Keyword args pass through (`optim.Adam(params, lr: 0.001)`), `for range` works over any Python iterable, and you can assign into Python attributes and subscripts.
 - ML sugar: `@` is matrix multiplication, dispatched to `__matmul__`.
-- Small stdlib: `error`, `math`, `file`, `ctx` (cancellation handles: deadlines and SIGINT), `http`.
+- Small stdlib: `error`, `math`, `file`, `ctx` (cancellation handles: deadlines and SIGINT), `http`, `os`, `time` (int nanoseconds, ctx-aware sleep), `regex` (RE2 flavor), `flag`, `gpu`, `test`.
 
 ## Two binaries
 

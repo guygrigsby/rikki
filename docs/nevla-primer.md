@@ -119,15 +119,25 @@ reference.
 ## Builtins and stdlib
 
 Builtins: `print`, `printf`/`sprintf` (`%v` for anything, `%.4f` etc),
-`len`, `append`, `clone` (deep copy), `ord`, `chr`, `os.args()` (program
-argv), `input(prompt)` (fallible). Lists have `map`/`filter`/`sum` and
-friends; maps have `keys`/`values`/`delete` (spec 14.11 lists all).
+`len`, `append`, `clone` (one-level copy of a list or map),
+`charcode`/`char` (code point of a character and back). Lists have
+`map`/`filter`/`sum` and friends; maps have `keys`/`values`/`delete`
+(spec 14.9 lists all). Program argv and stdin live in the `os` module,
+not builtins.
 
 Stdlib modules (plain `import "name"`): `error`, `math` (`abs`, `min`,
 `max`, `sqrt`, `pow`, `exp`, `ln`, `log`, trig, `floor`/`ceil`/`round`,
-`pi`, `e`), `file` (read/write/append/exists/list/remove/mkdir, all
-fallible), `ctx` (`background`, `timeout`, `interrupt` cancellation
-handles), `http` (`get`/`post`/`request`/`stream`, all take a `Ctx`).
+`pi`, `e`), `file` (read/write/append/exists/list/remove/mkdir/glob/
+modified, all fallible), `ctx` (`background`, `timeout`, `interrupt`
+cancellation handles), `http` (`get`/`post`/`request`/`stream`, all
+take a `Ctx`), `os` (`workdir`, `env` returning an option, `args`,
+`readline`), `time` (int nanoseconds everywhere: `now`, `clock`,
+ctx-aware `sleep`, `parts`, and the duration constants
+`time.second` etc.), `regex` (`compile` to a `Re` handle;
+`matches`/`find`/`find_all`/`replace`; RE2 flavor, no backtracking),
+`flag` (`value`/`toggle`/`parse`/`get`, help is an error value carrying
+the usage text). Durations are always `int` nanoseconds written with
+the constants: `ctx.timeout(c, 30 * time.second)`.
 
 Multi-file: `import "util.nv"` binds the sibling file as module `util`.
 Only Capitalized top-level names (functions, structs, fields) are visible

@@ -40,11 +40,14 @@ They are recorded as decisions in the repo's
 [ADRs](https://github.com/guygrigsby/nevla/tree/main/docs/adr); this is
 the reader's digest.
 
-**The whole program is checked before any of it runs, and a checked
-program cannot crash the process.** The worst outcomes are an error
-returned from `main` or a controlled runtime fault with a nevla stack
-trace. The reason is the twenty-minute crash: a training run should die
-at `nevla check`, in milliseconds, or not at all.
+**The whole program is checked before any of it runs, and no crash
+originates in nevla.** The worst outcomes are an error returned from
+`main` or a controlled runtime fault with a nevla stack trace, and
+every Python exception arrives as an error value. The one documented
+boundary: a C extension that itself segfaults below the bridge takes
+the process with it, as it would take any host. The reason for the
+tenet is the twenty-minute crash: a training run should die at
+`nevla check`, in milliseconds, or not at all.
 
 **Errors are values, and handling them is mandatory.** Dropping an error
 is a compile error; `check` propagates, `v, err :=` handles. There is no

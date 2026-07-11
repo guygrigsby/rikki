@@ -115,6 +115,6 @@ of one flattened string.
 Some failures do not return: index out of range, integer overflow,
 division by zero. These are faults; they print a nevla stack trace and
 terminate with a nonzero exit. Faults are deliberately not catchable,
-and no user program can crash the process any other way. If a failure
+and no user program can crash the process any other way (native code inside a C extension is the one documented boundary; see the intro). If a failure
 is something a caller could reasonably handle, it is an error value; if
 it is a bug in the program, it is a fault.

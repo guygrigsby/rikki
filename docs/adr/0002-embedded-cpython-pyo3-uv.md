@@ -16,3 +16,14 @@ Embed CPython through PyO3, isolated in a single bridge module (`src/bridge.rs`)
 - Value semantics stop at the bridge; `py` values are references. Documented, visible in the type.
 - The GIL constrains future concurrency; that work lands inside the one bridge module.
 - Projects that never `import py` never provision or start CPython.
+
+## Amendment 2026-07-10
+
+In-process CPython bounds the no-crash guarantee: a C extension that
+itself segfaults or aborts takes the process down, and no exception
+translation can catch a SIGSEGV. The claim is scoped accordingly
+everywhere it is made (spec section 1 and 12, README, the book): no
+crash originates in nevla, Python exceptions arrive as values, and
+native code below the bridge is the one documented boundary.
+Out-of-process isolation would close it at a cost this trade-off
+already rejected.
