@@ -119,7 +119,7 @@ reference.
 ## Builtins and stdlib
 
 Builtins: `print`, `printf`/`sprintf` (`%v` for anything, `%.4f` etc),
-`len`, `append`, `clone` (deep copy), `ord`, `chr`, `args()` (program
+`len`, `append`, `clone` (deep copy), `ord`, `chr`, `os.args()` (program
 argv), `input(prompt)` (fallible). Lists have `map`/`filter`/`sum` and
 friends; maps have `keys`/`values`/`delete` (spec 14.11 lists all).
 

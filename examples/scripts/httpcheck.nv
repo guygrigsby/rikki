@@ -6,6 +6,7 @@
 import "ctx"
 import "file"
 import "http"
+import "os"
 import py "time"
 
 fn ms() int {
@@ -17,13 +18,13 @@ fn ms() int {
 }
 
 fn main() (error?) {
-    urls := args()
-    if len(urls) == 1 && !urls[0].starts_with("http") && file.exists(urls[0]) {
+    urls := os.args()
+    if len(urls) == 1 && !urls[0].has_prefix("http") && file.exists(urls[0]) {
         text := check file.read(urls[0])
         urls = []str{}
         for _, line := range text.lines() {
             t := line.trim()
-            if t != "" && !t.starts_with("#") {
+            if t != "" && !t.has_prefix("#") {
                 urls = append(urls, t)
             }
         }

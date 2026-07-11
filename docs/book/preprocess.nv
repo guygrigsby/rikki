@@ -12,14 +12,14 @@ fn linkify(content str) (str, error?) {
     out := ""
     rest := content
     for {
-        i := rest.find("```nevla\n")
+        i := rest.index("```nevla\n")
         if i == none {
             break
         }
         headEnd := i + len("```nevla\n")
         out = out + rest[0:headEnd]
         rest = rest[headEnd:len(rest)]
-        j := rest.find("```")
+        j := rest.index("```")
         if j == none {
             break
         }
@@ -28,7 +28,7 @@ fn linkify(content str) (str, error?) {
         rest = rest[j + 3:len(rest)]
         if code.contains("fn main") {
             enc := check str(base64.urlsafe_b64encode(builtins.bytes(code, "utf-8")).decode())
-            for enc.ends_with("=") {
+            for enc.has_suffix("=") {
                 enc = enc.trim_suffix("=")
             }
             out = out + "\n\n[**▸ run it in the playground**](https://nevla.dev/play/#" + enc + ")\n"
@@ -55,7 +55,7 @@ fn walk(items py) (error?) {
 }
 
 fn main() (error?) {
-    argv := args()
+    argv := os.args()
     if len(argv) > 0 {
         if argv[0] == "supports" {
             return none

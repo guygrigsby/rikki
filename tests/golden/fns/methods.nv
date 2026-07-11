@@ -21,8 +21,8 @@ fn main() {
     print(s.trim().split(","))
     print(s.contains("World"))
     print(s.replace("World", "Nevla").trim())
-    print("aBc".upper())
-    print("aBc".lower())
-    print("hello".starts_with("he"))
-    print("hello".ends_with("lo"))
+    print("aBc".to_upper())
+    print("aBc".to_lower())
+    print("hello".has_prefix("he"))
+    print("hello".has_suffix("lo"))
 }

@@ -50,55 +50,24 @@ impl Interp<'_> {
                     _ => Err(self.fault("clone needs a list or map (value types already copy)")),
                 }
             }
-            "ord" => match args.first() {
+            "charcode" => match args.first() {
                 Some(Value::Str(s)) => {
                     let mut it = s.chars();
                     match (it.next(), it.next()) {
                         (Some(c), None) => Ok(Value::Int(c as i64)),
-                        _ => Err(self.fault("ord needs a single character")),
+                        _ => Err(self.fault("charcode needs a single character")),
                     }
                 }
-                _ => Err(self.fault("ord needs a str")),
+                _ => Err(self.fault("charcode needs a str")),
             },
-            "chr" => match args.first() {
+            "char" => match args.first() {
                 Some(Value::Int(n)) => u32::try_from(*n)
                     .ok()
                     .and_then(char::from_u32)
                     .map(|c| Value::Str(c.to_string()))
-                    .ok_or_else(|| self.fault(format!("chr: invalid code point {n}"))),
-                _ => Err(self.fault("chr needs an int")),
+                    .ok_or_else(|| self.fault(format!("char: invalid code point {n}"))),
+                _ => Err(self.fault("char needs an int")),
             },
-            "args" => Ok(Value::list(
-                self.prog_args.iter().cloned().map(Value::Str).collect(),
-            )),
-            "input" => {
-                let Some(Value::Str(prompt)) = args.first() else {
-                    return Err(self.fault("input needs a str prompt"));
-                };
-                self.out.push_str(prompt);
-                let mut line = String::new();
-                use std::io::BufRead;
-                match std::io::stdin().lock().read_line(&mut line) {
-                    Ok(0) => Ok(Value::Tuple(vec![
-                        Value::Str(String::new()),
-                        Value::Err(ErrVal {
-                            msg: "eof".into(),
-                            ..Default::default()
-                        }),
-                    ])),
-                    Ok(_) => {
-                        let line = line.trim_end_matches(['\n', '\r']).to_string();
-                        Ok(Value::Tuple(vec![Value::Str(line), Value::NoneV]))
-                    }
-                    Err(e) => Ok(Value::Tuple(vec![
-                        Value::Str(String::new()),
-                        Value::Err(ErrVal {
-                            msg: format!("stdin: {e}"),
-                            ..Default::default()
-                        }),
-                    ])),
-                }
-            }
             _ => Err(self.fault(format!("unknown function: {name}"))),
         }
     }
@@ -372,8 +341,8 @@ impl Interp<'_> {
         };
         match name {
             "trim" => Ok(Value::Str(s.trim().to_string())),
-            "upper" => Ok(Value::Str(s.to_uppercase())),
-            "lower" => Ok(Value::Str(s.to_lowercase())),
+            "to_upper" => Ok(Value::Str(s.to_uppercase())),
+            "to_lower" => Ok(Value::Str(s.to_lowercase())),
             "split" => {
                 let sep = one_str(self, &mut args)?;
                 Ok(Value::list(
@@ -384,11 +353,11 @@ impl Interp<'_> {
                 let needle = one_str(self, &mut args)?;
                 Ok(Value::Bool(s.contains(&needle)))
             }
-            "starts_with" => {
+            "has_prefix" => {
                 let p = one_str(self, &mut args)?;
                 Ok(Value::Bool(s.starts_with(&p)))
             }
-            "ends_with" => {
+            "has_suffix" => {
                 let p = one_str(self, &mut args)?;
                 Ok(Value::Bool(s.ends_with(&p)))
             }
@@ -397,7 +366,7 @@ impl Interp<'_> {
                 let from = one_str(self, &mut args)?;
                 Ok(Value::Str(s.replace(&from, &to)))
             }
-            "find" => {
+            "index" => {
                 let needle = one_str(self, &mut args)?;
                 Ok(match s.find(&needle) {
                     Some(byte) => Value::Int(s[..byte].chars().count() as i64),

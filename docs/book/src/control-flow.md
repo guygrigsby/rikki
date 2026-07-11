@@ -71,7 +71,7 @@ in different rounds capture different variables.
 ```nevla
 fn main() {
     for _, c := range "abc" {
-        print(c.upper())
+        print(c.to_upper())
     }
     // a map ranges in insertion order
     m := map[str]int{"one": 1, "two": 2}

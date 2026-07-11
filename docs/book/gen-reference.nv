@@ -5,25 +5,26 @@
 import "file"
 
 fn sliceChapter(spec str, start str, end str) (str, error?) {
-    a := spec.find(start)
+    a := spec.index(start)
     if a == none {
         return "", error.new("spec slice not found: " + start)
     }
     rest := spec[a + len(start):len(spec)]
-    b := rest.find(end)
+    b := rest.index(end)
     if b == none {
         return "", error.new("spec slice end not found: " + end)
     }
     return rest[0:b], none
 }
 
+
 // spec subsections ("### 14.1 print") become book sections ("## print")
 fn demote(body str) str {
     out := []str{}
     for _, line := range body.lines() {
-        if line.starts_with("### ") {
+        if line.has_prefix("### ") {
             rest := line[4:len(line)]
-            sp := rest.find(" ")
+            sp := rest.index(" ")
             if sp != none {
                 out = append(out, "## " + rest[sp + 1:len(rest)])
             } else {

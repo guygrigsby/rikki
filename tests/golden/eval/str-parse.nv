@@ -1,10 +1,10 @@
 fn main() {
     // find: code-point index or none
-    i := "héllo".find("llo")
+    i := "héllo".index("llo")
     if i != none {
         print(i)
     }
-    print("abc".find("zz"))
+    print("abc".index("zz"))
     // fields and lines
     print("  a\tb  c ".fields())
     print("one\ntwo\nthree\n".lines())

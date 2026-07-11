@@ -3,13 +3,14 @@
 // the editor opens so the path survives after it closes.
 //   nv got.nv [name]
 import "file"
+import "os"
 import py "tempfile"
 import py "subprocess"
 
 fn main() (error?) {
     name := "scratch"
-    if len(args()) > 0 {
-        name = args()[0]
+    if len(os.args()) > 0 {
+        name = os.args()[0]
     }
     dir := check str(tempfile.mkdtemp(prefix: "got-" + name + "."))
 

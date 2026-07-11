@@ -88,11 +88,11 @@ impl Checker {
                 self.check_args(&[Str], args, span);
                 one(List(Box::new(Str)))
             }
-            (Str, "trim" | "upper" | "lower") => {
+            (Str, "trim" | "to_upper" | "to_lower") => {
                 self.check_args(&[], args, span);
                 one(Str)
             }
-            (Str, "contains" | "starts_with" | "ends_with") => {
+            (Str, "contains" | "has_prefix" | "has_suffix") => {
                 self.check_args(&[Str], args, span);
                 one(Bool)
             }
@@ -100,7 +100,7 @@ impl Checker {
                 self.check_args(&[Str, Str], args, span);
                 one(Str)
             }
-            (Str, "find") => {
+            (Str, "index") => {
                 self.check_args(&[Str], args, span);
                 one(Opt(Box::new(Int)))
             }

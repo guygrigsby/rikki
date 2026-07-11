@@ -71,7 +71,7 @@ fn signature(root str, watch []str, exts []str) str {
             continue
         }
         for _, ext := range exts {
-            if base.ends_with(ext) {
+            if base.has_suffix(ext) {
                 m, merr := float(os.path.getmtime(base))
                 if merr == none {
                     sig = sig + sprintf("%s %f\n", base, m)

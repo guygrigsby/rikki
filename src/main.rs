@@ -185,7 +185,7 @@ fn main() (error?) {
         return none
     }
     path := check str(pathv)
-    if !path.ends_with(".nv") {
+    if !path.has_suffix(".nv") {
         return none
     }
     // inside a project, check the whole program from its entrypoint; a

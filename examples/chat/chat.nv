@@ -5,24 +5,27 @@
 // cause chain and the session continues; three consecutive failures quit.
 import "http"
 import "ctx"
+import "os"
 import py "json"
+
 
 // Go-style address shorthand: ":8080" means localhost, scheme optional.
 fn normalize(url str) str {
     u := url
-    if u.starts_with(":") {
+    if u.has_prefix(":") {
         u = "localhost" + u
     }
-    if !u.starts_with("http://") && !u.starts_with("https://") {
+    if !u.has_prefix("http://") && !u.has_prefix("https://") {
         u = "http://" + u
     }
     return u
 }
 
+
 // One SSE line -> the token it carries, or "" for anything else
 // (role-only chunks, [DONE], keepalives, non-data lines).
 fn delta(line str) str {
-    if !line.starts_with("data: ") {
+    if !line.has_prefix("data: ") {
         return ""
     }
     obj, e := json.loads(line[6:len(line)])
@@ -38,9 +41,7 @@ fn delta(line str) str {
 
 fn ask(c Ctx, base str, model str, history str) (str, error?) {
     body := sprintf("{\"model\": %q, \"stream\": true, \"messages\": %s}", model, history)
-    resp, err := http.stream(c, base + "/v1/chat/completions", body, fn(line str) {
-        printf("%s", delta(line))
-    })
+    resp, err := http.stream(c, base + "/v1/chat/completions", body, fn(line str) { printf("%s", delta(line)) })
     if err != none {
         return "", error.wrap(err, "request failed")
     }
@@ -62,7 +63,7 @@ fn ask(c Ctx, base str, model str, history str) (str, error?) {
 }
 
 fn main() (error?) {
-    a := args()
+    a := os.args()
     if len(a) == 0 {
         print("usage: nv chat.nv <url> [model]")
         return error.new("missing server url")
@@ -78,7 +79,8 @@ fn main() (error?) {
 
     fails := 0
     for {
-        line, ierr := input("> ")
+        printf("> ")
+        line, ierr := os.readline()
         if ierr != none {
             // EOF is a normal way to leave, not a failure
             break

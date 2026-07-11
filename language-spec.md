@@ -193,7 +193,7 @@ always denote a conversion (section 7.7), and `map [` in expression position
 always begins a map literal. Slice types and slice conversions are written
 with the `[]` prefix (`[]int`, `[]float(x)`; sections 5.9, 7.7) and involve
 no reserved name. Builtin function names (`print`, `printf`, `sprintf`,
-`len`, `append`, `clone`, `ord`, `chr`, `args`, `input`) are also not
+`len`, `append`, `clone`, `charcode`, `char`) are also not
 reserved; a variable or
 function declaration with the same name shadows the builtin.
 
@@ -760,7 +760,7 @@ parameter type. A call of a non-function is a compile-time error
 ("not callable").
 
 `x.m(a1, ..., an)` is a method call. Methods exist only on strings, slices,
-and maps (section 14.11), on `Ctx` (section 15.4), on modules
+and maps (section 14.9), on `Ctx` (section 15.4), on modules
 (where `mod.f(...)` calls the module function), on `error` as the receiver of
 the builtin constructors `error.new` and `error.wrap` (section 15.1), and on
 `py` values (chapter 13). User struct types have no methods in v1.
@@ -1772,49 +1772,29 @@ len(x) int
 For `str`, the number of characters; for `list`, the element count;
 for `map`, the entry count. Any other argument type is a compile-time error.
 
-### 14.5 args
+### 14.5 charcode
 
 ```
-args() []str
-```
-
-Returns the program's arguments: everything after the source file on the
-command line (`nv prog.nv a b` and `nevla run prog.nv a b` both yield
-`["a", "b"]`). Takes no arguments. In contexts with no command line (tests,
-embedding) the list is empty.
-
-### 14.6 input
-
-```
-input(prompt str) (str, error?)
-```
-
-Writes `prompt` to standard output (no trailing newline, flushed), then reads
-one line from standard input. The returned string excludes the line
-terminator. End of input and read failures are error values, not faults
-(`eof` on end of input). When a program runs through the CLI runner its
-output is streamed unbuffered, so a prompt is visible before input blocks.
-
-### 14.7 ord
-
-```
-ord(c str) int
+charcode(c str) int
 ```
 
 The Unicode code point (the character's number) of `c`, which must be
 exactly one character; any other argument value is a runtime fault.
 
-### 14.8 chr
+### 14.6 char
 
 ```
-chr(n int) str
+char(n int) str
 ```
 
 The one-character string for the Unicode code point `n`. A value that is not a valid
 Unicode scalar (negative, greater than 0x10FFFF, or a surrogate) is a
-runtime fault. `chr(ord(c)) == c` for every one-character `c`.
+runtime fault. `char(charcode(c)) == c` for every one-character `c`.
 
-### 14.9 append
+Program arguments and standard input live in the `os` module
+(section 15.9); nevla has no `args` or `input` builtin.
+
+### 14.7 append
 
 ```
 append(xs []T, v1 T, ..., vn T) []T
@@ -1826,7 +1806,7 @@ value must be assignable to its element type. Zero values yield a plain
 copy. The original list is never modified; other names bound to it see
 growth only through rebinding (chapter 11).
 
-### 14.10 clone
+### 14.8 clone
 
 ```
 clone(x []T) []T
@@ -1838,7 +1818,7 @@ elements copy by their kinds, exactly Go's `slices.Clone`/`maps.Clone`.
 Applying `clone` to a value type is a compile-time error; value types
 already copy.
 
-### 14.11 Methods on builtin types
+### 14.9 Methods on builtin types
 
 All receivers are unchanged; results are new values.
 
@@ -1868,10 +1848,10 @@ Receiver `str`. Positions and counts are in characters.
 fn main() {
     s := "  the nevla book  "
     t := s.trim()
-    print(t.upper())                  // THE NEVLA BOOK
+    print(t.to_upper())                  // THE NEVLA BOOK
     print(t.split(" ").join("-"))     // the-nevla-book
     print(t.replace("book", "spec"))  // the nevla spec
-    i := t.find("nevla")
+    i := t.index("nevla")
     if i != none {
         print(i)                      // 4
     }
@@ -2414,7 +2394,7 @@ Before `main` runs, all `import py` modules are imported; a failing Python
 import terminates the program as a runtime error.
 
 Program arguments follow the file on the runner command line and are exposed
-through the `args()` builtin (section 14.5).
+through `os.args()` (section 15.9).
 
 ### 17.2 Termination and exit status
 

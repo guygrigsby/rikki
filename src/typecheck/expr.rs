@@ -515,24 +515,24 @@ impl Checker {
                             }
                         };
                     }
-                    "ord" => {
+                    "charcode" => {
                         if args.len() != 1 {
-                            self.diag(span, "ord takes one argument");
+                            self.diag(span, "charcode takes one argument");
                         } else {
                             let t = self.expr_one(&args[0], Some(&Type::Str));
                             if !matches!(t, Type::Str | Type::Unknown) {
-                                self.diag(span, format!("ord needs str, got {t}"));
+                                self.diag(span, format!("charcode needs str, got {t}"));
                             }
                         }
                         return ExprTy::One(Type::Int);
                     }
-                    "chr" => {
+                    "char" => {
                         if args.len() != 1 {
-                            self.diag(span, "chr takes one argument");
+                            self.diag(span, "char takes one argument");
                         } else {
                             let t = self.expr_one(&args[0], Some(&Type::Int));
                             if !matches!(t, Type::Int | Type::Unknown) {
-                                self.diag(span, format!("chr needs int, got {t}"));
+                                self.diag(span, format!("char needs int, got {t}"));
                             }
                         }
                         return ExprTy::One(Type::Str);
@@ -566,23 +566,6 @@ impl Checker {
                             }
                         }
                         return ExprTy::One(Type::Int);
-                    }
-                    "args" => {
-                        if !args.is_empty() {
-                            self.diag(span, "args takes no arguments");
-                        }
-                        return ExprTy::One(Type::List(Box::new(Type::Str)));
-                    }
-                    "input" => {
-                        if args.len() != 1 {
-                            self.diag(span, "input takes one str prompt");
-                        } else {
-                            let t = self.expr_one(&args[0], Some(&Type::Str));
-                            if !matches!(t, Type::Str | Type::Unknown) {
-                                self.diag(span, format!("input prompt must be str, got {t}"));
-                            }
-                        }
-                        return ExprTy::Multi(vec![Type::Str, err_opt()]);
                     }
                     _ => {}
                 }

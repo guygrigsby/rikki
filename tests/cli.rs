@@ -594,7 +594,7 @@ fn program_args_and_input() {
     let f = d.join("echo.nv");
     std::fs::write(
         &f,
-        "fn main() {\n    for _, a := range args() {\n        print(a)\n    }\n    for {\n        line, err := input(\"> \")\n        if err != none {\n            break\n        }\n        print(\"got: \" + line)\n    }\n}\n",
+        "import \"os\"\n\nfn main() {\n    for _, a := range os.args() {\n        print(a)\n    }\n    for {\n        printf(\"> \")\n        line, err := os.readline()\n        if err != none {\n            break\n        }\n        print(\"got: \" + line)\n    }\n}\n",
     )
     .unwrap();
     let mut child = Command::new(nv())
@@ -686,9 +686,10 @@ fn http_get_post_request_from_nevla() {
         &f,
         r#"import "http"
 import "ctx"
+import "os"
 
 fn main() (error?) {
-    base := args()[0]
+    base := os.args()[0]
     c := ctx.background()
     r1 := check http.get(c, base + "one")
     print(r1.status)
@@ -751,7 +752,7 @@ fn http_stream_lines_reach_handler() {
     let f = d.join("s.nv");
     std::fs::write(
         &f,
-        "import \"http\"\nimport \"ctx\"\n\nfn main() (error?) {\n    resp := check http.stream(ctx.background(), args()[0], \"{}\", fn(line str) {\n        if line.starts_with(\"data: \") {\n            print(\"got \" + line[6:len(line)])\n        }\n    })\n    print(resp.status)\n    return none\n}\n",
+        "import \"http\"\nimport \"ctx\"\nimport \"os\"\n\nfn main() (error?) {\n    resp := check http.stream(ctx.background(), os.args()[0], \"{}\", fn(line str) {\n        if line.has_prefix(\"data: \") {\n            print(\"got \" + line[6:len(line)])\n        }\n    })\n    print(resp.status)\n    return none\n}\n",
     )
     .unwrap();
     let out = Command::new(nv())
