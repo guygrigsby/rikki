@@ -31,6 +31,10 @@ like uv/python: `nevla` (setup: new, py add, check, project run) and `nv`
   deep copy). Do not move a type across the split without an ADR.
 - Commit style: terse, verb-first, area prefix (`lexer:`, `parser:`, `check:`,
   `eval:`, `stdlib:`, `bridge:`, `cli:`, `spec:`).
+- Names are descriptive (ADR 0017): longer clear beats shorter cryptic in
+  all API, spec, and implementation naming. Term-of-art short forms stay
+  (`http`, `ctx`); fossils and ad hoc abbreviations (`mtime`, `getenv`)
+  never land.
 - Concurrency is deferred, not ignored: any concurrency consideration hit
   while working (a constraint, an API that must stay wrappable, a user
   waiting on it) gets appended to `docs/proposals/concurrency.md` in the

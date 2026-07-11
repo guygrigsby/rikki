@@ -30,10 +30,11 @@ anything that waits.
   strings and come back as an error value carrying the usage text, as
   does an unknown flag. All values are strings; `int(x)`/`float(x)`
   conversions are already mandatory-checked, so no typed-flag machinery.
-- `os`: `os.cwd() (str, error?)`, `os.env(name str) str?`. The option
-  return replaces Python's get-with-default; narrowing does the work.
-  Deliberately absent until something needs them: exit (an error from
-  main is the exit status), setenv, hostname.
+- `os`: `os.workdir() (str, error?)`, `os.env(name str) str?`. The
+  option return replaces Python's get-with-default; narrowing does the
+  work. Deliberately absent until something needs them: exit (an error
+  from main is the exit status), setenv, hostname. (workdir was cwd
+  until ADR 0017; same fossil as mtime.)
 - `time`: `time.now() float` (epoch seconds), `time.clock() float`
   (monotonic seconds), `time.sleep(c Ctx, secs float) error?` (wakes
   early with the ctx error when the ctx ends, so poll loops die
@@ -43,8 +44,10 @@ anything that waits.
   log timestamps. A layout string can be reconsidered when real code
   outgrows that.
 - `file.glob(pattern str) ([]str, error?)` (`**` aware, results sorted)
-  and `file.mtime(path str) (float, error?)`. Folded into file rather
-  than a new module; a glob is a question about the filesystem.
+  and `file.modified(path str) (float, error?)` (epoch seconds; was
+  mtime until ADR 0017 made descriptive names a tenet). Folded into
+  file rather than a new module; a glob is a question about the
+  filesystem.
 - `regex`: `regex.compile(pattern str) (Re, error?)` returning an
   opaque handle (reference semantics, like Ctx), with
   `re.matches(s str) bool`, `re.find(s str) Match?`,

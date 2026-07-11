@@ -69,6 +69,11 @@ fallible unit. Dependencies are declared in the manifest or the program
 does not compile — a missing package is a compile error, not a stack
 trace at hour two.
 
+**Names are descriptive.** A longer clear name beats a shorter cryptic
+one: `file.modified`, never `mtime`. Domain-standard terms that
+practitioners actually say (`http`, `ctx`, `regex`, `min`) stay short;
+Unix fossils and ad hoc abbreviations do not get in.
+
 **Break early.** Until the language has users to protect, fundamental
 improvements ship now, not after they calcify. The version stamp in
 every project says what it was built against, and that is the promise:
