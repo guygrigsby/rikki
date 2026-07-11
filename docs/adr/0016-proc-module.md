@@ -38,7 +38,8 @@ and an opaque handle `Proc` with reference semantics, like Ctx.
   reads it in-language. Handle methods: `pid() int`, `running() bool`,
   `readline(c Ctx) (str, error?)` (eof is an error value, the same
   contract as `input()`), `wait(c Ctx) (int, error?)`,
-  `stop(grace float) error?` (terminate, wait grace seconds, kill).
+  `stop(grace int) error?` (terminate, wait the grace duration, kill;
+  int nanoseconds like all durations per ADR 0015).
 - The runtime owns the pipes: background stdlib threads pump child
   output into buffers (or the log file) the moment it exists. No
   Value crosses a thread; the interpreter stays single-threaded. The

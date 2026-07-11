@@ -35,16 +35,24 @@ anything that waits.
   work. Deliberately absent until something needs them: exit (an error
   from main is the exit status), setenv, hostname. (workdir was cwd
   until ADR 0017; same fossil as mtime.)
-- `time`: `time.now() float` (epoch seconds), `time.clock() float`
-  (monotonic seconds), `time.sleep(c Ctx, secs float) error?` (wakes
-  early with the ctx error when the ctx ends, so poll loops die
-  promptly on Ctrl-C), `time.parts(epoch float) Parts` with
-  `struct Parts { year int, month int, day int, hour int, minute int,
-  second int }`. No format mini-language; sprintf over Parts covers
-  log timestamps. A layout string can be reconsidered when real code
-  outgrows that.
+- `time`: one time currency, `int` nanoseconds (Go's Duration; exact
+  in i64 until 2262, where float epoch seconds silently degrades past
+  microseconds). `time.now() int` (epoch), `time.clock() int`
+  (monotonic), `time.sleep(c Ctx, d int) error?` (wakes early with the
+  ctx error when the ctx ends, so poll loops die promptly on Ctrl-C),
+  and the duration constants `time.nanosecond`, `time.microsecond`,
+  `time.millisecond`, `time.second`, `time.minute`, `time.hour`, so
+  durations read Go-style: `time.sleep(c, 500 * time.millisecond)`.
+  `time.parts(epoch int) Parts` with `struct Parts { year int,
+  month int, day int, hour int, minute int, second int }`. No format
+  mini-language; sprintf over Parts covers log timestamps. A layout
+  string can be reconsidered when real code outgrows that.
+- Cascade: `ctx.timeout(parent, secs float)` migrates to
+  `ctx.timeout(parent, d int)` in the same currency, so there is
+  exactly one way to say a duration. Break-early applies; the float
+  form dies before anyone else writes one.
 - `file.glob(pattern str) ([]str, error?)` (`**` aware, results sorted)
-  and `file.modified(path str) (float, error?)` (epoch seconds; was
+  and `file.modified(path str) (int, error?)` (epoch nanoseconds; was
   mtime until ADR 0017 made descriptive names a tenet). Folded into
   file rather than a new module; a glob is a question about the
   filesystem.
