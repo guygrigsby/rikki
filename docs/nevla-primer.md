@@ -118,26 +118,33 @@ reference.
 
 ## Builtins and stdlib
 
-Builtins: `print`, `printf`/`sprintf` (`%v` for anything, `%.4f` etc),
-`len`, `append`, `clone` (one-level copy of a list or map),
-`charcode`/`char` (code point of a character and back). Lists have
-`map`/`filter`/`sum` and friends; maps have `keys`/`values`/`delete`
-(spec 14.9 lists all). Program argv and stdin live in the `os` module,
-not builtins.
+<!-- BEGIN GENERATED: stdlib inventory -->
+Builtins: `print`, `printf`, `sprintf`, `len`, `charcode`, `char`, `append`, `clone`
+(spec chapter 14; str, list, and map methods in 14.9).
 
-Stdlib modules (plain `import "name"`): `error`, `math` (`abs`, `min`,
-`max`, `sqrt`, `pow`, `exp`, `ln`, `log`, trig, `floor`/`ceil`/`round`,
-`pi`, `e`), `file` (read/write/append/exists/list/remove/mkdir/glob/
-modified, all fallible), `ctx` (`background`, `timeout`, `interrupt`
-cancellation handles), `http` (`get`/`post`/`request`/`stream`, all
-take a `Ctx`), `os` (`workdir`, `env` returning an option, `args`,
-`readline`), `time` (int nanoseconds everywhere: `now`, `clock`,
-ctx-aware `sleep`, `parts`, and the duration constants
-`time.second` etc.), `regex` (`compile` to a `Re` handle;
-`matches`/`find`/`find_all`/`replace`; RE2 flavor, no backtracking),
-`flag` (`value`/`toggle`/`parse`/`get`, help is an error value carrying
-the usage text). Durations are always `int` nanoseconds written with
-the constants: `ctx.timeout(c, 30 * time.second)`.
+Modules (plain `import "name"`, spec chapter 15):
+
+- `error`: new, wrap
+- `math`: abs, ceil, cos, e, exp, floor, ln, log, max, min, pi, pow, round, sin, sqrt, tan
+- `file`: append, exists, glob, list, mkdir, modified, read, remove, write
+- `ctx`: background, interrupt, timeout
+- `test`: eq, err, neq, skip
+- `http`: get, post, request, stream
+- `gpu`: lock, shared, trylock, unlock
+- `time`: clock, hour, microsecond, millisecond, minute, nanosecond, now, parts, second, sleep
+- `os`: args, env, readline, workdir
+- `regex`: compile
+- `flag`: get, parse, toggle, value
+<!-- END GENERATED -->
+
+The nuance the names alone don't carry: `clone` is a one-level copy;
+`os.env` returns an option (narrow it, no get-with-default); every
+duration is `int` nanoseconds written with the time constants
+(`ctx.timeout(c, 30 * time.second)`); `time.sleep` wakes early when its
+ctx ends; `regex` is the RE2 family (no backreferences or lookaround);
+`flag` help and parse failures are error values carrying the usage
+text, the module never prints. Program argv and stdin live in `os`,
+not builtins.
 
 Multi-file: `import "util.nv"` binds the sibling file as module `util`.
 Only Capitalized top-level names (functions, structs, fields) are visible

@@ -771,3 +771,21 @@ fn http_stream_lines_reach_handler() {
     assert!(stdout.contains("got [DONE]\n"), "{stdout}");
     assert!(stdout.contains("200\n"), "{stdout}");
 }
+
+/// Nothing is remembered: the primer's stdlib inventory renders from the
+/// spec (gen-reference.nv); hand-drift is a red test, not a stale doc.
+#[test]
+fn primer_inventory_stays_generated() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let out = Command::new(nv())
+        .args(["docs/book/gen-reference.nv", "check"])
+        .current_dir(&root)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "primer drifted from the spec:\n{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}

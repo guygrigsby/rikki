@@ -1,8 +1,13 @@
 // Generate the book's reference chapters from the language spec, the
-// single source of truth for builtins and stdlib. Run from the repo
-// root: nv docs/book/gen-reference.nv
-// Output files are gitignored and rebuilt on every book build.
+// single source of truth for builtins and stdlib, and keep the agent
+// primer's inventory section in sync with it. Run from the repo root:
+//   nv docs/book/gen-reference.nv          write everything
+//   nv docs/book/gen-reference.nv check    exit nonzero if the primer drifted
+// The book chapters are gitignored and rebuilt per build; the primer is
+// tracked, so `check` runs in the gate (tests/cli.rs) and drift is red.
 import "file"
+import "os"
+import "regex"
 
 fn sliceChapter(spec str, start str, end str) (str, error?) {
     a := spec.index(start)
@@ -49,9 +54,106 @@ fn gen(spec str, fname str, title str, start str, end str) (error?) {
     return none
 }
 
+
+// Builtin names: every "### 14.x name" heading that names a function.
+// Prose headings start with a capital; "printf and sprintf" splits.
+fn builtin_names(chapter str) []str {
+    names := []str{}
+    for _, line := range chapter.lines() {
+        if !line.has_prefix("### ") {
+            continue
+        }
+        rest := line[4:len(line)]
+        sp := rest.index(" ")
+        if sp == none {
+            continue
+        }
+        title := rest[sp + 1:len(rest)]
+        if title.to_lower() != title {
+            continue
+        }
+        for _, w := range title.split(" and ") {
+            names = append(names, w.trim())
+        }
+    }
+    return names
+}
+
+
+// Member names of one module: every `mod.name` mention in its own
+// spec section, functions and constants alike, deduplicated.
+fn member_names(section str, mod str) (str, error?) {
+    re := check regex.compile("`" + mod + "\\.(\\w+)")
+    seen := map[str]bool{}
+    names := []str{}
+    for _, m := range re.find_all(section) {
+        n := m.groups[0]
+        if seen[n] == none {
+            seen[n] = true
+            names = append(names, n)
+        }
+    }
+    return names.sorted().join(", "), none
+}
+
+
+// The primer's generated inventory: module and builtin NAMES only, so
+// a rename or removal in the spec turns the primer red instead of
+// letting it teach dead code. Depth stays in the spec and the book.
+fn inventory(spec str) (str, error?) {
+    builtins_ch := check sliceChapter(spec, "## 14. Builtin functions\n", "\n## 15. ")
+    stdlib_ch := check sliceChapter(spec, "## 15. Standard library\n", "\n## 16. ")
+
+    out := "Builtins: `" + builtin_names(builtins_ch).join("`, `") + "`\n"
+    out = out + "(spec chapter 14; str, list, and map methods in 14.9).\n\n"
+    out = out + "Modules (plain `import \"name\"`, spec chapter 15):\n\n"
+
+    heads := check regex.compile("### 15\\.\\d+ (\\w+)")
+    mods := heads.find_all(stdlib_ch)
+    for i, m := range mods {
+        mod := m.groups[0]
+        section := stdlib_ch[m.end:len(stdlib_ch)]
+        if i + 1 < len(mods) {
+            section = stdlib_ch[m.end:mods[i + 1].start]
+        }
+        members := check member_names(section, mod)
+        out = out + "- `" + mod + "`: " + members + "\n"
+    }
+    return out, none
+}
+
+fn splice(doc str, block str) (str, error?) {
+    begin := "<!-- BEGIN GENERATED: stdlib inventory -->"
+    end := "<!-- END GENERATED -->"
+    a := doc.index(begin)
+    if a == none {
+        return "", error.new("primer is missing the generated-inventory markers")
+    }
+    b := doc.index(end)
+    if b == none {
+        return "", error.new("primer is missing the generated-inventory markers")
+    }
+    return doc[0:a + len(begin)] + "\n" + block + doc[b:len(doc)], none
+}
+
 fn main() (error?) {
     spec := check file.read("language-spec.md")
     check gen(spec, "builtins.md", "# Builtins", "## 14. Builtin functions\n", "\n## 15. ")
     check gen(spec, "stdlib.md", "# Standard library", "## 15. Standard library\n", "\n## 16. ")
+
+    primer_path := "docs/nevla-primer.md"
+    primer := check file.read(primer_path)
+    fresh := check splice(primer, check inventory(spec))
+    if len(os.args()) > 0 && os.args()[0] == "check" {
+        if fresh != primer {
+            return error.new(primer_path + " drifted from the spec; run: nv docs/book/gen-reference.nv")
+        }
+        print(primer_path + " is in sync")
+        return none
+    }
+    if fresh != primer {
+        check file.write(primer_path, fresh)
+        print("wrote " + primer_path)
+    }
     return none
 }
