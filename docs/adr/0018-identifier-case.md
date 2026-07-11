@@ -19,7 +19,7 @@ Rust's convention with Go's visibility:
 
 - Types are UpperCamelCase: `User`, `Parts`, `TrainRun`.
 - Everything else, functions, methods, locals, fields, module names,
-  is snake_case: `parse_age`, `starts_with`, `elapsed_ms`.
+  is snake_case: `parse_age`, `has_prefix`, `elapsed_ms`.
 - Visibility stays Go's first-capital rule, so an exported multi-word
   function or field capitalizes as UpperCamelCase: `ParseAge` exported,
   `parse_age` private. Exported names read like types; that is the
