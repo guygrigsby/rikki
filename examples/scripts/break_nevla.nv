@@ -1,0 +1,166 @@
+import "os"
+import "test"
+
+struct Box {
+    xs []int
+    m map[str]int
+}
+
+fn spin(n int) int {
+    return spin(n + 1)
+}
+
+fn probe_aliasing() (error?) {
+    xs := [1, 2, 3]
+    ys := xs
+    ys[0] = 9
+    check test.eq(xs[0], 9)
+
+    copied := clone(xs)
+    copied[1] = 44
+    check test.eq(xs[1], 2)
+
+    b := Box{xs: xs, m: map[str]int{"a": 1}}
+    c := b
+    c.xs[2] = 77
+    c.m["b"] = 2
+    check test.eq(xs[2], 77)
+    check test.eq(len(b.m), 2)
+    return none
+}
+
+fn probe_closures() (error?) {
+    total := 0
+    add := fn(x int) {
+        total = total + x
+    }
+    add(10)
+    add(32)
+    check test.eq(total, 42)
+
+    funcs := []fn() int{}
+    for i := range 3 {
+        funcs = append(funcs, fn() { i })
+    }
+    check test.eq(funcs[0](), 0)
+    check test.eq(funcs[1](), 1)
+    check test.eq(funcs[2](), 2)
+    return none
+}
+
+fn probe_range_mutation() (error?) {
+    xs := [1, 2, 3]
+    seen := []int{}
+    for i, v := range xs {
+        if i == 0 {
+            xs[2] = 99
+            xs = append(xs, 4)
+        }
+        seen = append(seen, v)
+    }
+    check test.eq(seen, [1, 2, 99])
+    check test.eq(len(xs), 4)
+
+    m := map[str]int{"a": 1, "b": 2}
+    keys := []str{}
+    for k := range m {
+        if k == "a" {
+            m.delete("b")
+            m["c"] = 3
+        }
+        keys = append(keys, k)
+    }
+    check test.eq(keys, ["a"])
+    check test.eq(m.has("c"), true)
+    return none
+}
+
+fn probe_strings() (error?) {
+    s := "héΩ"
+    check test.eq(len(s), 3)
+    check test.eq(s[1], "é")
+    check test.eq(s.chars(), ["h", "é", "Ω"])
+    check test.eq(char(charcode("Ω")), "Ω")
+    i := s.index("Ω")
+    if i == none {
+        return error.new("missing omega")
+    }
+    check test.eq(i, 2)
+    return none
+}
+
+fn probe_errors() (error?) {
+    _, parse_err := int("not an int")
+    if parse_err == none {
+        return error.new("bad int parse returned none")
+    }
+    wrapped := error.wrap(parse_err, "parse probe")
+    cause := wrapped.cause
+    if cause == none {
+        return error.new("wrapped error lost its cause")
+    }
+    check test.eq(cause.msg.contains("not an int"), true)
+    return none
+}
+
+fn safe() (error?) {
+    check probe_aliasing()
+    check probe_closures()
+    check probe_range_mutation()
+    check probe_strings()
+    check probe_errors()
+    print("safe probes passed")
+    return none
+}
+
+fn fault_index() (error?) {
+    xs := []int{}
+    print(xs[0])
+    return none
+}
+
+fn fault_overflow() (error?) {
+    xs := [9223372036854775807, 1]
+    print(xs.sum())
+    return none
+}
+
+fn fault_recursion() (error?) {
+    print(spin(0))
+    return none
+}
+
+fn fault_char() (error?) {
+    print(char(-1))
+    return none
+}
+
+fn fault_delete_return() (error?) {
+    m := map[str]int{"a": 1}
+    x := m.delete("a")
+    print(len(x))
+    return none
+}
+
+fn main() (error?) {
+    argv := os.args()
+    if len(argv) == 0 {
+        return safe()
+    }
+
+    mode := argv[0]
+    if mode == "index" {
+        return fault_index()
+    } else if mode == "overflow" {
+        return fault_overflow()
+    } else if mode == "recursion" {
+        return fault_recursion()
+    } else if mode == "char" {
+        return fault_char()
+    } else if mode == "delete-return" {
+        return fault_delete_return()
+    }
+
+    print("modes: index overflow recursion char delete-return")
+    return none
+}
