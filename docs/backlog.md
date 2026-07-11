@@ -7,9 +7,9 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
 - `bytes` type. Unblocks binary file and http bodies. Touches literals,
   indexing, conversions. ADR 0019 records the character model it
   complements.
-- proc module (ADR 0016, accepted 2026-07-10): subprocesses with
-  runtime-pumped pipes. The last blocker for fully native scripts;
-  dev-watch and got still ride subprocess through the bridge.
+- proc module: DONE 2026-07-10 (ADR 0016, spec 15.12). run/exec/start/
+  attach with runtime-pumped pipes; got, dev-watch, and httpcheck are
+  zero import py.
 - printf zero-padding: `%02d` parses as width 2 and space-pads; Go
   zero-pads. Surfaced writing timestamps (dev_watch two() helper is
   the workaround). Flags (`0`, `-`, `+`) are one contained lexer
