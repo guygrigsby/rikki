@@ -99,16 +99,22 @@ fn acquire(
         .write(true)
         .open(&path)
         .map_err(|e| format!("gpu: {}: {e}", path.display()))?;
-    loop {
-        use std::os::unix::io::AsRawFd;
-        if unsafe { libc::flock(file.as_raw_fd(), op) } == 0 {
-            break;
-        }
-        let e = std::io::Error::last_os_error();
-        match e.raw_os_error() {
-            Some(libc::EWOULDBLOCK) => return Ok(Some(format!("gpu: {card} busy"))),
-            Some(libc::EINTR) => continue, // a signal woke the wait; keep waiting
-            _ => return Err(format!("gpu: lock {card}: {e}")),
+    // exclusive blocking acquires evict what the protocol marks evictable
+    // before settling into the kernel wait (spec 15.7: shared holders all
+    // yield to an exclusive acquirer, which may terminate them)
+    let preempted = op == libc::LOCK_EX && preempt_for_exclusive(&file, card);
+    if !preempted {
+        loop {
+            use std::os::unix::io::AsRawFd;
+            if unsafe { libc::flock(file.as_raw_fd(), op) } == 0 {
+                break;
+            }
+            let e = std::io::Error::last_os_error();
+            match e.raw_os_error() {
+                Some(libc::EWOULDBLOCK) => return Ok(Some(format!("gpu: {card} busy"))),
+                Some(libc::EINTR) => continue, // a signal woke the wait; keep waiting
+                _ => return Err(format!("gpu: lock {card}: {e}")),
+            }
         }
     }
     // self-report who holds it; advisory, so a failed write is not fatal
@@ -116,6 +122,142 @@ fn acquire(
     inject_env();
     interp.gpu_holds.insert(card.to_string(), Held { file });
     Ok(None)
+}
+
+/// Evict preemptible holders ahead of an exclusive acquire. Returns
+/// true when the lock landed here; false settles the caller into the
+/// plain blocking wait (nothing evictable, or a non-preemptible holder
+/// is present). Bounded rounds: flock has no fairness, so a new shared
+/// holder can barge in between the kills and the lock; retrying a few
+/// times beats looping forever.
+#[cfg(unix)]
+fn preempt_for_exclusive(file: &std::fs::File, card: &str) -> bool {
+    use std::os::unix::io::AsRawFd;
+    let try_nb = || unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0;
+    let me = std::process::id() as i64;
+    let host = hostname();
+    for _round in 0..3 {
+        if try_nb() {
+            return true;
+        }
+        let mut signaled: Vec<i64> = vec![];
+        for (path, pid, holder_host, preemptible) in read_holders(card) {
+            if pid == me {
+                continue;
+            }
+            // the registry is advisory and readers prune the dead
+            let alive = unsafe { libc::kill(pid as libc::pid_t, 0) } == 0
+                || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM);
+            if !alive {
+                let _ = std::fs::remove_file(&path);
+                continue;
+            }
+            // never signal across hosts; never touch the non-preemptible
+            if holder_host != host || !preemptible {
+                continue;
+            }
+            unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+            signaled.push(pid);
+        }
+        if signaled.is_empty() {
+            return false;
+        }
+        // give the terminated ~10s to exit, polling for the lock
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            if try_nb() {
+                return true;
+            }
+            if std::time::Instant::now() >= deadline {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        // survivors get the hard version; their holder files prune as
+        // dead entries on the next round's registry read
+        for pid in signaled {
+            if unsafe { libc::kill(pid as libc::pid_t, 0) } == 0 {
+                unsafe { libc::kill(pid as libc::pid_t, libc::SIGKILL) };
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    false
+}
+
+/// Every registry entry for a card: (file, pid, host, preemptible).
+/// Minimal field extraction; nevla and the gputex CLI write the schema.
+#[cfg(unix)]
+fn read_holders(card: &str) -> Vec<(std::path::PathBuf, i64, String, bool)> {
+    let dir = state_dir().join(format!("{card}.holders"));
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return vec![];
+    };
+    let mut out = vec![];
+    for e in rd.flatten() {
+        let path = e.path();
+        if path.extension().is_none_or(|x| x != "json") {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Some(pid) = json_i64(&text, "pid") else {
+            continue;
+        };
+        let host = json_str(&text, "host").unwrap_or_default();
+        // absent means evictable: gputex --low writers always set it, and
+        // an exclusive CLI holder writes preemptible:false
+        let preemptible = json_bool(&text, "preemptible").unwrap_or(false);
+        out.push((path, pid, host, preemptible));
+    }
+    out
+}
+
+fn json_field<'a>(text: &'a str, key: &str) -> Option<&'a str> {
+    let at = text.find(&format!("\"{key}\":"))? + key.len() + 3;
+    Some(text[at..].trim_start())
+}
+
+fn json_i64(text: &str, key: &str) -> Option<i64> {
+    let rest = json_field(text, key)?;
+    let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+    digits.parse().ok()
+}
+
+fn json_bool(text: &str, key: &str) -> Option<bool> {
+    let rest = json_field(text, key)?;
+    if rest.starts_with("true") {
+        Some(true)
+    } else if rest.starts_with("false") {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+/// A JSON string value, unescaping only what jstr escapes.
+fn json_str(text: &str, key: &str) -> Option<String> {
+    let rest = json_field(text, key)?.strip_prefix('"')?;
+    let mut out = String::new();
+    let mut chars = rest.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' => return Some(out),
+            '\\' => match chars.next()? {
+                '"' => out.push('"'),
+                '\\' => out.push('\\'),
+                'u' => {
+                    let hex: String = chars.by_ref().take(4).collect();
+                    let n = u32::from_str_radix(&hex, 16).ok()?;
+                    out.push(char::from_u32(n)?);
+                }
+                other => out.push(other),
+            },
+            c => out.push(c),
+        }
+    }
+    None
 }
 
 fn state_dir() -> std::path::PathBuf {
@@ -325,6 +467,81 @@ mod tests {
                 }
                 v => panic!("card still busy after release: {v:?}"),
             }
+        }
+        let ok = call(&mut other, "unlock", vec![card()])
+            .map_err(|f| f.msg)
+            .unwrap();
+        assert!(matches!(ok, Value::NoneV));
+
+        // an exclusive acquirer preempts a shared, preemptible holder
+        // (spec 15.7: all yield to an exclusive acquirer, which may
+        // terminate them). The holder is a forked child so the flock
+        // conflict is real; its post-fork body is pure syscalls.
+        let lock_path = state_dir().join("cardX.lock");
+        let cpath = std::ffi::CString::new(lock_path.to_str().unwrap()).unwrap();
+        let mut fds = [0i32; 2];
+        assert_eq!(unsafe { libc::pipe(fds.as_mut_ptr()) }, 0);
+        let child = unsafe { libc::fork() };
+        assert!(child >= 0, "fork failed");
+        if child == 0 {
+            // child: SH-hold the card, report readiness, wait to be killed
+            unsafe {
+                let fd = libc::open(cpath.as_ptr(), libc::O_RDWR);
+                if fd < 0 || libc::flock(fd, libc::LOCK_SH) != 0 {
+                    libc::_exit(3);
+                }
+                let byte = [b'r'];
+                libc::write(fds[1], byte.as_ptr().cast(), 1);
+                loop {
+                    libc::pause(); // SIGTERM's default disposition ends us
+                }
+            }
+        }
+        // parent: write the child's holder record (registry is advisory,
+        // any writer will do), wait for the SH hold, then demand the card
+        let holders = state_dir().join("cardX.holders");
+        std::fs::create_dir_all(&holders).unwrap();
+        std::fs::write(
+            holders.join(format!("{child}.json")),
+            format!(
+                "{{\"label\":\"kid\",\"framework\":\"nevla\",\"pid\":{child},\"host\":{},\"preemptible\":true}}\n",
+                jstr(&hostname()),
+            ),
+        )
+        .unwrap();
+        let mut ready = [0u8; 1];
+        assert_eq!(
+            unsafe { libc::read(fds[0], ready.as_mut_ptr().cast(), 1) },
+            1,
+            "child never signaled readiness"
+        );
+        let t0 = std::time::Instant::now();
+        let ok = call(
+            &mut interp,
+            "lock",
+            vec![card(), Value::Str("preemptor".into())],
+        )
+        .map_err(|f| f.msg)
+        .unwrap();
+        assert!(matches!(ok, Value::NoneV), "{ok:?}");
+        assert!(
+            t0.elapsed() < Duration::from_secs(15),
+            "preemption took {:?}",
+            t0.elapsed()
+        );
+        let mut status = 0i32;
+        assert_eq!(unsafe { libc::waitpid(child, &mut status, 0) }, child);
+        assert!(
+            libc::WIFSIGNALED(status) && libc::WTERMSIG(status) == libc::SIGTERM,
+            "child must die by SIGTERM, status {status}"
+        );
+        let ok = call(&mut interp, "unlock", vec![card()])
+            .map_err(|f| f.msg)
+            .unwrap();
+        assert!(matches!(ok, Value::NoneV));
+        unsafe {
+            libc::close(fds[0]);
+            libc::close(fds[1]);
         }
     }
 

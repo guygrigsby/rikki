@@ -2188,9 +2188,16 @@ the job for status displays. A card id that is empty or contains a path
 separator is an error value ("bad card id"): ids become file names in
 the shared state directory.
 
-- `gpu.lock(card str, label str) error?` — take the card exclusively,
-  blocking in the kernel until it is free. Errors if this program
-  already holds that card.
+- `gpu.lock(card str, label str) error?` — take the card exclusively.
+  Preemptible holders (shared acquirers, and any registry entry marked
+  `preemptible`) on this host are first asked to leave with SIGTERM,
+  given about ten seconds, then removed with SIGKILL; holders on other
+  hosts are never signaled, dead registry entries are pruned, and a
+  non-preemptible holder is simply waited out, blocking in the kernel
+  until the card is free. The evict-then-take sequence retries a
+  bounded number of times (flock has no fairness; a new shared holder
+  can slip in) before settling into the blocking wait. Errors if this
+  program already holds that card.
 - `gpu.trylock(card str, label str) (bool, error?)` — non-blocking
   probe: `true` and hold the card if it was free, `false` if it is busy
   (including when held by this program). Busy is data, not an error; the

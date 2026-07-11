@@ -129,6 +129,17 @@ pub fn init(venv: Option<&Path>) {
 /// Find the base prefix of a CPython whose major.minor matches the embedded
 /// one: `pythonX.Y` on PATH, then `python3` if it matches, then uv's
 /// managed installs. None means leave startup to libpython's own search.
+/// A prefix is only a python home if the stdlib is actually inside it.
+/// A probe can report a base_prefix that does not (a relocated
+/// python-build-standalone, a pyenv shim mid-rebuild); trusting it sets
+/// PYTHONHOME to a directory without `encodings` and interpreter
+/// startup dies. Validate, or fall through to the next candidate.
+fn home_has_stdlib(prefix: &str, ver: &str) -> bool {
+    std::path::Path::new(prefix)
+        .join(format!("lib/python{ver}/encodings"))
+        .is_dir()
+}
+
 fn find_python_home(ver: &str) -> Option<String> {
     let probe = |bin: &str| -> Option<String> {
         let out = std::process::Command::new(bin)
@@ -143,15 +154,15 @@ fn find_python_home(ver: &str) -> Option<String> {
         }
         let text = String::from_utf8_lossy(&out.stdout);
         let mut lines = text.lines();
-        (lines.next()? == ver)
+        let home = (lines.next()? == ver)
             .then(|| lines.next())??
-            .to_string()
-            .into()
+            .to_string();
+        home_has_stdlib(&home, ver).then_some(home)
     };
     if let Some(home) = probe(&format!("python{ver}")).or_else(|| probe("python3")) {
         return Some(home);
     }
-    // no matching python on PATH; ask uv for a managed one
+    // no usable python on PATH; ask uv for a managed one
     let out = std::process::Command::new("uv")
         .args(["python", "find", ver])
         .output()
@@ -528,6 +539,21 @@ mod tests {
         .unwrap();
         let Value::Py(r) = out else { panic!("{out:?}") };
         assert_eq!(display(&r), "42");
+    }
+
+    #[test]
+    fn python_home_requires_encodings() {
+        let base = std::env::temp_dir().join(format!("nevla-home-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        // a prefix without the stdlib is not a home
+        std::fs::create_dir_all(base.join("lib/python3.12")).unwrap();
+        assert!(!super::home_has_stdlib(base.to_str().unwrap(), "3.12"));
+        // with encodings present it is
+        std::fs::create_dir_all(base.join("lib/python3.12/encodings")).unwrap();
+        assert!(super::home_has_stdlib(base.to_str().unwrap(), "3.12"));
+        // but only for the version that lives there
+        assert!(!super::home_has_stdlib(base.to_str().unwrap(), "3.13"));
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
