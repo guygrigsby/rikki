@@ -4,7 +4,7 @@ on:
   push:
     tags: ["v*"]
 
-# every wheel gets libpython grafted in by packaging/repair-wheel.py: the
+# every wheel gets libpython grafted in by packaging/repair-wheel.nv: the
 # build links an absolute libpython path that only exists on the build
 # machine, so the binaries ship their own copy (loaded via
 # @executable_path/../lib on mac, $ORIGIN/../lib on linux)
@@ -45,7 +45,7 @@ jobs:
           echo "nv=$TK home=$PYTHONHOME"
           ldd "$TK" | grep -i python || true
           "$TK" --version
-          "$TK" packaging/repair-wheel.nv dist/*.whl "$LIBDIR/libpython${{ matrix.python }}.so.1.0"
+          WHEEL=$(ls dist/*.whl) LIBPYTHON="$LIBDIR/libpython${{ matrix.python }}.so.1.0" "$TK" packaging/repair-wheel.nv
       - uses: actions/upload-artifact@v4
         with:
           name: wheels-linux-py${{ matrix.python }}
@@ -72,7 +72,7 @@ jobs:
           LIBDIR=$(dirname "$P")/../lib
           TK=$(find target -type f -name nv -path '*release*' | head -1)
           export PYTHONHOME="$("$P" -c 'import sys; print(sys.base_prefix)')"
-          "$TK" packaging/repair-wheel.nv dist/*.whl "$LIBDIR/libpython${{ matrix.python }}.dylib"
+          WHEEL=$(ls dist/*.whl) LIBPYTHON="$LIBDIR/libpython${{ matrix.python }}.dylib" "$TK" packaging/repair-wheel.nv
       - uses: actions/upload-artifact@v4
         with:
           name: wheels-macos-py${{ matrix.python }}

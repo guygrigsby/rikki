@@ -86,11 +86,23 @@ fn example_programs_compile() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut count = 0;
     let mut failures = vec![];
-    let mut stack = vec![root.join("examples")];
+    // every .nv the repo RUNS lives here: examples, the release
+    // pipeline's wheel repair, the book's generator and preprocessor.
+    // The goldens have their own runner; a language change that breaks
+    // any of these is a red test, not a broken release (v0.2.1 learned
+    // this the hard way: repair-wheel.nv still said .find).
+    let mut stack = vec![
+        root.join("examples"),
+        root.join("packaging"),
+        root.join("docs/book"),
+    ];
     while let Some(dir) = stack.pop() {
         for entry in fs::read_dir(&dir).unwrap() {
             let p = entry.unwrap().path();
             if p.is_dir() {
+                if p.file_name().is_some_and(|n| n == "src" || n == "theme") {
+                    continue; // book chapters and css, not programs
+                }
                 stack.push(p);
                 continue;
             }

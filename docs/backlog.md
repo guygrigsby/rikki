@@ -22,6 +22,12 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
   serve better. Touches packaging (wheel entry points, brew), docs,
   the shebang story, and the hook template; wants its own ADR either
   way.
+- Import aliasing (2026-07-11): `import py "os"` and std `os` cannot
+  coexist (duplicate-name diag, deliberate), and python's stdlib names
+  collide with nevla's own (os, time). repair-wheel.nv had to move to
+  an env-var interface because argv lives on std os. Go's answer is
+  `import alias "path"`; nevla wants the same and the spec slot is
+  ready (ImportSpec).
 - `defer` or an answer to it: `with` (py-only) got a keyword while
   native code has no cleanup construct; gpu leans on process-exit
   release. The audit flagged the asymmetry (2026-07-10).

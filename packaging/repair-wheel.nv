@@ -6,7 +6,7 @@
 // (needs patchelf on PATH). The RECORD is rewritten by hand because this
 // runs on the embedded interpreter, stdlib python only.
 //
-// Usage: nv packaging/repair-wheel.nv WHEEL LIBPYTHON
+// Usage: WHEEL=dist/x.whl LIBPYTHON=/path/libpython.dylib nv packaging/repair-wheel.nv
 import "file"
 import py "sys"
 import py "os"
@@ -42,7 +42,7 @@ fn libpythonRef(binPath str) (str, error?) {
     for _, line := range out.lines() {
         if line.contains("libpython") || line.contains("Python.framework") {
             t := line.trim()
-            sp := t.find(" ")
+            sp := t.index(" ")
             if sp != none {
                 return t[0:sp], none
             }
@@ -65,7 +65,7 @@ fn rewriteRecord(root str, distInfo str) (error?) {
             }
             data := check builtins.open(full, "rb").read()
             b64 := check str(base64.urlsafe_b64encode(hashlib.sha256(data).digest()).decode())
-            for b64.ends_with("=") {
+            for b64.has_suffix("=") {
                 b64 = b64.trim_suffix("=")
             }
             size := check str(builtins.len(data))
@@ -79,12 +79,14 @@ fn rewriteRecord(root str, distInfo str) (error?) {
 }
 
 fn main() (error?) {
-    argv := args()
-    if len(argv) != 2 {
-        return error.new("usage: nv repair-wheel.nv WHEEL LIBPYTHON")
+    // args live in the std os module, whose name the py "os" import
+    // already owns here, so the interface is environment variables
+    // until imports grow aliasing
+    wheel, werr := str(os.environ.get("WHEEL", ""))
+    libpython, lerr := str(os.environ.get("LIBPYTHON", ""))
+    if werr != none || lerr != none || wheel == "" || libpython == "" {
+        return error.new("usage: WHEEL=dist/x.whl LIBPYTHON=/path/libpython.so nv repair-wheel.nv")
     }
-    wheel := argv[0]
-    libpython := argv[1]
     lib := check str(os.path.basename(libpython))
     tmp := check str(tempfile.mkdtemp())
 
@@ -97,11 +99,11 @@ fn main() (error?) {
     distInfo := ""
     for _, name := range os.listdir(tmp) {
         n := check str(name)
-        if n.ends_with(".data") {
+        if n.has_suffix(".data") {
             scripts = tmp + "/" + n + "/scripts"
             dataLib = tmp + "/" + n + "/data/lib"
         }
-        if n.ends_with(".dist-info") {
+        if n.has_suffix(".dist-info") {
             distInfo = n
         }
     }
