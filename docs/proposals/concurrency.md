@@ -50,6 +50,15 @@ drafts that are not yet decisions and may never become one.
   ctx, the time.sleep pattern; three call sites now share that shape,
   which is the evidence a select/park primitive would consolidate.
 
+- 2026-07-10, proc comment review: Ctx is not waitable. It is a
+  deadline plus an AtomicBool, so every blocked stdlib call (time.sleep,
+  proc wait/readline/run) must wake on a slice to notice cancellation;
+  data paths already park on condvars. Giving CtxInner a condvar or
+  waker that timeout deadlines and the SIGINT handler signal would let
+  blockers park exactly and delete the slice-polling class. Any future
+  select primitive needs this anyway: select over (line, exit,
+  cancellation) is only as good as its worst event source.
+
 ## Users waiting on this (evidence of demand)
 
 - 2026-07-10, dev-watch example: wants to watch the filesystem, pump a

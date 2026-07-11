@@ -1,8 +1,17 @@
 //! Subprocesses with runtime-pumped pipes (spec 15.12, ADR 0016). The
 //! concurrency lives here, not in the language: pump threads move child
 //! output into buffers (or a log file) the moment it exists, and only
-//! Strings ever cross a thread. Blocking calls take a Ctx and poll in
-//! slices, the time.sleep pattern.
+//! Strings ever cross a thread.
+//!
+//! Three waiting shapes, only one of them a poll:
+//! - lines are PUSHED: readline parks on a condvar the pump signals;
+//! - process exit is polled (try_wait per 20ms slice): a blocking wait
+//!   costs a thread per child, SIGCHLD fights ctrlc for the process's
+//!   one signal handler, and pidfd/kqueue is per-platform code;
+//! - cancellation is polled everywhere, because a Ctx (deadline +
+//!   SIGINT flag) has no event source to park on. The 20ms slice is
+//!   the bound on noticing Ctrl-C, not on data latency. A waitable
+//!   Ctx would delete the slicing; see docs/proposals/concurrency.md.
 
 const CMD_FIELDS: &[(&str, FieldKind)] = &[
     ("argv", FieldKind::ListStr),
