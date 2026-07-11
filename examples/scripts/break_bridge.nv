@@ -1,0 +1,90 @@
+// break_bridge: provoke unusual Python explosions through the bridge
+// and watch what comes back. Safe modes must surface as error values or
+// controlled faults; the last two modes ARE the documented boundary
+// (spec section 1): they take the process down and are supposed to.
+//
+// Verified 2026-07-10: the first four arrive as error values with their
+// pytype intact (hostile-str stringifies as "unprintable", pyo3 holds);
+// os-exit exits 7 with nothing to convert; segfault dies with SIGSEGV
+// (exit 139). The boundary behaves exactly as documented.
+//
+//   nv break_bridge.nv                  list the modes
+//   nv break_bridge.nv system-exit      sys.exit(3): BaseException, not Exception
+//   nv break_bridge.nv interrupt        raise KeyboardInterrupt from python
+//   nv break_bridge.nv recursion        a lambda that calls itself forever
+//   nv break_bridge.nv hostile-str      an exception whose __str__ itself raises
+//   nv break_bridge.nv os-exit          os._exit(7): no exception, no cleanup, exit 7
+//   nv break_bridge.nv segfault         ctypes reads address 0: SIGSEGV, core dump
+import "os"
+import py "builtins"
+import py "ctypes"
+import py "sys"
+
+fn report(tag str, err error?) {
+    if err == none {
+        print(tag + ": no error came back (unexpected)")
+        return
+    }
+    print(tag + " arrived as a value:")
+    print("  msg: " + err.msg)
+    print("  pytype: " + err.pytype)
+}
+
+
+// sys.exit raises SystemExit, a BaseException. The bridge must hand it
+// over as a value like any other exception, not exit.
+fn system_exit() {
+    _, err := sys.exit(3)
+    report("SystemExit", err)
+}
+
+
+// KeyboardInterrupt is the other famous BaseException. A generator's
+// throw() raises any exception object from an expression, which is the
+// only raise the bridge exposes.
+fn interrupt() {
+    _, err := builtins.eval("(_ for _ in ()).throw(KeyboardInterrupt('fake ctrl-c'))", builtins.dict())
+    report("KeyboardInterrupt", err)
+}
+
+
+// RecursionError, the classic way: a lambda that calls itself forever.
+fn recursion() {
+    _, err := builtins.eval("(lambda f: f(f))(lambda f: f(f))", builtins.dict())
+    report("RecursionError", err)
+}
+
+
+// An exception whose own __str__ raises. Error conversion has to
+// stringify the exception; this is the exception fighting back.
+fn hostile_str() {
+    expr := "(_ for _ in ()).throw(type('Hostile', (Exception,), {'__str__': lambda self: 1 // 0})('payload'))"
+    _, err := builtins.eval(expr, builtins.dict())
+    report("hostile __str__", err)
+}
+
+fn main() {
+    argv := os.args()
+    if len(argv) == 0 {
+        print("modes: system-exit interrupt recursion hostile-str os-exit segfault")
+        return
+    }
+    mode := argv[0]
+    if mode == "system-exit" {
+        system_exit()
+    } else if mode == "interrupt" {
+        interrupt()
+    } else if mode == "recursion" {
+        recursion()
+    } else if mode == "hostile-str" {
+        hostile_str()
+    } else if mode == "os-exit" {
+        // the boundary: no exception exists to convert; the process is gone
+        _, err := builtins.eval("__import__('os')._exit(7)", builtins.dict())
+        report("os._exit", err)
+    } else if mode == "segfault" {
+        // the boundary at its harshest: native code reads address zero
+        _, err := ctypes.string_at(0)
+        report("segfault", err)
+    }
+}
