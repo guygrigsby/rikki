@@ -125,6 +125,9 @@ impl<'p> Interp<'p> {
                         if path == "http" {
                             structs.extend(crate::stdlib::http::struct_exprs());
                         }
+                        if path == "time" {
+                            structs.extend(crate::stdlib::time::struct_exprs());
+                        }
                     }
                     if *py {
                         py_imports.push(path.clone());

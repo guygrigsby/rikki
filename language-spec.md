@@ -2222,6 +2222,66 @@ fn main() (error?) {
 }
 ```
 
+### 15.8 time
+
+Clocks, sleeping, and civil time. The single time currency is `int`
+nanoseconds: every duration and every instant in the standard library
+is an integer count of nanoseconds (exact in `int` until the year
+2262), and durations are written with the constants below.
+
+Importing `"time"` also declares:
+
+```
+struct Parts { year int, month int, day int, hour int, minute int, second int }
+```
+
+Constants (all `int`):
+
+| Constant | Value |
+|----------|-------|
+| `time.nanosecond` | 1 |
+| `time.microsecond` | 1000 |
+| `time.millisecond` | 1000000 |
+| `time.second` | 1000000000 |
+| `time.minute` | 60 · 10⁹ |
+| `time.hour` | 3600 · 10⁹ |
+
+Functions:
+
+- `time.now() int` — the wall clock, nanoseconds since the Unix epoch.
+- `time.clock() int` — a monotonic clock, nanoseconds since an
+  arbitrary origin; only differences are meaningful. Unaffected by
+  wall-clock adjustment.
+- `time.sleep(c Ctx, d int) error?` — block for `d` nanoseconds, then
+  `none`. A non-positive `d` returns `none` without blocking. If the
+  ctx is done, or becomes done while sleeping, the sleep ends promptly
+  and returns the ctx error (`"deadline exceeded"` or `"interrupted"`).
+  Wake-up latency after the ctx ends is implementation-defined but
+  bounded (the reference implementation checks at least every 50ms).
+- `time.parts(epoch int) Parts` — the local civil time for an epoch
+  instant, split into fields. Nanoseconds within the second truncate.
+  An epoch outside the representable civil range faults.
+
+```nevla
+import "ctx"
+import "time"
+
+fn main() {
+    t0 := time.clock()
+    e := time.sleep(ctx.background(), 250 * time.millisecond)
+    if e != none {
+        print("interrupted early: " + e.msg)
+    }
+    elapsed_ms := (time.clock() - t0) / time.millisecond
+    p := time.parts(time.now())
+    printf("%d:%d:%d slept about %dms\n", p.hour, p.minute, p.second, elapsed_ms)
+}
+```
+
+In contexts with no usable clock (the browser playground) `time.now`,
+`time.clock`, `time.sleep`, and `time.parts` report their absence as a
+fault naming the build, the same contract as `ctx.timeout` (15.4).
+
 ## 16. Modules and multi-file programs
 
 ### 16.1 File imports

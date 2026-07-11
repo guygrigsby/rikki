@@ -98,6 +98,9 @@ impl Checker {
                     if path == "ctx" {
                         self.structs.insert("Ctx".into(), vec![]);
                     }
+                    if path == "time" {
+                        self.structs.extend(crate::stdlib::time::struct_types());
+                    }
                 }
                 // file imports resolve after fns and structs are collected
             }

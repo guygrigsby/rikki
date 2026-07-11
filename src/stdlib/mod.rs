@@ -4,6 +4,7 @@ pub mod gpu;
 pub mod http;
 pub mod math;
 pub mod test;
+pub mod time;
 
 use crate::interp::{Fault, Interp};
 use crate::value::Value;
@@ -21,6 +22,7 @@ pub fn call(
         "gpu" => gpu::call(interp, name, args),
         "http" => http::call(interp, name, args),
         "test" => test::call(interp, name, args),
+        "time" => time::call(interp, name, args),
         _ => Err(interp.fault(format!("{module}.{name} is not implemented yet"))),
     }
 }
@@ -29,6 +31,8 @@ pub fn constant(interp: &Interp, module: &str, name: &str) -> Result<Value, Faul
     match (module, name) {
         ("math", "pi") => Ok(Value::Float(std::f64::consts::PI)),
         ("math", "e") => Ok(Value::Float(std::f64::consts::E)),
+        ("time", _) => time::constant(name)
+            .ok_or_else(|| interp.fault(format!("{module}.{name} is not implemented yet"))),
         _ => Err(interp.fault(format!("{module}.{name} is not implemented yet"))),
     }
 }

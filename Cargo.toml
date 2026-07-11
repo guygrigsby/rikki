@@ -14,9 +14,11 @@ toml = "1.1.2"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
-# native-only: the py bridge, http, and SIGINT handling have no wasm story;
-# the playground build stubs them (src/bridge_wasm.rs, cfg gates)
+# native-only: the py bridge, http, SIGINT handling, and local civil time
+# have no wasm story; the playground build stubs them (src/bridge_wasm.rs,
+# cfg gates)
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 ctrlc = "3.5.2"
 pyo3 = { version = "0.29.0", features = ["py-clone"] }
 ureq = "3.3.0"

@@ -1,0 +1,40 @@
+import "ctx"
+import "time"
+
+fn main() {
+    // the duration constants relate exactly
+    print(time.microsecond / time.nanosecond)
+    print(time.millisecond / time.microsecond)
+    print(time.second / time.millisecond)
+    print(time.minute / time.second)
+    print(time.hour / time.minute)
+
+    // wall clock: parts of now() are a plausible local civil time
+    p := time.parts(time.now())
+    print(p.year >= 2026)
+    print(p.month >= 1 && p.month <= 12)
+    print(p.day >= 1 && p.day <= 31)
+    print(p.hour >= 0 && p.hour < 24)
+    print(p.minute >= 0 && p.minute < 60)
+    print(p.second >= 0 && p.second < 60)
+
+    // a known instant: epoch zero is 1970 in every timezone on earth
+    z := time.parts(0)
+    print(z.year == 1969 || z.year == 1970)
+
+    // monotonic clock moves while we sleep
+    c0 := time.clock()
+    e := time.sleep(ctx.background(), 5 * time.millisecond)
+    print(e == none)
+    print(time.clock() > c0)
+
+    // negative duration sleeps zero
+    print(time.sleep(ctx.background(), -time.second) == none)
+
+    // an already-done ctx wakes the sleep immediately with its error
+    dead := ctx.timeout(ctx.background(), 0.0)
+    de := time.sleep(dead, time.hour)
+    if de != none {
+        print(de.msg)
+    }
+}
