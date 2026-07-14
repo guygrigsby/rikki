@@ -456,7 +456,11 @@ An integer literal in the range 0 to 255 is additionally assignable to
 out-of-range integer literal in a `byte` position is a compile-time error
 ("cannot use `n` as byte"). This is the only implicit conversion in the
 language; a variable of type `int` is never assignable to `byte` without an
-explicit `byte(...)` conversion (section 7.7).
+explicit `byte(...)` conversion (section 7.7). The implicit applies only at
+a position already known to be `byte` (a scalar slot, or an element of a
+`[]byte{...}` typed literal); it does not reach into a bare list literal's
+own element-type inference, so `[]int` (including a bare `[1, 2]`) is never
+assignable to `[]byte` (section 7.2.1).
 
 ### 5.11 Zero values
 
@@ -683,6 +687,20 @@ needs an explicit `byte(...)` conversion.
 
 ```
 b := []byte{137, 80, 78, 71}   // ok: literals assignable to byte
+```
+
+The literal rule applies only to the typed form: a bare list literal's
+elements type themselves first (an integer literal types `int`), so a bare
+`[1, 2]` is `[]int` regardless of a surrounding `[]byte` context, and `[]int`
+is not assignable to `[]byte` (section 5.10). Only `[]byte{...}` builds a
+`[]byte` from integer literals; a bare `[1, 2]` passed where `[]byte` is
+expected is a compile-time error ("expected []byte, got []int").
+
+```
+fn takesBytes(b []byte) bool { return len(b) > 0 }
+
+takesBytes([]byte{1, 2})   // ok
+// takesBytes([1, 2])      // compile error: expected byte, got int
 ```
 
 #### 7.2.2 Map literals

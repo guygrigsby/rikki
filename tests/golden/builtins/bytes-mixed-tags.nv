@@ -1,15 +1,13 @@
 // Regression coverage for the Task 3 fix round: []byte values whose
 // elements carry a mix of Value::Byte and Value::Int runtime tags (the
-// compact buffer's boxed-list escape hatches: sorted_by's return, a bare
-// untyped list literal in a []byte-expected position, an untyped literal
-// struct field) must behave exactly like an all-Value::Byte buffer.
+// compact buffer's boxed-list escape hatches: sorted_by's return, an
+// untyped literal struct field) must behave exactly like an all-Value::Byte
+// buffer. A bare untyped list literal in a []byte-expected position used
+// to be a third escape hatch; the checker now rejects it (fix round, see
+// tests/golden/check/bytes-no-implicit-list.nv), so that case moved there.
 
 struct Header {
     kind byte
-}
-
-fn takesBytes(b []byte) bool {
-    return b.contains(byte(1))
 }
 
 fn main() {
@@ -20,11 +18,6 @@ fn main() {
     c := b.sorted_by(fn(x, y byte) bool { return x > y })
     d := append(c, 9)
     print(d.contains(byte(9)))       // true
-
-    // a bare untyped list literal passed where []byte is expected stays a
-    // boxed list of Value::Int; contains' needle (byte(1), Value::Byte)
-    // must still cross-compare against those Value::Int elements.
-    print(takesBytes([1, 2]))        // true
 
     // a struct literal field typed byte keeps a bare int literal as
     // Value::Int (no field-type coercion at the literal site); comparing

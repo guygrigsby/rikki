@@ -101,7 +101,18 @@ impl Checker {
                     let t = self.expr_one(it, Some(&elem));
                     if elem == Type::Unknown {
                         elem = t;
-                    } else if !self.expects(&elem, &t, Some(it), it.span) {
+                    // plain accepts(), not expects(): a bare `[...]` literal
+                    // never gets the byte int-literal implicit (design
+                    // 2026-07-13, literal-rule; spec 5.10 says int never
+                    // implicitly becomes byte, generalized here to lists).
+                    // Only the `[]byte{...}` spelling (K::ListLit below)
+                    // gets that carve-out. Without this, an expected/
+                    // unified element type of Byte let `expects()` accept
+                    // an in-range int literal per element, silently typing
+                    // the whole bare list `[]byte` while eval's K::List arm
+                    // still builds a boxed Value::List of Value::Int —
+                    // diverging from the compact Value::Bytes at runtime.
+                    } else if !elem.accepts(&t) {
                         self.diag(it.span, format!("expected {elem}, got {t}"));
                     }
                 }

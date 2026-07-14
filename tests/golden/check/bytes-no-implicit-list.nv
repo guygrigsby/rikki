@@ -1,0 +1,14 @@
+// A bare untyped list literal is not assignable to []byte; only the
+// []byte{...} spelling is (fix round: this used to typecheck by smuggling
+// a boxed Value::List past the checker via the byte int-literal implicit,
+// see tests/golden/eval/bytes-str-smuggled-list-fault.nv's history and
+// docs/specs/2026-07-13-bytes-design.md's literal-rule section). []int
+// never implicitly becomes []byte, same as int never implicitly becomes
+// byte (spec 5.10).
+fn takesBytes(b []byte) bool {
+    return b.contains(byte(1))
+}
+
+fn main() {
+    print(takesBytes([1, 2]))
+}
