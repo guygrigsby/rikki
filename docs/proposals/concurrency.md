@@ -83,3 +83,13 @@ drafts that are not yet decisions and may never become one.
 - Test runner parallelism: tests are fallible functions (ADR 0012), an
   embarrassingly parallel list, and likely the first internal user of
   whatever primitive lands.
+- 2026-07-13, bytes design: lent `[]byte` buffers are memory shared with
+  Python (always-view bridge crossing, buffer protocol). Safe today only
+  because nevla is single-threaded and the GIL serializes Python; any
+  parallel design must give lent buffers the same answer as shared lists,
+  and they are observable from foreign code, so "don't" is even weaker
+  here.
+- 2026-07-13, bytes design: the lent flag (buffers that ever crossed the
+  bridge stop growing in place) is the seam a future synchronization or
+  freeze-on-share story hooks into; it already distinguishes private
+  buffers from shared ones at runtime.

@@ -1,7 +1,9 @@
-# byte and []byte: binary data as a compact list
+# byte and []byte: binary data as a compact list, shared across the bridge
 
-Date: 2026-07-13. Status: approved. Source: backlog v1.1 top item (binary
-file and http bodies); ADR 0019 promised bytes its own record.
+Date: 2026-07-13. Status: approved. Source: backlog v1.1 top item; ADR 0019
+promised bytes its own record. The shard workflow (read a shard, train from
+it; create a shard) is the sizing case: the design must handle big data,
+which forced the bridge posture below.
 
 ## Shape
 
@@ -60,57 +62,153 @@ language cost.
 - Rendering: `print` and `%v` render like a list of its elements,
   consistent with lists.
 
-## Runtime representation
+## Runtime representation: stable addresses by construction
 
-Invisible in the spec, and the reason the design works: `[]byte` gets a
-compact sibling of `Value::List` backed by `Rc<RefCell<Vec<u8>>>`. A 10MB
-body is 10MB contiguous, not ten million boxed `Value`s. The typechecker
-knows the static type; the interpreter dispatches list operations on the
-compact representation. A bare `byte` value is `Value::Byte(u8)`.
+`[]byte` gets a compact sibling of `Value::List` backed by a
+reference-counted `Vec<u8>`; a bare `byte` value is `Value::Byte(u8)`. A
+10MB body is 10MB contiguous, not ten million boxed `Value`s.
 
-## Bridge (spec 13.5)
+The property the bridge design rests on: **no operation in the language
+reallocates a live buffer.** `b[i] = x` writes in place and never moves
+memory; `append` is pure (ADR 0010), producing a new buffer and rebinding;
+slices copy. A buffer's address is therefore stable from allocation to
+death, except for one runtime optimization, governed by a lent flag:
 
-- Inbound: `byte` converts to Python `int`; `[]byte` converts to Python
-  `bytes` as one contiguous copy. This is the cheapest row in the inbound
-  table; nevla lists already copy per-element with a fresh PyObject each
-  (`to_py_depth`), so one memcpy is a strict improvement on the existing
-  posture, not a new cost.
-- Outbound: `[]byte(x)` on a `py` operand extracts from `bytes`,
-  `bytearray`, and `memoryview` (buffer protocol), one copy in, fallible
-  like every outbound conversion. `byte(x)` on a `py` operand: deferred;
-  `int(x)` then `byte(n)` covers it.
-- Large data does not transit the bridge as a value, by idiom: shards and
-  tensors load py-side by path (`torch.load(path)`,
-  `safetensors.safe_open`, `np.memmap`) and live as `py` handles. `[]byte`
-  serves the small and medium band: http payloads, images into
-  `io.BytesIO`, headers, checksums, download-then-load-by-path.
-- Zero-copy (a Python memoryview over nevla's buffer, Rc pinned) is
-  explicitly deferred: Python holding a view into a mutable nevla buffer
-  is an aliasing design of its own. Re-entry: the ADR names it; a line
-  lands in docs/proposals/concurrency.md, since a lent buffer and a shared
-  buffer are the same problem.
+- A buffer that is solely owned and has **never been lent** across the
+  bridge may grow in place on `append` (amortized O(1)); building a shard
+  by appending chunks is linear, not quadratic.
+- A buffer that has **ever been lent** never grows in place: `append`
+  copies. Lent views keep seeing the old buffer, which is exactly the
+  rebinding semantics `append` already has. Stable addresses for every
+  lent buffer, fast growth for every private one, no user-visible rule
+  beyond "append rebinds."
 
-## stdlib
+## The bridge model for real data
 
-`file` (spec 15.3) grows the binary pair:
+This design sets the general model for data crossing the bridge, one rule
+per kind (spec 13.5 gains this framing):
+
+1. **Value types** (scalars, str, structs): convert, i.e. copy.
+   Semantically lossless; values have no identity to preserve.
+2. **Contiguous primitive buffers**: cross by reference, zero-copy, via
+   CPython's buffer protocol. `[]byte` is the first member; compact
+   numeric list types (`[]float64`, `[]int64` for data prep) inherit this
+   exact design if demand arrives. This is the data plane.
+3. **Structured containers** (lists, maps): copy today, per-element, as
+   they always have (`to_py_depth` builds a fresh PyList/PyDict). CPython
+   cannot view foreign memory as a `list`; the only by-reference option is
+   a lazy proxy object (per-access dispatch and conversion), which trades
+   one upfront copy for per-element round-trips — wrong for bulk data and
+   breaks `isinstance(x, list)` consumers (json.dumps rejects
+   non-lists). Recorded as the known upgrade if mutation-through-the-
+   bridge ever earns its cost; not now.
+4. **py handles**: already references, unchanged.
+
+### []byte crossing: always a view
+
+Inbound, a `[]byte` argument converts to a buffer-protocol object — a
+small bridge-defined Python type holding the buffer's reference count and
+exposing pointer+length. `memoryview`, `np.frombuffer`,
+`torch.frombuffer`, `hashlib.update`, `f.write` consume it with zero
+copies at any size. No size threshold, no opt-in: `[]byte` is a reference
+type and it crosses like one — the first nevla type with reference
+semantics through the bridge, which is its job. Mutations are visible
+both ways (`b[i] = x` changes what a `frombuffer` tensor sees); nevla is
+single-threaded and the GIL serializes Python, so there is no torn access
+today. The concurrency proposal inherits the constraint.
+
+The cost is ergonomic, accepted deliberately: a view is not a Python
+`bytes`; libraries that `isinstance(x, bytes)`, key dicts on bytes, or
+call `.decode()` need `bytes(b)` py-side — the one explicit copy, paid at
+the call site that demands it.
+
+Outbound, `[]byte(x)` on a `py` operand extracts from `bytes`,
+`bytearray`, and `memoryview` (buffer protocol) with one copy in,
+fallible like every outbound conversion. Zero-copy outbound (nevla
+`[]byte` over Python-owned memory) is deferred: it gives `[]byte` a
+second storage backing and complicates the CPython-free wasm build.
+`byte(x)` on a `py` operand: deferred; `int(x)` then `byte(n)` covers it.
+
+### The shard flows
+
+Usage — the data plane never copies after the read:
+
+```nevla
+b := check file.readbytes("shard-00.bin")              // disk to ram, once
+x := check torch.frombuffer(b, dtype: torch.float32)   // zero-copy view
+```
+
+(`torch.load`/`safetensors` paths, where the data never leaves Python at
+all, remain the idiom for framework-format shards; `[]byte` serves the
+raw-buffer and preprocessing cases.)
+
+Prep — build privately (in-place growth), then write or lend:
+
+```nevla
+f := check file.create("shard-00.bin")
+for sample := range n {
+    chunk := encode_sample(sample)       // private buffer, fast appends
+    check f.write(chunk)                 // lent per call, zero-copy
+}
+check f.close()
+```
+
+## Streaming
+
+Streaming across the bridge is push-shaped: a loop over bounded chunks,
+nevla driving, Python consuming synchronously inside each call
+(`update`/`feed`/`write`-style APIs — hashing, compression, encryption,
+incremental parsers). Buffer reuse works: writes to a lent buffer are
+legal, visible, and never realloc, so reading into the same fixed buffer
+each iteration is sound. Footgun to document: a `frombuffer` tensor
+aliases the buffer, so the next chunk overwrites what the tensor sees;
+`.clone()` py-side detaches.
+
+Pull streaming — Python calling back into nevla (`json.load(f)` on a
+nevla file-like, a DataLoader over a nevla dataset) — is not possible:
+functions do not cross the bridge. That is a language-level gap
+(callbacks across the bridge), out of scope here and recorded as a
+follow-on; the idiom is inversion (nevla drives the loop) or keeping the
+pipeline py-side behind a handle.
+
+## stdlib: file (spec 15.3)
+
+Whole-file pair:
 
 - `file.readbytes(path str) ([]byte, error?)` — whole-file read; empty
   `[]byte` on error.
 - `file.writebytes(path str, b []byte) error?` — create or truncate.
 
-No `appendbytes` until something wants it.
+Chunked handles (v1, because without a chunk source push streaming is
+theoretical). Importing `"file"` declares an opaque handle type `File`
+(the `Proc` pattern of 15.12):
+
+- `file.open(path str) (File, error?)` — read-only handle.
+- `file.create(path str) (File, error?)` — write handle, create or
+  truncate.
+- `f.read(n int) ([]byte, error?)` — up to `n` bytes; empty `[]byte` with
+  `none` error means end of file.
+- `f.write(b []byte) error?` — write the whole buffer.
+- `f.close() error?` — idempotent.
+
+No append-mode handle, no seek, no read-into until something wants them.
 
 ## Out of scope, with re-entry paths
 
-- Binary http. `Request`/`Response` declare `body str` as struct types;
-  flipping to `[]byte` breaks every http program and taxes the text
-  majority, parallel fields need their own thought. Break-early philosophy
-  means the flip stays available. Backlog keeps the line.
-- Hex integer literals (`0x89`). Lexer-only, orthogonal; backlog item if
-  decimal grates.
+- Binary http. `Request`/`Response` declare `body str`; the flip to
+  `[]byte` (break-early makes it available) or parallel fields is its own
+  small design. Backlog keeps the line.
+- fn across the bridge (callbacks, nevla file-likes, pull streaming):
+  language feature with reentrancy questions; backlog entry.
+- Lazy list/map proxies (containers by reference through the bridge):
+  see the bridge model; adopt only when a use case demands mutation
+  visibility and accepts per-access cost.
+- Zero-copy outbound (`[]byte` over Python-owned buffers).
+- `file.mapbytes` (mmap-backed read-only buffers): the page-cache upgrade
+  for shard reading; natural follow-on, wants the read-only-buffer story.
+- Hex integer literals (`0x89`). Lexer-only, orthogonal; backlog item.
 - `[]int(b)` / `[]byte(xs)` cross-conversions: a `for` loop covers it.
-- byte arithmetic and bit operators: see above; compatible later.
-- Zero-copy bridge views: see above.
+- byte arithmetic and bit operators: compatible later.
 
 ## Testing
 
@@ -124,17 +222,28 @@ Goldens first, per the house rule:
   error, `int(b)`/`byte(n)`.
 - Checker: byte/int mixing rejections, arithmetic rejection, `x byte`
   declarations everywhere types go.
-- `py/` cases (NEVLA_TEST_PY=1): inbound `[]byte` to `len()` and
-  `hashlib`, outbound from `bytes`/`bytearray`/`memoryview`, non-buffer
-  object erroring, `byte` inbound as int.
-- file: readbytes/writebytes round-trip including non-UTF-8 content.
+- file: readbytes/writebytes round-trip with non-UTF-8 content; chunked
+  read to EOF; create/write/close round-trip; write-after-close error.
+- `py/` cases (NEVLA_TEST_PY=1, stdlib-only consumers): `len()` and
+  `hashlib` over a lent view; `bytes(x)` py-side materialization;
+  mutation visibility (nevla writes `b[i]`, a held `memoryview` sees it);
+  append-after-lend detach (view sees old buffer); outbound from
+  `bytes`/`bytearray`/`memoryview`; non-buffer object erroring; `byte`
+  inbound as int; chunked hash loop equals whole-file hash.
 
 ## Spec sections touched (same commit as semantics, per house rule)
 
 3.2 note, 5.1 (byte joins the scalar table), 5.9 (type syntax), 5.10
 (literal assignability), 5.11 (zero value), 7.5, 7.6, 7.7 (conversion
-table rows and the fallibility note), 7.9.2 (comparisons), 13.5 (both
-tables), 14 (`len`, `append`, `clone`), 15.3 (file). Plus one new ADR:
-byte/[]byte placement, the str-fallibility and no-arithmetic Go
-deviations, zero-copy deferral. ADR 0019 consequences line is satisfied,
-not amended.
+table rows and the fallibility note), 7.9.2 (comparisons), 13.5 (the
+per-kind bridge model, the view row, outbound row), 14 (`len`, `append`,
+`clone`), 15.3 (file, including the File handle). Plus one new ADR:
+byte/[]byte placement, always-view bridge crossing and the stable-address
+argument, the lent flag, the str-fallibility and no-arithmetic Go
+deviations, the buffer-family future, the deferred proxies. ADR 0019's
+consequences line is satisfied, not amended.
+
+docs/proposals/concurrency.md gains two lines in the same commit as the
+bridge work: lent buffers are memory shared with Python and join lists in
+whatever sharing story lands; the lent flag is the seam a future
+synchronization story hooks into.

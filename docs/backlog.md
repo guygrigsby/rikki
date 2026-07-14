@@ -4,9 +4,32 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
 
 ## v1.1
 
-- `bytes` type. Unblocks binary file and http bodies. Touches literals,
-  indexing, conversions. ADR 0019 records the character model it
-  complements.
+- byte and `[]byte`: DESIGN APPROVED 2026-07-13
+  (docs/specs/2026-07-13-bytes-design.md), implementation next. byte
+  scalar (compare-only, no arithmetic) plus `[]byte` as a compact list
+  type; always-view zero-copy bridge crossing via the buffer protocol
+  (stable addresses by construction, the lent flag); chunked file
+  handles. Sets the bridge model for real data: values copy, primitive
+  buffers cross by reference, containers copy (lazy proxies are the
+  recorded upgrade), py handles unchanged.
+- Compact numeric buffers `[]float64`/`[]int64` (2026-07-13): the byte
+  design is written to be the template (data prep building tensors
+  nevla-side, `np.frombuffer` zero-copy). Build when a data-prep flow
+  wants it; no new design round needed, inherit the bytes ADR.
+- fn across the bridge (2026-07-13): Python cannot call back into nevla,
+  so pull-shaped py APIs (file-likes, DataLoader datasets, json.load on
+  a stream) are inexpressible; the idiom is inversion (nevla drives,
+  push APIs receive). A callable-proxy design owns the reentrancy
+  questions when the inversion idiom stops being enough.
+- Binary http (2026-07-13): `Request`/`Response` declare `body str`;
+  binary bodies need the break-early flip to `[]byte` or parallel
+  fields. Scoped out of the bytes design; needed before nevla can
+  download a shard itself.
+- `file.mapbytes` (2026-07-13): mmap-backed read-only buffers, the
+  page-cache upgrade for shard reading; wants a read-only-buffer story
+  first.
+- Hex integer literals (2026-07-13): `0x89` for byte-heavy code; decimal
+  grates in `[]byte{137, 80, 78, 71}`. Lexer-only, orthogonal.
 - proc module: DONE 2026-07-10 (ADR 0016, spec 15.12). run/exec/start/
   attach with runtime-pumped pipes; got, dev-watch, and httpcheck are
   zero import py.
