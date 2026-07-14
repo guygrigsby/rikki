@@ -72,16 +72,21 @@ The property the bridge design rests on: **no operation in the language
 reallocates a live buffer.** `b[i] = x` writes in place and never moves
 memory; `append` is pure (ADR 0010), producing a new buffer and rebinding;
 slices copy. A buffer's address is therefore stable from allocation to
-death, except for one runtime optimization, governed by a lent flag:
+death, unconditionally.
 
-- A buffer that is solely owned and has **never been lent** across the
-  bridge may grow in place on `append` (amortized O(1)); building a shard
-  by appending chunks is linear, not quadratic.
-- A buffer that has **ever been lent** never grows in place: `append`
-  copies. Lent views keep seeing the old buffer, which is exactly the
-  rebinding semantics `append` already has. Stable addresses for every
-  lent buffer, fast growth for every private one, no user-visible rule
-  beyond "append rebinds."
+**Amended 2026-07-14 (ADR 0022, supersedes the lent-flag design below):**
+the original design gated an in-place append growth optimization on a
+lent flag. Implementation proved the sole-owner heuristic unsound —
+`c := append(b, x)` is indistinguishable at runtime from
+`b = append(b, x)`, and in-place growth let the old binding observe the
+append, breaking purity. `append` on `[]byte` now always copies; there
+is no lent flag; stable addresses hold with no conditions and the bridge
+view needs no growth guard. Cost accepted: in-memory append accumulation
+is O(n²) — big builds stream through chunked `File.write` (the prep flow
+below), and index-assign buffer reuse is unaffected. The recorded upgrade
+if a real workload hits the wall: checker-assisted self-rebind detection
+(`b = append(b, x)` is statically recognizable) reintroducing in-place
+growth for that shape only, which would also bring the lent flag back.
 
 ## The bridge model for real data
 

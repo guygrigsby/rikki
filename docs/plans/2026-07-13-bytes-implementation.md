@@ -4,7 +4,9 @@
 
 **Goal:** Implement the `byte` scalar and compact `[]byte` list type per `docs/specs/2026-07-13-bytes-design.md`, including zero-copy always-view bridge crossing and chunked file handles.
 
-**Architecture:** `byte` is a new nullary `Type`/`Value` scalar; `[]byte` is `Type::List(Box::new(Type::Byte))` at check time and a new compact `Value::Bytes(Rc<RefCell<BytesBuf>>)` at runtime. The bridge crosses `[]byte` as a buffer-protocol `#[pyclass]` view (the repo's first pyclass), gated by a lent flag that also governs in-place append growth. `File` handles follow the `Proc` opaque-handle pattern exactly.
+**Architecture:** `byte` is a new nullary `Type`/`Value` scalar; `[]byte` is `Type::List(Box::new(Type::Byte))` at check time and a new compact `Value::Bytes(Rc<RefCell<BytesBuf>>)` at runtime. The bridge crosses `[]byte` as a buffer-protocol `#[pyclass]` view (the repo's first pyclass). `File` handles follow the `Proc` opaque-handle pattern exactly.
+
+> **AMENDED 2026-07-14 (ADR 0022, during Task 3):** there is NO lent flag and NO in-place append growth — the sole-owner heuristic proved unsound (`c := append(b, x)` broke purity) and `append` on `[]byte` always copies. `BytesBuf` has only `data`. Buffer addresses are stable unconditionally, so Task 7 needs no growth guard and must NOT set or reference `lent`. Every mention of `lent`/growth in Tasks 3 and 7 below is superseded by this note; the append-after-lend detach golden in Task 7 remains valid (append always detaches).
 
 **Tech Stack:** Rust (tree-walking interpreter), pyo3 0.29 (buffer protocol, `Python::attach`), golden-test harness (`tests/golden.rs`).
 
