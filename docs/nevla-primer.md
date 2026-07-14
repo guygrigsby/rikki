@@ -131,7 +131,7 @@ Modules (plain `import "name"`, spec chapter 15):
 
 - `error`: new, wrap
 - `math`: abs, ceil, cos, e, exp, floor, ln, log, max, min, pi, pow, round, sin, sqrt, tan
-- `file`: append, exists, glob, list, mkdir, modified, read, remove, write
+- `file`: append, exists, glob, list, mkdir, modified, read, readbytes, remove, write, writebytes
 - `ctx`: background, interrupt, timeout
 - `test`: eq, err, neq, skip
 - `http`: get, post, request, stream

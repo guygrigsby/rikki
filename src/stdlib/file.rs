@@ -18,6 +18,26 @@ fn fallible(v: Result<Value, String>, zero: Value) -> Value {
 }
 
 pub fn call(interp: &mut Interp, name: &str, args: Vec<Value>) -> Result<Value, Fault> {
+    // Handle readbytes and writebytes before string validation
+    match (name, &args[..]) {
+        ("readbytes", [Value::Str(path)]) => {
+            return Ok(fallible(
+                fs::read(path)
+                    .map(Value::bytes)
+                    .map_err(|e| format!("readbytes {path}: {e}")),
+                Value::bytes(vec![]),
+            ))
+        }
+        ("writebytes", [Value::Str(path), Value::Bytes(b)]) => {
+            return Ok(match fs::write(path, &b.borrow().data) {
+                Ok(()) => Value::NoneV,
+                Err(e) => err(format!("writebytes {path}: {e}")),
+            })
+        }
+        _ => {}
+    }
+
+    // Validate that all remaining args are strings
     let mut strs = vec![];
     for a in &args {
         match a {
@@ -212,6 +232,58 @@ mod tests {
                 Value::Err(e) => assert!(e.msg.contains("nonexistent")),
                 v => panic!("{v:?}"),
             },
+            v => panic!("{v:?}"),
+        }
+    }
+
+    #[test]
+    fn readbytes_roundtrips_non_utf8() {
+        let base = tempbase("bytes");
+        let p = format!("{base}/x.bin");
+        std::fs::write(&p, [0u8, 255, 137]).unwrap();
+        match call("readbytes", vec![s(&p)]) {
+            Value::Tuple(ts) => {
+                match &ts[0] {
+                    Value::Bytes(b) => {
+                        assert_eq!(b.borrow().data, vec![0u8, 255, 137]);
+                    }
+                    v => panic!("{v:?}"),
+                }
+                assert!(matches!(ts[1], Value::NoneV));
+            }
+            v => panic!("{v:?}"),
+        }
+    }
+
+    #[test]
+    fn writebytes_creates_file() {
+        let base = tempbase("writebytes");
+        let p = format!("{base}/out.bin");
+        let data = Value::Bytes(
+            std::rc::Rc::new(std::cell::RefCell::new(crate::value::BytesBuf {
+                data: vec![1u8, 2, 255, 254],
+            })),
+        );
+        assert!(matches!(call("writebytes", vec![s(&p), data]), Value::NoneV));
+        let read_back = std::fs::read(&p).unwrap();
+        assert_eq!(read_back, vec![1u8, 2, 255, 254]);
+    }
+
+    #[test]
+    fn readbytes_missing_is_error_value() {
+        match call("readbytes", vec![s("/nonexistent/bin")]) {
+            Value::Tuple(ts) => {
+                match &ts[0] {
+                    Value::Bytes(b) => {
+                        assert_eq!(b.borrow().data.len(), 0);
+                    }
+                    v => panic!("{v:?}"),
+                }
+                match &ts[1] {
+                    Value::Err(e) => assert!(e.msg.contains("nonexistent")),
+                    v => panic!("{v:?}"),
+                }
+            }
             v => panic!("{v:?}"),
         }
     }

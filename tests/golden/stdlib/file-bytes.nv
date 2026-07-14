@@ -1,0 +1,24 @@
+import "file"
+
+fn main() {
+    p := "/tmp/nevla-golden-file-bytes"
+    b := []byte{0, 255, 137, 10}          // deliberately not valid UTF-8
+    err := file.writebytes(p, b)
+    if err != none {
+        print("write failed")
+        return
+    }
+    got, rerr := file.readbytes(p)
+    if rerr != none {
+        print("read failed")
+        return
+    }
+    print(len(got))          // 4
+    print(int(got[1]))       // 255
+    _, derr := str(got)
+    print(derr != none)      // true: content is not UTF-8, and that is fine
+    rerr2 := file.remove(p)
+    missing, merr := file.readbytes("/nonexistent/nevla-bytes")
+    print(len(missing))      // 0: empty []byte on error
+    print(merr != none)      // true
+}

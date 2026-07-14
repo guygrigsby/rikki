@@ -2127,12 +2127,16 @@ fn main() {
 
 ### 15.3 file
 
-Paths are `str`. Contents are UTF-8 `str`; there is no bytes type in v1.
+Paths are `str`. Text contents are UTF-8 `str` or raw bytes `[]byte`.
 
 - `file.read(path str) (str, error?)` — whole-file read; the value slot
   is `""` on error.
 - `file.write(path str, s str) error?` — create or truncate, then write.
 - `file.append(path str, s str) error?` — create if missing, append.
+- `file.readbytes(path str) ([]byte, error?)` — whole-file read; the value
+  slot is an empty `[]byte` on error.
+- `file.writebytes(path str, b []byte) error?` — create or truncate, then
+  write binary data.
 - `file.exists(path str) bool` — existence test; never errors.
 - `file.list(dir str) ([]str, error?)` — entry names, sorted
   lexicographically.
