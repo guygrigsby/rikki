@@ -66,6 +66,8 @@ pub enum Value {
     Ctx(std::sync::Arc<crate::stdlib::ctx::CtxInner>),
     Re(std::sync::Arc<regex::Regex>),
     Proc(std::sync::Arc<crate::stdlib::proc::ProcInner>),
+    /// Open file handle; reference type behind Arc, like Proc (spec 15.3).
+    File(std::sync::Arc<crate::stdlib::file::FileInner>),
     Tuple(Vec<Value>),
     Unit,
 }
@@ -283,6 +285,7 @@ impl Value {
             | Value::Ctx(_)
             | Value::Re(_)
             | Value::Proc(_)
+            | Value::File(_)
             | Value::Unit => false,
         })
     }
@@ -358,6 +361,7 @@ fn render_depth(v: &Value, depth: u32) -> String {
         Value::Ctx(_) => "ctx".into(),
         Value::Re(re) => format!("re({})", re.as_str()),
         Value::Proc(_) => "proc".into(),
+        Value::File(f) => format!("<File {}>", f.path),
         Value::Tuple(items) => items.iter().map(r).collect::<Vec<_>>().join(", "),
         Value::Unit => "()".into(),
     }

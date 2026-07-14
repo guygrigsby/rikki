@@ -1,0 +1,25 @@
+import "file"
+
+fn main() (error?) {
+    p := "/tmp/nevla-golden-file-handle"
+    w := check file.create(p)
+    check w.write([]byte{1, 2, 3, 4, 5, 6, 7})
+    check w.close()
+
+    r := check file.open(p)
+    total := 0
+    for {
+        chunk, err := r.read(3)
+        if err != none {
+            return err
+        }
+        if len(chunk) == 0 {
+            break
+        }
+        total = total + len(chunk)
+    }
+    check r.close()
+    print(total)             // 7: chunked read to EOF (3 + 3 + 1)
+    _ := file.remove(p)
+    return none
+}

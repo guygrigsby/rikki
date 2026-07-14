@@ -57,6 +57,13 @@ fn injected_struct_owners() -> Vec<(&'static str, Vec<String>)> {
                 .map(|(n, _)| n)
                 .collect(),
         ),
+        (
+            "file",
+            crate::stdlib::file::struct_types()
+                .into_iter()
+                .map(|(n, _)| n)
+                .collect(),
+        ),
     ]
 }
 

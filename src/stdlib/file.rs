@@ -1,4 +1,6 @@
 use std::fs;
+use std::io::{Read, Write};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::interp::{Fault, Interp};
 use crate::value::{ErrVal, Value};
@@ -17,8 +19,117 @@ fn fallible(v: Result<Value, String>, zero: Value) -> Value {
     }
 }
 
+/// A poisoned lock still guards live, structurally-valid data here (an
+/// `Option<File>`); recovering it is safe and keeps a panicking reader on
+/// one thread from turning into a fault or abort on every other thread
+/// touching the same handle. No `unwrap` on a lock reachable from user
+/// source (spec: every unwrap/expect reachable from user source is a bug).
+fn lock_or_recover<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Open file handle; reference type behind Arc, like Proc (spec 15.3).
+/// `Mutex<Option<..>>`: None after close, making close idempotent and
+/// post-close reads/writes ordinary error values instead of faults.
+pub struct FileInner {
+    pub path: String,
+    handle: Mutex<Option<fs::File>>,
+}
+
+impl std::fmt::Debug for FileInner {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "File({})", self.path)
+    }
+}
+
+impl FileInner {
+    /// Read up to `n` bytes. EOF is `k == 0`, reported as `(empty, none)`,
+    /// not an error value; a closed handle is an error value, not a fault.
+    fn read(&self, n: i64) -> Value {
+        let mut guard = lock_or_recover(&self.handle);
+        match guard.as_mut() {
+            None => Value::Tuple(vec![
+                Value::bytes(vec![]),
+                err(format!("read {}: file is closed", self.path)),
+            ]),
+            Some(file) => {
+                let mut buf = Vec::new();
+                match file.take(n.max(0) as u64).read_to_end(&mut buf) {
+                    Ok(_) => Value::Tuple(vec![Value::bytes(buf), Value::NoneV]),
+                    Err(e) => Value::Tuple(vec![
+                        Value::bytes(vec![]),
+                        err(format!("read {}: {e}", self.path)),
+                    ]),
+                }
+            }
+        }
+    }
+
+    /// Write `data`; a closed handle or an io error is an error value.
+    fn write(&self, data: &[u8]) -> Value {
+        let mut guard = lock_or_recover(&self.handle);
+        match guard.as_mut() {
+            None => err(format!("write {}: file is closed", self.path)),
+            Some(file) => match file.write_all(data) {
+                Ok(()) => Value::NoneV,
+                Err(e) => err(format!("write {}: {e}", self.path)),
+            },
+        }
+    }
+
+    /// Idempotent: drop the underlying file (if any is still held) and
+    /// always succeed, closed-already included.
+    fn close(&self) -> Value {
+        let mut guard = lock_or_recover(&self.handle);
+        *guard = None;
+        Value::NoneV
+    }
+}
+
+fn open_with(path: &str, verb: &str, opener: impl Fn(&str) -> std::io::Result<fs::File>) -> Value {
+    match opener(path) {
+        Ok(f) => Value::Tuple(vec![
+            Value::File(Arc::new(FileInner {
+                path: path.to_string(),
+                handle: Mutex::new(Some(f)),
+            })),
+            Value::NoneV,
+        ]),
+        Err(e) => Value::Tuple(vec![
+            // closed already: nothing to read/write from a handle that
+            // never opened
+            Value::File(Arc::new(FileInner {
+                path: path.to_string(),
+                handle: Mutex::new(None),
+            })),
+            err(format!("{verb} {path}: {e}")),
+        ]),
+    }
+}
+
+pub fn struct_types() -> Vec<(String, Vec<(String, crate::types::Type)>)> {
+    vec![("File".into(), vec![])] // zero fields: not constructible
+}
+
+pub fn method(
+    interp: &mut Interp,
+    f: &FileInner,
+    name: &str,
+    args: Vec<Value>,
+) -> Result<Value, Fault> {
+    match (name, args.as_slice()) {
+        ("read", [Value::Int(n)]) => Ok(f.read(*n)),
+        ("write", [Value::Bytes(b)]) => Ok(f.write(&b.borrow().data)),
+        ("close", []) => Ok(f.close()),
+        _ => Err(interp.fault(format!("File has no method {name} with those arguments"))),
+    }
+}
+
 pub fn call(interp: &mut Interp, name: &str, args: Vec<Value>) -> Result<Value, Fault> {
-    // Handle readbytes and writebytes before string validation
+    // Handle readbytes, writebytes, open, and create before string
+    // validation: readbytes/writebytes take a Bytes argument, and
+    // open/create return a Value::File rather than the plain values the
+    // all-str loop below produces.
     match (name, &args[..]) {
         ("readbytes", [Value::Str(path)]) => {
             return Ok(fallible(
@@ -33,6 +144,10 @@ pub fn call(interp: &mut Interp, name: &str, args: Vec<Value>) -> Result<Value, 
                 Ok(()) => Value::NoneV,
                 Err(e) => err(format!("writebytes {path}: {e}")),
             })
+        }
+        ("open", [Value::Str(path)]) => return Ok(open_with(path, "open", |p| fs::File::open(p))),
+        ("create", [Value::Str(path)]) => {
+            return Ok(open_with(path, "create", |p| fs::File::create(p)))
         }
         _ => {}
     }
@@ -279,6 +394,99 @@ mod tests {
                     }
                     v => panic!("{v:?}"),
                 }
+                match &ts[1] {
+                    Value::Err(e) => assert!(e.msg.contains("nonexistent")),
+                    v => panic!("{v:?}"),
+                }
+            }
+            v => panic!("{v:?}"),
+        }
+    }
+
+    fn opened(name: &str, path: &str) -> std::sync::Arc<super::FileInner> {
+        match call(name, vec![s(path)]) {
+            Value::Tuple(ts) => match ts.into_iter().next() {
+                Some(Value::File(f)) => f,
+                v => panic!("{v:?}"),
+            },
+            v => panic!("{v:?}"),
+        }
+    }
+
+    fn method(f: &super::FileInner, name: &str, args: Vec<Value>) -> Value {
+        let prog = Program::default();
+        let mut interp = Interp::new(&prog);
+        super::method(&mut interp, f, name, args)
+            .map_err(|fault| fault.msg)
+            .unwrap()
+    }
+
+    #[test]
+    fn chunked_read_to_eof() {
+        let base = tempbase("handle-read");
+        let p = format!("{base}/chunks.bin");
+        std::fs::write(&p, [1u8, 2, 3, 4, 5, 6, 7]).unwrap();
+        let f = opened("open", &p);
+        let mut total = 0usize;
+        loop {
+            match method(&f, "read", vec![Value::Int(3)]) {
+                Value::Tuple(ts) => {
+                    assert!(matches!(ts[1], Value::NoneV));
+                    match &ts[0] {
+                        Value::Bytes(b) => {
+                            let len = b.borrow().data.len();
+                            if len == 0 {
+                                break;
+                            }
+                            total += len;
+                        }
+                        v => panic!("{v:?}"),
+                    }
+                }
+                v => panic!("{v:?}"),
+            }
+        }
+        assert_eq!(total, 7); // 3 + 3 + 1: chunked read to EOF
+        assert!(matches!(method(&f, "close", vec![]), Value::NoneV));
+    }
+
+    #[test]
+    fn write_after_close_is_error_value() {
+        let base = tempbase("handle-write-closed");
+        let p = format!("{base}/out.bin");
+        let f = opened("create", &p);
+        assert!(matches!(method(&f, "close", vec![]), Value::NoneV));
+        let data = Value::Bytes(std::rc::Rc::new(std::cell::RefCell::new(
+            crate::value::BytesBuf { data: vec![1u8] },
+        )));
+        match method(&f, "write", vec![data]) {
+            Value::Err(e) => assert!(e.msg.contains("closed")),
+            v => panic!("{v:?}"),
+        }
+        // read after close is likewise an error value, not a fault
+        match method(&f, "read", vec![Value::Int(1)]) {
+            Value::Tuple(ts) => {
+                assert!(matches!(&ts[0], Value::Bytes(b) if b.borrow().data.is_empty()));
+                assert!(matches!(&ts[1], Value::Err(_)));
+            }
+            v => panic!("{v:?}"),
+        }
+    }
+
+    #[test]
+    fn double_close_is_ok() {
+        let base = tempbase("handle-double-close");
+        let p = format!("{base}/f.bin");
+        let f = opened("create", &p);
+        assert!(matches!(method(&f, "close", vec![]), Value::NoneV));
+        assert!(matches!(method(&f, "close", vec![]), Value::NoneV));
+    }
+
+    #[test]
+    fn open_missing_is_error_value() {
+        match call("open", vec![s("/nonexistent/nope.bin")]) {
+            Value::Tuple(ts) => {
+                assert!(matches!(&ts[0], Value::File(_)));
                 match &ts[1] {
                     Value::Err(e) => assert!(e.msg.contains("nonexistent")),
                     v => panic!("{v:?}"),

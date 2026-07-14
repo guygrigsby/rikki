@@ -1,0 +1,15 @@
+import "file"
+
+fn main() {
+    p := "/tmp/nevla-golden-file-closed"
+    w, err := file.create(p)
+    if err != none {
+        print("create failed")
+        return
+    }
+    _ := w.close()
+    _ := w.close()                    // close is idempotent: no error
+    werr := w.write([]byte{1})
+    print(werr != none)              // true: write after close is an error value
+    _ := file.remove(p)
+}

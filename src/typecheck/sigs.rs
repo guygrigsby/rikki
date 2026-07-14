@@ -47,6 +47,9 @@ pub(super) fn std_member(module: &str, name: &str) -> Option<Member> {
         ("file", "modified") => Member::Fn(vec![Str], vec![Int, err_opt()]),
         ("file", "readbytes") => Member::Fn(vec![Str], vec![List(Box::new(Byte)), err_opt()]),
         ("file", "writebytes") => Member::Fn(vec![Str, List(Box::new(Byte))], vec![err_opt()]),
+        ("file", "open") | ("file", "create") => {
+            Member::Fn(vec![Str], vec![Struct("File".into()), err_opt()])
+        }
         ("gpu", "lock") | ("gpu", "shared") => Member::Fn(vec![Str, Str], vec![err_opt()]),
         ("gpu", "trylock") => Member::Fn(vec![Str, Str], vec![Bool, err_opt()]),
         ("gpu", "unlock") => Member::Fn(vec![Str], vec![err_opt()]),

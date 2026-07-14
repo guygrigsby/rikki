@@ -169,6 +169,13 @@ impl Checker {
                     self.diag(span, "Proc cannot be constructed; use proc.start()");
                     return one(Type::Struct(name.clone()));
                 }
+                if name == "File" && matches!(self.imports.get("file"), Some(ImportKind::Std(_))) {
+                    self.diag(
+                        span,
+                        "File cannot be constructed; use file.open or file.create",
+                    );
+                    return one(Type::Struct(name.clone()));
+                }
                 let Some(def) = self.structs.get(name).cloned() else {
                     self.diag(span, format!("unknown struct: {name}"));
                     return one(Type::Unknown);
@@ -943,6 +950,24 @@ impl Checker {
                 }
                 _ => {
                     self.diag(span, format!("Proc has no method {name}"));
+                    ExprTy::One(Type::Unknown)
+                }
+            },
+            Type::Struct(s) if s == "File" => match name {
+                "read" => {
+                    self.check_args(&[Type::Int], args, span);
+                    ExprTy::Multi(vec![Type::List(Box::new(Type::Byte)), err_opt()])
+                }
+                "write" => {
+                    self.check_args(&[Type::List(Box::new(Type::Byte))], args, span);
+                    ExprTy::One(err_opt())
+                }
+                "close" => {
+                    self.check_args(&[], args, span);
+                    ExprTy::One(err_opt())
+                }
+                _ => {
+                    self.diag(span, format!("File has no method {name}"));
                     ExprTy::One(Type::Unknown)
                 }
             },

@@ -238,6 +238,7 @@ impl Interp<'_> {
             Value::Ctx(c) => crate::stdlib::ctx::method(self, &c, name),
             Value::Re(re) => crate::stdlib::regex::method(self, &re, name, args),
             Value::Proc(p) => crate::stdlib::proc::method(self, &p, name, args),
+            Value::File(f) => crate::stdlib::file::method(self, &f, name, args),
             Value::List(items) => self.list_method(items, name, args),
             Value::Bytes(buf) => self.bytes_method(buf, name, args),
             Value::Str(s) => self.str_method(&s, name, args),

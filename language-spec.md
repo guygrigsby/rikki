@@ -2154,6 +2154,41 @@ Paths are `str`. Text contents are UTF-8 `str` or raw bytes `[]byte`.
   modification time, epoch nanoseconds (the one time currency,
   section 15.8).
 
+Importing `"file"` also declares the opaque struct type `File`, a
+handle to an open file, with reference semantics (section 11.1);
+`file.open` and `file.create` make them. There is no seek and no
+append-mode handle in v1.
+
+- `file.open(path str) (File, error?)` — open an existing file for
+  reading.
+- `file.create(path str) (File, error?)` — create or truncate, open
+  for writing.
+- `f.read(n int) ([]byte, error?)` — read up to `n` bytes from the
+  handle's current position. EOF is `([]byte{}, none)`, not an error
+  value. Reading a closed handle is an error value, not a fault.
+- `f.write(b []byte) error?` — write `b` to the handle. Writing a
+  closed handle is an error value, not a fault.
+- `f.close() error?` — close the handle. Idempotent: closing an
+  already-closed handle succeeds.
+
+```nevla
+import "file"
+
+fn main() (error?) {
+    path := "/tmp/nevla-book-handle-example.bin"
+    w := check file.create(path)
+    check w.write([]byte{1, 2, 3})
+    check w.close()
+
+    r := check file.open(path)
+    chunk := check r.read(2)
+    print(chunk)                     // [1, 2]
+    check r.close()
+    check file.remove(path)
+    return none
+}
+```
+
 ```nevla
 import "file"
 

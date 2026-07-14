@@ -121,6 +121,9 @@ impl Checker {
                     if path == "proc" {
                         self.structs.extend(crate::stdlib::proc::struct_types());
                     }
+                    if path == "file" {
+                        self.structs.extend(crate::stdlib::file::struct_types());
+                    }
                 }
                 // file imports resolve after fns and structs are collected
             }
