@@ -72,8 +72,18 @@ pub enum Value {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum MapKey {
+    /// Also holds `byte` keys: a bare-literal key evaluates to `Value::Int`
+    /// at runtime (spec 5.10) while a `byte(n)`-converted key evaluates to
+    /// `Value::Byte`, so folding both into one variant here is what makes
+    /// `map[byte]{...}` see them as the same key regardless of which
+    /// spelling wrote it or which spelling reads it back. The checker
+    /// guarantees only byte-typed keys reach a `map[byte]`, so this can
+    /// never collide with a genuine `int` key. `keys()`/iteration over a
+    /// `map[byte]` therefore yields `Value::Int`-tagged keys; this is the
+    /// established mixed-tag representation (`eq_value` and `binop`
+    /// already compare Byte/Int numerically, so it is observationally
+    /// transparent — see `tests/golden/builtins/bytes-mixed-tags.nv`).
     Int(i64),
-    Byte(u8),
     Str(String),
     Bool(bool),
 }
@@ -82,7 +92,7 @@ impl MapKey {
     pub fn from_value(v: &Value) -> Option<MapKey> {
         match v {
             Value::Int(i) => Some(MapKey::Int(*i)),
-            Value::Byte(b) => Some(MapKey::Byte(*b)),
+            Value::Byte(b) => Some(MapKey::Int(*b as i64)),
             Value::Str(s) => Some(MapKey::Str(s.clone())),
             Value::Bool(b) => Some(MapKey::Bool(*b)),
             _ => None,
@@ -92,7 +102,6 @@ impl MapKey {
     pub fn to_value(&self) -> Value {
         match self {
             MapKey::Int(i) => Value::Int(*i),
-            MapKey::Byte(b) => Value::Byte(*b),
             MapKey::Str(s) => Value::Str(s.clone()),
             MapKey::Bool(b) => Value::Bool(*b),
         }
@@ -180,8 +189,13 @@ impl Value {
             // Value::Int regardless of which side of the comparison it's
             // on. binop's (Eq, Byte, Int) arm (interp.rs) already widens
             // the same way for `==`; this is the same rule for eq_value's
-            // callers (list contains, struct/list-of-struct equality, map
-            // keys), which don't go through binop at all.
+            // callers (list contains, struct/list-of-struct equality, and
+            // map *value* comparison during map equality), which don't go
+            // through binop at all. Map *key* matching never reaches this
+            // function at all — it goes through MapKey's derived
+            // PartialEq/Hash, which is why `MapKey::from_value` folds
+            // Value::Byte into MapKey::Int rather than relying on this
+            // widening.
             Value::Int(a) => match other {
                 Value::Int(b) => a == b,
                 Value::Byte(b) => *a == *b as i64,

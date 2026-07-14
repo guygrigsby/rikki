@@ -1,0 +1,26 @@
+// Regression: a map[byte] must treat a bare-int-literal key and a
+// byte()-converted key as the same key in both directions, since a bare
+// literal in a byte-typed slot evaluates to Value::Int at runtime (spec
+// 5.10) while byte(n) evaluates to Value::Byte, and the checker admits
+// both spellings wherever a byte key is expected (spec 5.3).
+
+fn main() {
+    // literal-keyed map, byte()-spelled read
+    m := map[byte]str{3: "x"}
+    print(m[byte(3)])        // x
+
+    // byte()-keyed map, literal-spelled read
+    n := map[byte]str{byte(5): "y"}
+    print(n[5])              // y
+
+    // has() must cross-spell too
+    print(m.has(byte(3)))    // true
+    print(n.has(5))          // true
+
+    // keys() must yield a key that compares equal against both spellings,
+    // whichever runtime tag (Value::Byte or Value::Int) the key holds.
+    ks := n.keys()
+    k := ks[0]
+    print(k == byte(5))      // true
+    print(k == 5)            // true
+}
