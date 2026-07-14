@@ -372,15 +372,18 @@ impl Checker {
                         | (Type::Byte, Type::Byte | Type::Int)
                         | (Type::Int, Type::Byte)
                         | (Type::Str, _)
-                // []T(x) list pass-through, except across the byte boundary:
-                // []byte(xs) on []int and []int(b) on []byte are not v1
-                // conversions (design 2026-07-13, out of scope: a for loop
-                // covers it), and convert() has no arms for them — its
-                // catch-all would hand an error tuple to this single-valued
-                // slot (print rendered it, len faulted). []byte([]byte)
-                // identity and every non-byte pass-through stay.
-                ) || matches!((&t, &at), (Type::List(want), Type::List(got))
-                        if (**want == Type::Byte) == (**got == Type::Byte))
+                // []T(x) list pass-through, except across the byte boundary
+                // at ANY depth: []byte(xs) on []int, []int(b) on []byte,
+                // and the nested pairs ([][]byte(xss) on [][]int and its
+                // mirror) are not v1 conversions (design 2026-07-13, out of
+                // scope: a for loop covers it), and convert() has no arms
+                // for them — its catch-all would hand an error tuple to
+                // this single-valued slot (print rendered it, len faulted),
+                // or seat boxed []int lists in []byte element slots.
+                // []byte([]byte) identity and every non-byte pass-through
+                // stay, at every depth.
+                ) || matches!((&t, &at), (Type::List(_), Type::List(_))
+                        if !Self::conversion_crosses_byte(&t, &at))
                     || (is_byte_list(&t) && at == Type::Str);
                 if !ok {
                     self.diag(span, format!("cannot convert {at} to {t}"));
@@ -400,6 +403,23 @@ impl Checker {
                     ExprTy::One(t)
                 }
             }
+        }
+    }
+
+    /// Whether a []T(x) conversion pair crosses the byte boundary at any
+    /// depth: at each (List, List) level the two element types must agree
+    /// on byteness, recursively — [][]byte(xss) on [][]int agrees at the
+    /// top (neither element is byte) but crosses one level down, where a
+    /// boxed []int would be seated in a []byte element slot. Non-list
+    /// pairs terminate the walk: per-element validation beyond byteness
+    /// stays out of v1 (spec 7.7).
+    fn conversion_crosses_byte(want: &Type, got: &Type) -> bool {
+        match (want, got) {
+            (Type::List(w), Type::List(g)) => {
+                (**w == Type::Byte) != (**g == Type::Byte)
+                    || Self::conversion_crosses_byte(w, g)
+            }
+            _ => false,
         }
     }
 

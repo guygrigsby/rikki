@@ -1,10 +1,16 @@
+// The []T(x) pass-through never crosses the byte boundary, at any depth:
 // []byte(xs) on []int and []int(b) on []byte are not v1 conversions
-// (bytes design 2026-07-13, out-of-scope list: a for loop covers it).
-// Before this rule the generic []T(x) list pass-through accepted both as
-// single-valued while convert() had no arms for them: its catch-all
+// (bytes design 2026-07-13, out-of-scope list: a for loop covers it),
+// and neither are the nested pairs — [][]byte(xss) on [][]int agrees on
+// byteness at the top level (neither element is byte) but one level down
+// would seat boxed []int lists in []byte element slots (str(bss[0])
+// faulted), and the mirror puts Value::Byte elements in []int (sum()
+// faulted). Before this rule the generic pass-through accepted all four
+// as single-valued while convert() had no arms for them: its catch-all
 // returned an error TUPLE into the single-valued slot — print rendered
 // "[], error(cannot convert ...)" with exit 0, then len faulted.
-// []byte([]byte) identity and non-byte pass-throughs are unaffected.
+// []byte([]byte) identity and non-byte pass-throughs are unaffected at
+// every depth.
 fn main() {
     xs := [104, 105]
     b := []byte(xs)
@@ -12,4 +18,10 @@ fn main() {
     c := []byte{104, 105}
     ys := []int(c)
     print(len(ys))
+    xss := [[104, 105]]
+    bss := [][]byte(xss)
+    print(len(bss))
+    dss := [][]byte{[]byte{1, 2}}
+    yss := [][]int(dss)
+    print(len(yss))
 }

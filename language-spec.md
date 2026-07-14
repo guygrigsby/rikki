@@ -950,15 +950,16 @@ Permitted operand types and behavior, for non-`py` operands:
 | `str(x)` | any type except `[]byte` | the canonical rendering of section 14.1; never fails |
 | | `[]byte` | UTF-8 decode; failure ("invalid UTF-8 in byte conversion to str") is an error value. The sole non-`py` fallible `str(x)`; every other operand renders and cannot fail |
 | `py(x)` | `int`, `float`, `bool`, `str`, the literal `none` | the inbound bridge conversion (section 13.5) as a `py` handle; never fails. `py(none)` is the zero value of `py` (section 5.11). Containers, structs, functions, and option-typed values are compile-time errors ("cannot convert ... to py"); pass them to py calls directly |
-| `[]T(x)` | `[]U` | yields the operand list unchanged; element types are not validated in v1 (see below). Excluded when exactly one of `T`, `U` is `byte`: `[]byte(xs)` on a `[]int` and `[]int(b)` on a `[]byte` are compile-time errors ("cannot convert"); convert element-wise with a `for` loop |
+| `[]T(x)` | `[]U` | yields the operand list unchanged; element types are not validated in v1 (see below). Excluded when `T` and `U` disagree on byteness at any depth: `[]byte(xs)` on a `[]int`, `[]int(b)` on a `[]byte`, and the nested pairs (`[][]byte(xss)` on a `[][]int`, and its mirror) are compile-time errors ("cannot convert"); convert element-wise with a `for` loop |
 
 Any other operand type is a compile-time error ("cannot convert").
 
 `[]T` applied to a nevla list performs no per-element checking in v1:
 the list value passes through single-valued, and the expression's static
-type becomes `[]T`. The pass-through never crosses the `byte` boundary
-(the exclusion in the table above); `[]byte([]byte)` identity is a
-pass-through like any other. If the actual elements do not match `T`, later operations on them
+type becomes `[]T`. The pass-through never crosses the `byte` boundary at
+any depth (the exclusion in the table above, applied recursively through
+nested list types); `[]byte([]byte)` and `[][]byte([][]byte)` identity are
+pass-throughs like any other. If the actual elements do not match `T`, later operations on them
 fault at runtime. Programs must not rely on this as a checked cast; its
 intended use is extraction from `py` values, where elements are genuinely
 converted (section 13.5).
