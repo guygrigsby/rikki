@@ -1,6 +1,8 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Int,
+    /// 0..=255 scalar; compare-only in v1 (design 2026-07-13, ADR 0021).
+    Byte,
     Float,
     Bool,
     Str,
@@ -21,6 +23,7 @@ impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Type::Int => write!(f, "int"),
+            Type::Byte => write!(f, "byte"),
             Type::Float => write!(f, "float"),
             Type::Bool => write!(f, "bool"),
             Type::Str => write!(f, "str"),

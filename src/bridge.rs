@@ -381,6 +381,7 @@ fn to_py_depth(py: Python<'_>, v: &Value, depth: u32) -> Result<Py<PyAny>, ErrVa
     }
     let obj: Py<PyAny> = match v {
         Value::Int(i) => PyInt::new(py, *i).into_any().unbind(),
+        Value::Byte(b) => PyInt::new(py, *b as i64).into_any().unbind(),
         Value::Float(f) => PyFloat::new(py, *f).into_any().unbind(),
         Value::Bool(b) => PyBool::new(py, *b).to_owned().into_any().unbind(),
         Value::Str(s) => PyString::new(py, s).into_any().unbind(),

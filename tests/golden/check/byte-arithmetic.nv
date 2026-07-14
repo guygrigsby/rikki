@@ -1,0 +1,6 @@
+fn main() {
+    a := byte(1)
+    b := byte(2)
+    c := a + b
+    print(int(c))
+}

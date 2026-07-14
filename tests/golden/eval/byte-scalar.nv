@@ -1,0 +1,13 @@
+struct Header { kind byte }
+
+fn main() {
+    b := byte(7)
+    print(int(b))            // 7
+    print(b == byte(7))      // true
+    print(byte(3) < byte(9)) // true
+    h := Header{kind: byte(0)}
+    print(h.kind)            // 0
+    m := map[byte]str{byte(1): "one"}
+    print(m[byte(1)])
+    printf("%v\n", b)
+}

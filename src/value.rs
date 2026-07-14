@@ -23,6 +23,8 @@ pub const DEPTH_LIMIT: u32 = 256;
 #[derive(Debug, Clone)]
 pub enum Value {
     Int(i64),
+    /// byte scalar, 0..=255; value type like Int.
+    Byte(u8),
     Float(f64),
     Bool(bool),
     Str(String),
@@ -58,6 +60,7 @@ pub enum Value {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum MapKey {
     Int(i64),
+    Byte(u8),
     Str(String),
     Bool(bool),
 }
@@ -66,6 +69,7 @@ impl MapKey {
     pub fn from_value(v: &Value) -> Option<MapKey> {
         match v {
             Value::Int(i) => Some(MapKey::Int(*i)),
+            Value::Byte(b) => Some(MapKey::Byte(*b)),
             Value::Str(s) => Some(MapKey::Str(s.clone())),
             Value::Bool(b) => Some(MapKey::Bool(*b)),
             _ => None,
@@ -75,6 +79,7 @@ impl MapKey {
     pub fn to_value(&self) -> Value {
         match self {
             MapKey::Int(i) => Value::Int(*i),
+            MapKey::Byte(b) => Value::Byte(*b),
             MapKey::Str(s) => Value::Str(s.clone()),
             MapKey::Bool(b) => Value::Bool(*b),
         }
@@ -137,6 +142,7 @@ impl Value {
         }
         Some(match self {
             Value::Int(a) => matches!(other, Value::Int(b) if a == b),
+            Value::Byte(a) => matches!(other, Value::Byte(b) if a == b),
             Value::Float(a) => matches!(other, Value::Float(b) if a == b),
             Value::Bool(a) => matches!(other, Value::Bool(b) if a == b),
             Value::Str(a) => matches!(other, Value::Str(b) if a == b),
@@ -239,6 +245,7 @@ fn render_depth(v: &Value, depth: u32) -> String {
     let r = |x: &Value| render_depth(x, depth + 1);
     match v {
         Value::Int(i) => i.to_string(),
+        Value::Byte(b) => b.to_string(),
         Value::Float(f) => f.to_string(),
         Value::Bool(b) => b.to_string(),
         Value::Str(s) => s.clone(),

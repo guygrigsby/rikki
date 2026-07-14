@@ -1234,6 +1234,10 @@ impl<'p> Interp<'p> {
             (LtEq, Int(a), Int(b)) => Bool(a <= b),
             (Gt, Int(a), Int(b)) => Bool(a > b),
             (GtEq, Int(a), Int(b)) => Bool(a >= b),
+            (Lt, Byte(a), Byte(b)) => Bool(a < b),
+            (LtEq, Byte(a), Byte(b)) => Bool(a <= b),
+            (Gt, Byte(a), Byte(b)) => Bool(a > b),
+            (GtEq, Byte(a), Byte(b)) => Bool(a >= b),
             (Lt, Float(a), Float(b)) => Bool(a < b),
             (LtEq, Float(a), Float(b)) => Bool(a <= b),
             (Gt, Float(a), Float(b)) => Bool(a > b),
@@ -1364,6 +1368,7 @@ impl<'p> Interp<'p> {
         Ok(match t {
             TypeExpr::Named(n) => match n.as_str() {
                 "int" => Value::Int(0),
+                "byte" => Value::Byte(0),
                 "float" => Value::Float(0.0),
                 "bool" => Value::Bool(false),
                 "str" => Value::Str(String::new()),

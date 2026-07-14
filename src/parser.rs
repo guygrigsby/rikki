@@ -36,7 +36,7 @@ struct Parser {
     depth: usize,
 }
 
-const CONV_NAMES: &[&str] = &["int", "float", "str", "bool"];
+const CONV_NAMES: &[&str] = &["int", "float", "str", "bool", "byte"];
 
 /// Cap on recursive-descent nesting. Chosen empirically: at this limit a
 /// debug build peaks under 4 MiB of stack (worst case, paren nesting), well

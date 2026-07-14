@@ -1,0 +1,5 @@
+fn main() {
+    n := 300
+    b := byte(n)
+    print(int(b))
+}

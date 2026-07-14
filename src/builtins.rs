@@ -123,11 +123,19 @@ impl Interp<'_> {
         // (T, error?) tuple the checker promises for them
         match (name, v) {
             ("int", Value::Int(i)) => Ok(Value::Int(i)),
+            ("int", Value::Byte(b)) => Ok(Value::Int(b as i64)),
             ("int", Value::Float(f)) => Ok(Value::Int(f as i64)),
             ("int", Value::Str(s)) => match s.trim().parse::<i64>() {
                 Ok(i) => ok(Value::Int(i)),
                 Err(_) => fail(self, target, format!("cannot parse {s:?} as int")),
             },
+            ("byte", Value::Byte(b)) => Ok(Value::Byte(b)),
+            ("byte", Value::Int(n)) => {
+                if !(0..=255).contains(&n) {
+                    return Err(self.fault(format!("byte conversion out of range: {n}")));
+                }
+                Ok(Value::Byte(n as u8))
+            }
             ("float", Value::Float(f)) => Ok(Value::Float(f)),
             ("float", Value::Int(i)) => Ok(Value::Float(i as f64)),
             ("float", Value::Str(s)) => match s.trim().parse::<f64>() {

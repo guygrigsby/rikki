@@ -339,6 +339,10 @@ impl Checker {
                         | (_, Type::Unknown)
                         | (Type::Int | Type::Float, Type::Int | Type::Float | Type::Str)
                         | (Type::Bool, Type::Str | Type::Bool)
+                        // byte(x): identity and int-narrowing (runtime fault
+                        // out of 0..=255); byte(s) stays "cannot convert"
+                        | (Type::Byte, Type::Byte | Type::Int)
+                        | (Type::Int, Type::Byte)
                         | (Type::Str, _)
                         | (Type::List(_), Type::List(_))
                 );
@@ -422,6 +426,7 @@ impl Checker {
                     let ok = matches!(
                         (&lt, &rt),
                         (Type::Int, Type::Int)
+                            | (Type::Byte, Type::Byte)
                             | (Type::Float, Type::Float)
                             | (Type::Str, Type::Str)
                     );
@@ -440,8 +445,10 @@ impl Checker {
                         self.diag(span, "none only compares to option types");
                     }
                 } else if !unknown {
-                    let comparable =
-                        matches!(&lt, Type::Int | Type::Float | Type::Str | Type::Bool) && lt == rt;
+                    let comparable = matches!(
+                        &lt,
+                        Type::Int | Type::Byte | Type::Float | Type::Str | Type::Bool
+                    ) && lt == rt;
                     if !comparable {
                         self.diag(span, format!("cannot compare {lt} and {rt}"));
                     }

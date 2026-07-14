@@ -243,6 +243,7 @@ impl Checker {
         match t {
             TypeExpr::Named(n) => match n.as_str() {
                 "int" => Type::Int,
+                "byte" => Type::Byte,
                 "float" => Type::Float,
                 "bool" => Type::Bool,
                 "str" => Type::Str,
@@ -260,10 +261,10 @@ impl Checker {
             TypeExpr::List(inner) => Type::List(Box::new(self.resolve(inner, span))),
             TypeExpr::Map(k, v) => {
                 let kt = self.resolve(k, span);
-                if !matches!(kt, Type::Int | Type::Str | Type::Bool | Type::Unknown) {
+                if !matches!(kt, Type::Int | Type::Byte | Type::Str | Type::Bool | Type::Unknown) {
                     self.diag(
                         span,
-                        format!("map key type must be int, str, or bool, got {kt}"),
+                        format!("map key type must be int, byte, str, or bool, got {kt}"),
                     );
                 }
                 Type::Map(Box::new(kt), Box::new(self.resolve(v, span)))

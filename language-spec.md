@@ -189,11 +189,11 @@ return    struct    true      with
 `py` is a keyword; it also serves as the name of the `py` type (section 5.8)
 and as the marker in `import py` declarations (section 6.4).
 
-The names `int`, `float`, `bool`, `str`, `error`, and `map` are not
+The names `int`, `byte`, `float`, `bool`, `str`, `error`, and `map` are not
 keywords. They are predeclared type names, resolved contextually; `int`,
-`float`, `str`, and `bool` followed immediately by `(` in expression position
-always denote a conversion (section 7.7), and `map [` in expression position
-always begins a map literal. Slice types and slice conversions are written
+`byte`, `float`, `str`, and `bool` followed immediately by `(` in expression
+position always denote a conversion (section 7.7), and `map [` in expression
+position always begins a map literal. Slice types and slice conversions are written
 with the `[]` prefix (`[]int`, `[]float(x)`; sections 5.9, 7.7) and involve
 no reserved name. Builtin function names (`print`, `printf`, `sprintf`,
 `len`, `append`, `clone`, `charcode`, `char`) are also not
@@ -286,6 +286,12 @@ types are identical when they have the same name.
   `bool` (section 8.6).
 - `int` is a 64-bit signed integer. Overflow is a runtime fault (chapter 12),
   never a silent wrap.
+- `byte` holds the integers 0 through 255, zero value `0`. It supports only
+  comparison (`==`, `!=`, `<`, `<=`, `>`, `>=`, section 7.9.2); there are no
+  arithmetic operators on `byte` in this version (section 7.9.1). Widen with
+  `int(b)` to compute. `byte(n)` from `int` narrows and is a runtime fault
+  when `n` is outside 0..255 (section 7.7); this is a deliberate deviation
+  from Go, where `uint8` wraps silently (ADR 0021).
 - `float` is an IEEE 754 64-bit binary floating point number. Float
   arithmetic follows IEEE 754: division by zero yields an infinity, `0.0/0.0`
   yields NaN, and no float arithmetic faults.
@@ -305,7 +311,8 @@ alias the one underlying list. `clone(xs)` makes an explicit copy.
 ### 5.3 Map types
 
 `map[K]V` maps keys of type `K` to values of type `V`. The key type `K`
-must be `int`, `str`, or `bool`; any other key type is a compile-time error.
+must be `int`, `byte`, `str`, or `bool`; any other key type is a
+compile-time error.
 Maps preserve insertion order: iteration, `keys()`, and `values()` visit
 entries in the order the keys were first inserted, and `delete` preserves the
 relative order of the remaining entries. Maps are reference types
@@ -415,8 +422,8 @@ FnResult  = "(" [ TypeList ] ")" | Type .
 TypeList  = Type { "," Type } .
 ```
 
-A `TypeName` is one of the predeclared names `int`, `float`, `bool`, `str`,
-`error`, a struct name, or a dotted name `module.Struct` referring to a
+A `TypeName` is one of the predeclared names `int`, `byte`, `float`, `bool`,
+`str`, `error`, a struct name, or a dotted name `module.Struct` referring to a
 struct declared in an imported file module (chapter 16). Any other name is a
 compile-time error ("unknown type"). The unparenthesized `FnResult`
 alternative must begin with an identifier or `py` (section 5.5).
@@ -448,6 +455,7 @@ of failed conversions and stdlib calls:
 | Type | Zero value |
 |------|-----------|
 | `int` | `0` |
+| `byte` | `0` |
 | `float` | `0.0` |
 | `bool` | `false` |
 | `str` | `""` |
@@ -845,7 +853,7 @@ empty. Slicing any other type, including `py`, is a compile-time error.
 ### 7.7 Conversions
 
 ```
-Conversion = ( "int" | "float" | "str" | "bool" | "py" ) "(" Expression ")"
+Conversion = ( "int" | "float" | "str" | "bool" | "byte" | "py" ) "(" Expression ")"
            | SliceType "(" Expression ")" .
 ```
 
@@ -867,8 +875,11 @@ Permitted operand types and behavior, for non-`py` operands:
 | Conversion | Operand types | Behavior |
 |------------|---------------|----------|
 | `int(x)` | `int` | identity |
+| | `byte` | widening, exact |
 | | `float` | truncation toward zero; values outside the `int` range saturate to the nearest bound, NaN yields 0 |
 | | `str` | decimal parse after trimming leading and trailing white space; failure is an error value |
+| `byte(x)` | `byte` | identity |
+| | `int` | narrowing; a runtime fault ("byte conversion out of range: n") when the operand is outside 0..255, never a silent truncation. Bounds-check first for data-driven narrowing. `str` is not a permitted operand; parse with `int(s)` and narrow |
 | `float(x)` | `float` | identity |
 | | `int` | exact or nearest representable value |
 | | `str` | float parse after trimming; failure is an error value |
@@ -971,7 +982,9 @@ binary_op  = "||" | "&&" | "==" | "!=" | "<" | "<=" | ">" | ">="
 | `+` | `[]A`, `[]B` | list concatenation, see below |
 
 `int` and `float` never mix: `1 + 2.5` is a compile-time error
-("int and float do not mix"). `%` is defined on `int` only. Integer `/` and
+("int and float do not mix"). `byte` has no arithmetic operators in this
+version (section 5.1): widen with `int(b)`, compute, and narrow with
+`byte(n)`. `%` is defined on `int` only. Integer `/` and
 `%` fault on a zero divisor; integer `+`, `-`, `*`, `/`, `%`, and unary `-`
 fault on overflow (chapter 12). Integer division truncates toward zero.
 Float arithmetic never faults (section 5.1).
@@ -994,8 +1007,10 @@ Unary `-` requires `int` or `float`; unary `!` requires `bool`.
 
 #### 7.9.2 Comparison operators
 
-`<`, `<=`, `>`, `>=` are defined on `int` with `int`, `float` with `float`,
-and `str` with `str` (lexicographic by character number). The result is `bool`.
+`<`, `<=`, `>`, `>=` are defined on `int` with `int`, `byte` with `byte`,
+`float` with `float`, and `str` with `str` (lexicographic by character
+number). The result is `bool`. `byte` and `int` never mix; widen with
+`int(b)` to compare across the two.
 All other operand combinations are compile-time errors. Because comparisons
 are left associative and yield `bool`, a chained comparison such as
 `a < b < c` parses but is rejected by the type checker.
@@ -1005,8 +1020,8 @@ are left associative and yield `bool`, a chained comparison such as
 `==` and `!=` yield `bool` and are defined in exactly two shapes:
 
 - Scalar equality: both operands have the same type, which must be `int`,
-  `float`, `bool`, or `str`. Float equality follows IEEE 754 (NaN is not
-  equal to itself).
+  `byte`, `float`, `bool`, or `str`. Float equality follows IEEE 754 (NaN
+  is not equal to itself).
 - None comparison: one operand is the literal `none` and the other has an
   option type. `x == none` is true iff `x` is absent. Comparing `none`
   against a non-option operand is a compile-time error
@@ -1688,6 +1703,7 @@ list elements and map entries:
 | Nevla | Python |
 |----------|--------|
 | `int` | `int` |
+| `byte` | `int` |
 | `float` | `float` |
 | `bool` | `bool` |
 | `str` | `str` |
@@ -1742,6 +1758,7 @@ a line feed to standard output. Canonical rendering (shared by `print`, the
 | Type | Rendering |
 |------|-----------|
 | `int` | decimal |
+| `byte` | decimal (`byte(7)` renders as `7`) |
 | `float` | shortest decimal that round-trips; integral values render without a fractional part (`3.0` renders as `3`); infinities as `inf`/`-inf`, NaN as `NaN` |
 | `bool` | `true` / `false` |
 | `str` | the string itself, unquoted |
@@ -1764,8 +1781,8 @@ The format string uses Go-style verbs:
 
 | Verb | Argument type | Output |
 |------|---------------|--------|
-| `%v` | any | canonical rendering (section 14.1) |
-| `%d` | `int` | decimal |
+| `%v` | any | canonical rendering (section 14.1); renders `byte` as decimal |
+| `%d` | `int` | decimal; `byte` is not accepted, widen with `int(b)` |
 | `%s` | `str` | the string |
 | `%t` | `bool` | `true` / `false` |
 | `%q` | `str` | double-quoted, backslash-escaped |

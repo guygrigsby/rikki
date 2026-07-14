@@ -1,0 +1,7 @@
+fn main() {
+    n := 5
+    b := byte(1)
+    if b == n {
+        print("no")
+    }
+}
