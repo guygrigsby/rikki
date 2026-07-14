@@ -1,0 +1,22 @@
+// Known gap (see docs/proposals or task-4 notes): a bare untyped list
+// literal argument in a []byte-expected parameter position stays a boxed
+// Value::List of Value::Int (Task 3's smuggled-literal spelling,
+// tests/golden/builtins/bytes-mixed-tags.nv) — identical at runtime to a
+// genuine []int list of the same numbers. str(b) cannot tell these two
+// apart at the value level, and str([]int) must keep rendering (see
+// tests/golden/eval/conv-infallible.nv's str([1, 2]) == "[1, 2]"), so
+// convert() only decodes a true Value::Bytes; it never treats a boxed
+// Value::List as bytes. Reaching str(b) through this escape hatch
+// checker-types as fallible (b's declared type is []byte) but at runtime
+// evaluates through the single-valued render arm, so the 2-name bind
+// below faults instead of decoding. This is a reported fault, not a
+// panic — the process never aborts.
+fn decode(b []byte) (str, error?) {
+    v, err := str(b)
+    return v, err
+}
+
+fn main() {
+    s, err := decode([104, 105])
+    print(s)
+}

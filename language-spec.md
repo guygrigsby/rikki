@@ -885,14 +885,19 @@ Conversion = ( "int" | "float" | "str" | "bool" | "byte" | "py" ) "(" Expression
 Conversions are the explicit casts of the language. Fallibility follows the
 operand type: a conversion from `str` (a parse) or from `py` (a bridge
 extraction, section 13.5) has the multi-value type `(T, error?)` and must be
-consumed accordingly (sections 7.10, 10.2). Every other permitted pair
-cannot fail, is single-valued, and is used inline:
+consumed accordingly (sections 7.10, 10.2). One conversion is fallible by its
+operand rather than its target: `str(x)` is fallible when `x` is `[]byte` (a
+UTF-8 decode) — the sole non-`py` fallible `str(x)`. Every other permitted
+pair, including every other `str(x)`, cannot fail, is single-valued, and is
+used inline:
 
 ```
 n, err := int("42")       // 42, none: str source is a parse
 m, err2 := int("x")       // 0, error("cannot parse \"x\" as int")
 i := int(3.9)             // 3: numeric conversions are single-valued
 s := str(123) + "!"       // "123!": str(x) never fails
+buf := []byte("hi")       // UTF-8 encode: []byte(s) never fails
+t, err3 := str(buf)       // "hi", none: []byte source is a UTF-8 decode
 ```
 
 Permitted operand types and behavior, for non-`py` operands:
@@ -905,12 +910,15 @@ Permitted operand types and behavior, for non-`py` operands:
 | | `str` | decimal parse after trimming leading and trailing white space; failure is an error value |
 | `byte(x)` | `byte` | identity |
 | | `int` | narrowing; a runtime fault ("byte conversion out of range: n") when the operand is outside 0..255, never a silent truncation. Bounds-check first for data-driven narrowing. `str` is not a permitted operand; parse with `int(s)` and narrow |
+| `[]byte(x)` | `[]byte` | identity, per the `[]T(x)` pass-through rule below |
+| | `str` | UTF-8 encode; never fails |
 | `float(x)` | `float` | identity |
 | | `int` | exact or nearest representable value |
 | | `str` | float parse after trimming; failure is an error value |
 | `bool(x)` | `bool` | identity |
 | | `str` | after trimming, exactly `"true"` or `"false"`; anything else is an error value |
-| `str(x)` | any type | the canonical rendering of section 14.1; never fails |
+| `str(x)` | any type except `[]byte` | the canonical rendering of section 14.1; never fails |
+| | `[]byte` | UTF-8 decode; failure ("invalid UTF-8 in byte conversion to str") is an error value. The sole non-`py` fallible `str(x)`; every other operand renders and cannot fail |
 | `py(x)` | `int`, `float`, `bool`, `str`, the literal `none` | the inbound bridge conversion (section 13.5) as a `py` handle; never fails. `py(none)` is the zero value of `py` (section 5.11). Containers, structs, functions, and option-typed values are compile-time errors ("cannot convert ... to py"); pass them to py calls directly |
 | `[]T(x)` | `[]U` | yields the operand list unchanged; element types are not validated in v1 (see below) |
 

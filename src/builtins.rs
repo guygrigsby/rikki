@@ -193,6 +193,20 @@ impl Interp<'_> {
                 "false" => ok(Value::Bool(false)),
                 _ => fail(self, target, format!("cannot parse {s:?} as bool")),
             },
+            // str(b): UTF-8 decode, the sole non-py fallible str(x) (spec
+            // 7.7). Must run before the catch-all ("str", v) render arm
+            // below, which every other str(x) still uses.
+            ("str", Value::Bytes(b)) => {
+                let data = b.borrow().data.clone();
+                match String::from_utf8(data) {
+                    Ok(s) => ok(Value::Str(s)),
+                    Err(_) => fail(
+                        self,
+                        target,
+                        "invalid UTF-8 in byte conversion to str".into(),
+                    ),
+                }
+            }
             ("str", v) => Ok(Value::Str(render(&v))),
             // py(x): checker limits sources to scalars, str, and none, all
             // of which the inbound table converts without failing
@@ -202,6 +216,8 @@ impl Interp<'_> {
             },
             ("list", Value::List(items)) => Ok(Value::List(items)),
             ("bytes", Value::Bytes(b)) => Ok(Value::Bytes(b)),
+            // []byte(s): UTF-8 encode, single-valued, never fails (spec 7.7)
+            ("bytes", Value::Str(s)) => Ok(Value::bytes(s.into_bytes())),
             // py conversions land with the bridge
             (t, v) => fail(
                 self,

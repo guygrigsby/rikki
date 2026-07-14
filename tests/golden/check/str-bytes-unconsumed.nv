@@ -1,0 +1,4 @@
+fn main() {
+    b := []byte{104, 105}
+    print(str(b))
+}

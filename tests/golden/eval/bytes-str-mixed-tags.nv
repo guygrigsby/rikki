@@ -1,0 +1,18 @@
+// str(b) must decode a []byte value the same way regardless of how that
+// value arrived, matching the observational-equivalence rule established
+// by tests/golden/builtins/bytes-mixed-tags.nv for methods. sorted_by is
+// one of the compact buffer's boxed-list escape hatches (a plain
+// Vec<Value> internally); bytes_method repacks its result into
+// Value::Bytes before returning it (Task 3), so decode below runs on a
+// value that passed through that boxed intermediate, not a value built
+// straight from a []byte literal.
+fn main() {
+    b := []byte{105, 104}
+    c := b.sorted_by(fn(x, y byte) bool { return x < y })
+    s, err := str(c)
+    if err != none {
+        print("unexpected")
+        return
+    }
+    print(s) // hi
+}

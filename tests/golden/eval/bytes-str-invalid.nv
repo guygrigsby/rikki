@@ -1,0 +1,10 @@
+fn main() {
+    b := []byte{255, 254}
+    s, err := str(b)
+    if err != none {
+        print("invalid")
+        print(len(s))        // 0: zero value in the value slot
+        return
+    }
+    print("decoded")
+}

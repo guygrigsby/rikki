@@ -1,0 +1,11 @@
+fn main() {
+    b := []byte("héllo")
+    print(len(b))            // 6: UTF-8 bytes, not characters
+    s, err := str(b)
+    if err != none {
+        print("unexpected")
+        return
+    }
+    print(s)                 // héllo
+    print(len(s))            // 5: characters (ADR 0019)
+}

@@ -333,6 +333,12 @@ impl Checker {
                     }
                     return ExprTy::One(Type::Py);
                 }
+                // []byte(x): the operand is a nevla []byte (identity, list
+                // pass-through below) or a str (UTF-8 encode, spec 7.7,
+                // never fails). str(x) on a []byte operand is the mirror:
+                // UTF-8 decode, the sole non-py fallible str(x).
+                let is_byte_list =
+                    |ty: &Type| matches!(ty, Type::List(inner) if **inner == Type::Byte);
                 let ok = matches!(
                     (&t, &at),
                     (_, Type::Py)
@@ -345,18 +351,19 @@ impl Checker {
                         | (Type::Int, Type::Byte)
                         | (Type::Str, _)
                         | (Type::List(_), Type::List(_))
-                );
+                ) || (is_byte_list(&t) && at == Type::Str);
                 if !ok {
                     self.diag(span, format!("cannot convert {at} to {t}"));
                 }
-                // fallible only from py (bridge) or str (parse); numeric,
-                // identity, str-render, and list pass-through are single-valued
+                // fallible only from py (bridge), str (parse), or []byte
+                // (decode, spec 7.7); numeric, identity, str-render,
+                // []byte(s) encode, and list pass-through are single-valued
                 let fallible = matches!(
                     (&t, &at),
                     (_, Type::Py)
                         | (_, Type::Unknown)
                         | (Type::Int | Type::Float | Type::Bool, Type::Str)
-                );
+                ) || (t == Type::Str && is_byte_list(&at));
                 if fallible {
                     ExprTy::Multi(vec![t, err_opt()])
                 } else {
