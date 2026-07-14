@@ -107,3 +107,18 @@ drafts that are not yet decisions and may never become one.
   concurrency model draws without changing the user-visible type. Same
   wrappability constraint as Proc's blocking reads: `f.read(n)` is a
   blocking pull a channel or select design must be able to absorb.
+- 2026-07-14, task 7 review: `bytesview` (the `[]byte` bridge view) is an
+  `unsendable` pyclass holding an `Rc`; pyo3 panics (a caught
+  PanicException at dealloc, process exit unaffected) if one is
+  deallocated on a thread other than its creator.
+  `bridge::release_pending()` covers the deferred-decref-queue vector:
+  values dropped while the thread is detached flush on the run's own
+  interp thread before it exits. It structurally cannot cover a view
+  stashed into a cross-run-persistent python global (`builtins.__dict__`,
+  a module attribute) in run 1 and deallocated by run 2's thread — only
+  reachable in multi-run-per-process embedding with deliberate stashing;
+  the CLI (one run per process) is immune. No code fix without forfeiting
+  the design: `Rc` cannot be `Send`, and the sendable alternatives give
+  up zero-copy. Whatever threading story lands must either pin py
+  teardown to an owner thread or make the buffer's cell `Send`; this
+  hazard is its concrete test case.
