@@ -1,0 +1,43 @@
+// map over []byte with a byte-returning fn repacks into the compact
+// Value::Bytes, closing the last boxed-list escape hatch of the mixed-tag
+// class: the checker types these results []byte, so str/append/contains
+// must see a compact buffer, not the boxed list list_method builds
+// internally. The repack decision reads the fn's declared return type
+// (FnRef::Decl -> fns table, FnRef::Closure -> ClosureData.ret); a lambda
+// that omitted its return type falls back to the element-tag check (all
+// results Value::Byte), which an expression-body lambda yielding its
+// byte parameter satisfies.
+
+fn identity(x byte) byte {
+    return x
+}
+
+fn main() {
+    b := []byte{104, 105}
+
+    // declared-return lambda: the faulting repro, now green
+    c := b.map(fn(x byte) byte { return x })
+    s, _ := str(c)
+    print(s)                        // hi
+    d := append(c, 33)
+    print(d.contains(byte(33)))     // true
+    print(d.contains(105))          // true: bare literal needle still normalizes
+
+    // declared top-level fn through FnRef::Decl
+    e := b.map(identity)
+    s2, _ := str(e)
+    print(s2)                       // hi
+
+    // undeclared expression-body lambda: element-tag fallback
+    f := b.map(fn(x byte) { x })
+    s3, _ := str(f)
+    print(s3)                       // hi
+
+    // empty receiver with a declared byte return repacks empty: append
+    // must grow the compact buffer, not a boxed list
+    g := []byte{}.map(fn(x byte) byte { return x })
+    print(len(g))                   // 0
+    h := append(g, 104)
+    s4, _ := str(h)
+    print(s4)                       // h
+}

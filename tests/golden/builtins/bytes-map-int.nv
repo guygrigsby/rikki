@@ -1,0 +1,14 @@
+// map over []byte with a non-byte return stays a boxed list, exactly as
+// the checker types it ([]int here). The all-in-range case is the trap
+// the repack must not fall into: every element of d fits 0..255, but the
+// declared return type is int, so repacking to the compact buffer would
+// turn the single-valued str([]int) render into a fallible decode.
+fn main() {
+    b := []byte{3, 200}
+    c := b.map(fn(x byte) int { return int(x) * 2 })
+    print(c)                 // [6, 400]
+    print(c.contains(6))     // true
+    print(c.sum())           // 406
+    d := b.map(fn(x byte) int { return int(x) })
+    print(str(d))            // [3, 200]: render, not decode
+}

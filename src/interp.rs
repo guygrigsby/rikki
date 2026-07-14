@@ -327,6 +327,12 @@ impl<'p> Interp<'p> {
         self.fns.contains_key(name)
     }
 
+    /// Declared return types of a top-level fn, for callers that decide
+    /// runtime representation by declaration (bytes_method's map repack).
+    pub(crate) fn declared_fn_return(&self, name: &str) -> Option<&[TypeExpr]> {
+        self.fns.get(name).map(|f| f.ret.as_slice())
+    }
+
     pub(crate) fn call_fn_by_name(&mut self, name: &str, args: Vec<Value>) -> Result<Value, Fault> {
         self.call_named(name, args)
     }
