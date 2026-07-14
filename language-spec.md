@@ -779,7 +779,11 @@ Result typing:
 - If the literal declares no result types and its body is a single
   expression statement, the literal is an expression-bodied function: its
   result type is the expression's type (no result if the expression has no
-  value), and calling it returns the expression's value.
+  value), and calling it returns the expression's value. Exception: an
+  expression-bodied function whose inferred result type is `byte` is a
+  compile-time error ("lambda returning byte needs a declared return
+  type"); a `byte` result must be written down
+  (`fn(x byte) byte { return x }`).
 - Otherwise the literal has no results.
 
 ```

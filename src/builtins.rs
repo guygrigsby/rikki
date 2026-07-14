@@ -286,6 +286,19 @@ impl Interp<'_> {
                 for it in items {
                     out.push(self.call_value(&f, vec![it])?);
                 }
+                // map is the one method whose result element type follows
+                // the callback, on ANY receiver: a byte-returning callback
+                // makes the checker type the result []byte, whose runtime
+                // form is the compact buffer, so repack by the callback's
+                // declared return type — xs.map(fn(x int) byte {...}) over
+                // a plain []int must come out compact exactly like
+                // b.map(...) over []byte (which delegates here). The
+                // checker guarantees a byte return is always declared
+                // (lambda rule, typecheck/expr.rs), so an undeclared
+                // closure is non-byte and the boxed list below is correct.
+                if self.fn_declares_byte_return(&f) {
+                    return self.repack_bytes(&out);
+                }
                 Ok(Value::list(out))
             }
             "filter" => {
@@ -418,20 +431,6 @@ impl Interp<'_> {
         args: Vec<Value>,
     ) -> Result<Value, Fault> {
         let items: Vec<Value> = buf.borrow().data.iter().map(|b| Value::Byte(*b)).collect();
-        // "map" is the one delegated method whose result element type
-        // follows the callback, so whether to repack is decided by the
-        // mapped fn's declared return type (read before args move below):
-        // the checker types b.map(fn(x byte) byte {...}) as []byte, and a
-        // boxed result would smuggle a non-compact []byte exactly like the
-        // bare-list-literal holes were doing. None means no declaration is
-        // visible at runtime (a lambda that omitted its return type —
-        // indistinguishable from a void lambda in ClosureData); those fall
-        // back to the element-tag check at the repack site below.
-        let map_declared_byte: Option<bool> = if name == "map" {
-            args.last().and_then(|f| self.fn_declared_byte_return(f))
-        } else {
-            None
-        };
         // An argument naming a byte element (contains' needle) arrives as
         // Value::Int when spelled as a bare literal (spec 5.10); normalize
         // to Value::Byte so eq_value (used by "contains") matches against
@@ -455,33 +454,12 @@ impl Interp<'_> {
             // through the plain List arms instead, which skip the
             // byte-argument normalization above and can mix a raw
             // Value::Int into an otherwise all-Value::Byte buffer.
+            // "map" is NOT here: its result element type follows the
+            // callback on any receiver, so list_method's own map arm owns
+            // the declared-return repack and its result passes through
+            // this match untouched (as Value::Bytes when repacked there).
             ("filter" | "sorted" | "sorted_by", Value::List(items)) => {
                 self.repack_bytes(&items.borrow())
-            }
-            // "map" repacks exactly when the callback returns byte. The
-            // declared type decides wherever visible (it cannot mis-repack
-            // an all-coincidentally-in-range []int, and it is right even
-            // for an empty result); an undeclared lambda repacks only when
-            // the result is nonempty and every element carries the
-            // Value::Byte tag — a strict tag check, NOT as_byte_elem, so an
-            // int-returning undeclared lambda (Value::Int elements, checker
-            // types []int) never repacks. Residual, accepted: an undeclared
-            // expression-body lambda yielding byte over an EMPTY receiver
-            // stays boxed while the checker infers []byte; the runtime has
-            // no elements and no declaration to decide by.
-            ("map", Value::List(items)) => {
-                let repack = match map_declared_byte {
-                    Some(declared) => declared,
-                    None => {
-                        let items = items.borrow();
-                        !items.is_empty() && items.iter().all(|v| matches!(v, Value::Byte(_)))
-                    }
-                };
-                if repack {
-                    self.repack_bytes(&items.borrow())
-                } else {
-                    Ok(Value::List(items))
-                }
             }
             // "each" (Unit) and "contains" (Bool) return whatever
             // list_method already produced, untouched.
@@ -489,27 +467,23 @@ impl Interp<'_> {
         }
     }
 
-    /// The declared return type of a runtime fn value, reduced to "is it
-    /// exactly `byte`": `Some(true)` repacks, `Some(false)` stays boxed,
-    /// `None` means no declaration is visible (a lambda without a written
-    /// return type — indistinguishable from a void lambda in ClosureData,
-    /// whose `ret` is empty either way). A declared byte return still
-    /// permits `return 5` (the scalar literal rule, spec 5.10), which is
-    /// why repack_bytes reads elements via as_byte_elem, not tags.
-    fn fn_declared_byte_return(&self, f: &Value) -> Option<bool> {
+    /// Whether a runtime fn value declares its return type as exactly
+    /// `byte`. The declaration is always visible when it exists
+    /// (FnRef::Decl → the fns table, FnRef::Closure → ClosureData.ret);
+    /// a lambda that omitted its return type stores nothing there, and
+    /// the checker guarantees such a lambda does not return byte (the
+    /// declared-return rule in typecheck/expr.rs), so empty means "not
+    /// byte", never "unknown". A declared byte return still permits
+    /// `return 5` (the scalar literal rule, spec 5.10), which is why
+    /// repack_bytes reads elements via as_byte_elem, not tags.
+    fn fn_declares_byte_return(&self, f: &Value) -> bool {
         let is_byte = |ret: &[TypeExpr]| matches!(ret, [TypeExpr::Named(n)] if n == "byte");
         match f {
             Value::Fn(crate::value::FnRef::Decl(n)) => {
-                self.declared_fn_return(n).map(|ret| is_byte(ret))
+                self.declared_fn_return(n).is_some_and(is_byte)
             }
-            Value::Fn(crate::value::FnRef::Closure(c)) => {
-                if c.ret.is_empty() {
-                    None
-                } else {
-                    Some(is_byte(&c.ret))
-                }
-            }
-            _ => Some(false),
+            Value::Fn(crate::value::FnRef::Closure(c)) => is_byte(&c.ret),
+            _ => false,
         }
     }
 

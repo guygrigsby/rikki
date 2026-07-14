@@ -1085,6 +1085,21 @@ impl Checker {
             match &body[0].kind {
                 StmtKind::Expr(e) => {
                     let t = self.expr_one(e, None);
+                    // A byte return must be written down: the runtime
+                    // decides []byte's compact-vs-boxed representation for
+                    // map results by the callback's DECLARED return type
+                    // (FnDecl.ret / ClosureData.ret — an omitted lambda
+                    // return stores nothing, indistinguishable from void),
+                    // so an inferred-only byte return would let
+                    // xs.map(fn(x) { byte(x) }) checker-type []byte while
+                    // the runtime builds a boxed list, faulting str() —
+                    // including laundered through a fn-typed variable,
+                    // which no map-site rule can see. With this rule every
+                    // byte-returning fn value carries its declaration and
+                    // an undeclared closure is guaranteed non-byte.
+                    if t == Type::Byte {
+                        self.diag(span, "lambda returning byte needs a declared return type");
+                    }
                     if t == Type::Unit {
                         vec![]
                     } else {

@@ -1,0 +1,22 @@
+// A lambda whose inferred return type is byte must declare it: the
+// runtime decides map's compact-vs-boxed result by the callback's
+// DECLARED return type (an omitted lambda return stores nothing in
+// ClosureData, indistinguishable from void), so an inferred-only byte
+// return would checker-type the map result []byte while the runtime
+// builds a boxed list — str() faulted on every spelling below before
+// this rule. The rule is at the lambda, not the map site, because the
+// closure can launder through a fn-typed variable no map-site check can
+// see. Spell the return type: fn(x byte) byte { return x }.
+fn main() {
+    b := []byte{104, 105}
+    c := b.map(fn(x byte) { x })
+    print(len(c))
+    d := []byte{}.map(fn(x) { x })
+    print(len(d))
+    xs := [104, 105]
+    e := xs.map(fn(x int) { byte(x) })
+    print(len(e))
+    g := fn(x byte) { x }
+    f := b.map(g)
+    print(len(f))
+}

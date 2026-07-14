@@ -1,12 +1,12 @@
-// map over []byte with a byte-returning fn repacks into the compact
-// Value::Bytes, closing the last boxed-list escape hatch of the mixed-tag
-// class: the checker types these results []byte, so str/append/contains
-// must see a compact buffer, not the boxed list list_method builds
-// internally. The repack decision reads the fn's declared return type
-// (FnRef::Decl -> fns table, FnRef::Closure -> ClosureData.ret); a lambda
-// that omitted its return type falls back to the element-tag check (all
-// results Value::Byte), which an expression-body lambda yielding its
-// byte parameter satisfies.
+// map repacks its result into the compact Value::Bytes exactly when the
+// callback's declared return type is byte, on ANY receiver: the checker
+// types those results []byte, so str/append/contains must see a compact
+// buffer, not the boxed list list_method builds internally. The decision
+// reads the declaration off the runtime fn value (FnRef::Decl -> fns
+// table, FnRef::Closure -> ClosureData.ret); the checker guarantees a
+// declaration always exists for byte-returning fns (a lambda inferring a
+// byte return without declaring it is a compile error, see
+// tests/golden/check/bytes-map-undeclared.nv).
 
 fn identity(x byte) byte {
     return x
@@ -15,7 +15,7 @@ fn identity(x byte) byte {
 fn main() {
     b := []byte{104, 105}
 
-    // declared-return lambda: the faulting repro, now green
+    // declared-return lambda over []byte: the faulting repro, now green
     c := b.map(fn(x byte) byte { return x })
     s, _ := str(c)
     print(s)                        // hi
@@ -28,8 +28,10 @@ fn main() {
     s2, _ := str(e)
     print(s2)                       // hi
 
-    // undeclared expression-body lambda: element-tag fallback
-    f := b.map(fn(x byte) { x })
+    // plain []int receiver, byte-returning callback: the checker types
+    // this []byte too, so it must come out compact just the same
+    xs := [104, 105]
+    f := xs.map(fn(x int) byte { return byte(x) })
     s3, _ := str(f)
     print(s3)                       // hi
 
