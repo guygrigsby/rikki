@@ -1828,6 +1828,7 @@ via the conversions of section 7.7 applied to a `py` operand. Each yields
 | `bool(x)` | (practically) always | Python truthiness of the object |
 | `str(x)` | (practically) always | Python `str()` of the object |
 | `[]T(x)` | the object is iterable and every element extracts as `T` | `T` may be `int`, `float`, `bool`, `str`, or `py`; `py` keeps elements as handles |
+| `[]byte(x)` | the object supports the buffer protocol (`bytes`, `bytearray`, `memoryview`, including a `nevla.bytesview` round-tripped through Python) | one copy out of the buffer, into a fresh compact `[]byte`; a non-buffer object is an error |
 
 Failure produces `(zero value of T, error)` with the Python exception
 converted per section 13.4.

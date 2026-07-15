@@ -85,6 +85,7 @@ pub enum ConvTarget {
     Bool,
     Str,
     List(Elem),
+    Bytes,
     Other(String),
 }
 

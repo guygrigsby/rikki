@@ -153,6 +153,7 @@ impl Interp<'_> {
                         "bool" => ConvTarget::List(Elem::Bool),
                         "str" => ConvTarget::List(Elem::Str),
                         "py" => ConvTarget::List(Elem::Py),
+                        "byte" => ConvTarget::Bytes,
                         other => ConvTarget::Other(other.to_string()),
                     },
                     _ => return Err(self.fault("unsupported list conversion from py")),

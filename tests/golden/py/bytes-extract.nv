@@ -1,0 +1,21 @@
+import py "builtins"
+
+fn main() (error?) {
+    raw := check builtins.bytes([]byte{104, 105})     // round trip through a real python bytes
+    got, err := []byte(raw)
+    if err != none {
+        return err
+    }
+    print(len(got))          // 2
+    print(int(got[0]))       // 104
+
+    ba := check builtins.bytearray(got)
+    got2, err2 := []byte(ba)
+    print(err2 == none)      // true: bytearray extracts
+    print(len(got2))         // 2
+
+    obj := check builtins.object()
+    _, err3 := []byte(obj)
+    print(err3 != none)      // true: non buffer object is an error value
+    return none
+}

@@ -501,6 +501,11 @@ pub enum ConvTarget {
     Str,
     /// `[]T(x)`: elements extracted per `Elem`.
     List(Elem),
+    /// `[]byte(x)`: one copy out of anything exposing the buffer protocol
+    /// (`bytes`, `bytearray`, `memoryview`, including a nevla-origin
+    /// `bytesview` round-tripped through python); non-buffer objects are an
+    /// error value (spec 13.5).
+    Bytes,
     /// A target extraction can never satisfy (an unknown named type, py,
     /// ...); always fails with an error value naming it.
     Other(String),
@@ -533,6 +538,13 @@ pub fn extract(target: &ConvTarget, h: &PyHandle) -> Result<Value, ErrVal> {
                 }
                 Ok(Value::list(out))
             }
+            ConvTarget::Bytes => match pyo3::buffer::PyBuffer::<u8>::get(b) {
+                Ok(buffer) => buffer
+                    .to_vec(py)
+                    .map(Value::bytes)
+                    .map_err(|e| errval(py, e)),
+                Err(e) => Err(errval(py, e)),
+            },
             ConvTarget::Other(name) => Err(ErrVal {
                 msg: format!("cannot convert py to {name}"),
                 ..Default::default()
@@ -662,6 +674,41 @@ mod tests {
             let bytes: Vec<u8> = copy.extract().unwrap();
             assert_eq!(bytes, vec![9, 2, 3]);
         });
+    }
+
+    // A nevla-origin bytesview round-trips through []byte(x): extraction
+    // goes through the same buffer protocol as bytes/bytearray, and it is a
+    // copy, not an alias, of the view (spec 13.5's "one copy" applies here
+    // too) — mutating the extracted buffer must leave the original's
+    // untouched.
+    #[test]
+    fn bytesview_extract_is_a_copy() {
+        init(None);
+        let bref = std::rc::Rc::new(std::cell::RefCell::new(crate::value::BytesBuf {
+            data: vec![1, 2, 3],
+        }));
+        let val = Value::Bytes(bref.clone());
+        let h = Python::attach(|py| PyHandle::new(to_py(py, &val).unwrap()));
+
+        let extracted = extract(&ConvTarget::Bytes, &h).unwrap();
+        let Value::Bytes(out) = extracted else {
+            panic!("{extracted:?}")
+        };
+        assert_eq!(out.borrow().data, vec![1, 2, 3]);
+
+        out.borrow_mut().data[0] = 99;
+        assert_eq!(
+            bref.borrow().data,
+            vec![1, 2, 3],
+            "extract must copy, not alias, the bytesview"
+        );
+
+        // h holds the bytesview pyclass (unsendable); drop it and flush its
+        // deferred decref here, on the thread that created it, matching the
+        // run_source teardown (lib.rs) rather than letting it land on a
+        // later test's thread.
+        drop(h);
+        release_pending();
     }
 
     #[test]
