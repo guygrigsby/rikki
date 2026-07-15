@@ -87,3 +87,13 @@ fn resolve_records_py_import_boundary() {
     let (_r, _c, py) = nevla::model::resolve::resolve(&prog);
     assert!(py.iter().any(|b| b.note.contains("math")), "{py:?}");
 }
+
+#[test]
+fn analyze_assembles_full_model() {
+    let entry = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/model_basic/src/main.nv");
+    let model = nevla::model::analyze(&entry).expect("analyze");
+    assert!(model.symbols.iter().any(|s| s.name == "Double"));
+    assert!(!model.references.is_empty());
+    assert!(!model.calls.is_empty());
+}

@@ -1,7 +1,17 @@
+use std::path::Path;
+
 use serde::{Deserialize, Serialize};
 
 pub mod resolve;
 pub mod symbols;
+
+/// Analyze a program from its entry point, producing a resolved model.
+pub fn analyze(entry: &Path) -> Result<Model, Vec<crate::diag::Diag>> {
+    let prog = crate::loader::load(entry).map_err(|d| vec![d])?;
+    let symbols = symbols::extract(&prog);
+    let (references, calls, py_boundaries) = resolve::resolve(&prog);
+    Ok(Model { symbols, references, calls, py_boundaries })
+}
 
 /// Position in source, 1-based line and column.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
