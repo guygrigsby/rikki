@@ -4,15 +4,23 @@ Not commitments, just recorded intent. Ordered roughly by expected pain.
 
 ## v1.1
 
-- byte and `[]byte`: DESIGN APPROVED 2026-07-13
-  (docs/specs/2026-07-13-bytes-design.md), implementation next. byte
-  scalar (compare-only, no arithmetic) plus `[]byte` as a compact list
-  type; always-view zero-copy bridge crossing via the buffer protocol
-  (stable addresses by construction: `append` always copies rather than
-  mutating in place, ADR 0022, so a lent buffer's memory never moves);
-  chunked file handles. Sets the bridge model for real data: values copy,
-  primitive buffers cross by reference, containers copy (lazy proxies are
-  the recorded upgrade), py handles unchanged.
+- byte and `[]byte`: DONE 2026-07-14 (ADR 0021, ADR 0022; design:
+  docs/specs/2026-07-13-bytes-design.md). byte scalar (compare-only, no
+  arithmetic) plus `[]byte` as a compact list type; always-view zero-copy
+  bridge crossing via the buffer protocol (stable addresses by
+  construction: `append` always copies rather than mutating in place, so
+  a lent buffer's memory never moves — ADR 0022 supersedes ADR 0021's
+  lent-flag in-place-growth optimization, which proved unsound: a
+  refcount check cannot tell "the caller is rebinding this name"
+  (`b = append(b, x)`, safe) from "the caller is keeping it and binding
+  elsewhere" (`c := append(b, x)`, not safe), so growth is unconditional
+  copy now, matching every other `[]T`); chunked file handles
+  (open/create/read/write/close, the `Proc` opaque-handle pattern). Sets
+  the bridge model for real data: values copy, primitive buffers cross by
+  reference, containers copy (lazy proxies are the recorded upgrade), py
+  handles unchanged. Follow-ons tracked as their own entries below:
+  compact numeric buffers, fn across the bridge, binary http,
+  `file.mapbytes`, hex integer literals.
 - Compact numeric buffers `[]float64`/`[]int64` (2026-07-13): the byte
   design is written to be the template (data prep building tensors
   nevla-side, `np.frombuffer` zero-copy). Build when a data-prep flow
