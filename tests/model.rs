@@ -46,3 +46,44 @@ fn extract_pins_import_symbol_from_the_real_loader() {
     assert_eq!(util.id.0, "import:main.nv:util");
     assert!(!util.is_py);
 }
+
+#[test]
+fn resolve_finds_cross_file_module_member_call() {
+    let prog = load_fixture("model_basic");
+    let syms = nevla::model::symbols::extract(&prog);
+    let double = syms.iter().find(|s| s.name == "Double").expect("Double");
+    let (refs, calls, _py) = nevla::model::resolve::resolve(&prog);
+
+    // compute() calls util.Double(x): Method form.
+    let hits: Vec<_> = refs.iter().filter(|r| r.target == double.id).collect();
+    assert_eq!(hits.len(), 1, "refs to double: {refs:?}");
+    assert_eq!(hits[0].form, nevla::model::ReferenceForm::ModuleMemberCall);
+    assert_eq!(hits[0].file, "main.nv");
+    let call_hits: Vec<_> = calls.iter().filter(|c| c.callee == double.id).collect();
+    assert_eq!(call_hits.len(), 1);
+    let compute = syms.iter().find(|s| s.name == "compute").unwrap();
+    assert_eq!(call_hits[0].caller, compute.id);
+}
+
+#[test]
+fn resolve_finds_same_file_ident_call_and_skips_shadowed() {
+    let prog = load_fixture("model_basic");
+    let syms = nevla::model::symbols::extract(&prog);
+    let compute = syms.iter().find(|s| s.name == "compute").unwrap();
+    let (refs, _calls, _py) = nevla::model::resolve::resolve(&prog);
+    // main() calls compute(20): Ident form. shadowedCall's `compute` param
+    // (tests/fixtures/model_basic/src/main.nv) shadows the module fn, so its
+    // `return compute` must not add a second hit here.
+    let hits: Vec<_> = refs.iter().filter(|r| r.target == compute.id).collect();
+    assert_eq!(hits.len(), 1, "{refs:?}");
+    assert_eq!(hits[0].form, nevla::model::ReferenceForm::Ident);
+}
+
+#[test]
+fn resolve_records_py_import_boundary() {
+    let entry = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/model_py/src/main.nv");
+    let prog = nevla::loader::load(&entry).expect("load model_py");
+    let (_r, _c, py) = nevla::model::resolve::resolve(&prog);
+    assert!(py.iter().any(|b| b.note.contains("math")), "{py:?}");
+}

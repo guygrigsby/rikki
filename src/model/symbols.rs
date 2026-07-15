@@ -97,7 +97,10 @@ fn unqualified_name(qualified: &str) -> String {
         .to_string()
 }
 
-fn symbol_id(kind: SymbolKind, file: &str, qualified: &str) -> String {
+/// Shared with `resolve` so a caller's `SymbolId` (built from a `FnDecl`
+/// directly, without going through `extract`) matches exactly what
+/// `extract` would have produced for that same function.
+pub(crate) fn symbol_id(kind: SymbolKind, file: &str, qualified: &str) -> String {
     format!("{}:{}:{}", kind.tag(), file, qualified)
 }
 

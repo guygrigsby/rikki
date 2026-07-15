@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+pub mod resolve;
 pub mod symbols;
 
 /// Position in source, 1-based line and column.

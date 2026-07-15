@@ -7,3 +7,9 @@ fn compute(x int) int {
 fn main() {
     print(str(compute(20)))
 }
+
+// shadowedCall's param `compute` shadows the module fn of the same name;
+// the resolver must not emit a reference for the `return compute` below.
+fn shadowedCall(compute int) int {
+    return compute
+}
