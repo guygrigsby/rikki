@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+pub mod symbols;
+
 /// Position in source, 1-based line and column.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Pos {

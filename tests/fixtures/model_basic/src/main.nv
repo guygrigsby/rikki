@@ -1,0 +1,9 @@
+import "util.nv"
+
+fn compute(x int) int {
+    return util.Double(x) + 1
+}
+
+fn main() {
+    print(str(compute(20)))
+}
