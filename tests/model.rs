@@ -24,4 +24,25 @@ fn extract_finds_functions() {
     assert_eq!(double.qualified, "util.Double");
     assert_eq!(double.file, "util.nv");
     assert_eq!(double.id.0, "function:util.nv:util.Double");
+    assert_eq!(double.ty.as_deref(), Some("(int) (int)"));
+}
+
+#[test]
+fn extract_pins_import_symbol_from_the_real_loader() {
+    // The loader rewrites `.nv` import paths to the bare file stem before
+    // the model sees them (src/loader.rs); the Import symbol carries that
+    // rewritten form as both name and qualified.
+    let prog = load_fixture("model_basic");
+    let syms = nevla::model::symbols::extract(&prog);
+    let imports: Vec<&nevla::model::Symbol> = syms
+        .iter()
+        .filter(|s| s.kind == nevla::model::SymbolKind::Import)
+        .collect();
+    assert_eq!(imports.len(), 1, "got {imports:?}");
+    let util = imports[0];
+    assert_eq!(util.name, "util");
+    assert_eq!(util.qualified, "util");
+    assert_eq!(util.file, "main.nv");
+    assert_eq!(util.id.0, "import:main.nv:util");
+    assert!(!util.is_py);
 }

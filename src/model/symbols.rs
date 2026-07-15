@@ -25,6 +25,9 @@ fn symbol_for(decl: &Decl) -> Symbol {
         } => {
             let unqualified = unqualified_name(name);
             let file = file.clone().unwrap_or_default();
+            // py-typed struct fields are legal (spec 7.11 reads them as
+            // plain py values), so a struct crosses the py boundary when
+            // any field does, mirroring the params/ret rule for fns.
             let is_py = fields.iter().any(|(_, ty)| is_py_type(ty));
             Symbol {
                 id: SymbolId(symbol_id(SymbolKind::Struct, &file, name)),
