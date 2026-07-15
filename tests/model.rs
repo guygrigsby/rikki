@@ -97,3 +97,62 @@ fn analyze_assembles_full_model() {
     assert!(!model.references.is_empty());
     assert!(!model.calls.is_empty());
 }
+
+#[test]
+fn resolve_finds_bare_struct_literal() {
+    // tests/fixtures/model_struct/src/main.nv defines `struct Point` in the
+    // root file and instantiates it bare (`Point{X: 1, Y: 2}`) on line 9: a
+    // same-file StructLiteral reference, root-file names stay unqualified.
+    let prog = load_fixture("model_struct");
+    let syms = nevla::model::symbols::extract(&prog);
+    let point = syms
+        .iter()
+        .find(|s| s.kind == nevla::model::SymbolKind::Struct && s.qualified == "Point")
+        .expect("root Point struct");
+    let (refs, _calls, _py) = nevla::model::resolve::resolve(&prog);
+    let hits: Vec<_> = refs
+        .iter()
+        .filter(|r| r.target == point.id && r.form == nevla::model::ReferenceForm::StructLiteral)
+        .collect();
+    assert_eq!(hits.len(), 1, "{refs:?}");
+    assert_eq!(hits[0].file, "main.nv");
+    assert_eq!(hits[0].at, nevla::model::Pos { line: 9, col: 10 });
+}
+
+#[test]
+fn resolve_finds_cross_module_struct_literal() {
+    // Same fixture: shapes.nv also defines `struct Point` (loader-mangled to
+    // `shapes.Point`); main.nv instantiates it dotted (`shapes.Point{X: 3, Y:
+    // 4}`) on line 10, distinct from the root Point above.
+    let prog = load_fixture("model_struct");
+    let syms = nevla::model::symbols::extract(&prog);
+    let point = syms
+        .iter()
+        .find(|s| s.kind == nevla::model::SymbolKind::Struct && s.qualified == "shapes.Point")
+        .expect("shapes.Point struct");
+    let (refs, _calls, _py) = nevla::model::resolve::resolve(&prog);
+    let hits: Vec<_> = refs
+        .iter()
+        .filter(|r| r.target == point.id && r.form == nevla::model::ReferenceForm::StructLiteral)
+        .collect();
+    assert_eq!(hits.len(), 1, "{refs:?}");
+    assert_eq!(hits[0].file, "main.nv");
+    assert_eq!(hits[0].at, nevla::model::Pos { line: 10, col: 10 });
+}
+
+#[test]
+fn analyze_errs_on_nonexistent_entry() {
+    let entry = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/model_basic/src/does_not_exist.nv");
+    let result = nevla::model::analyze(&entry);
+    assert!(result.is_err(), "expected Err, got {result:?}");
+}
+
+#[test]
+fn analyze_errs_on_import_cycle() {
+    // Reuses the golden import-cycle fixture read-only; analyze must surface
+    // the loader's cycle error, not panic.
+    let entry = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden/imports/cycle/main.nv");
+    let result = nevla::model::analyze(&entry);
+    assert!(result.is_err(), "expected Err, got {result:?}");
+}

@@ -221,6 +221,23 @@ mod tests {
     }
 
     #[test]
+    fn extract_struct_marks_py_boundary() {
+        // A struct with any py-typed field crosses the py boundary, mirroring
+        // the params/ret rule for fns (see py-conv.nv golden: `handle py`).
+        let prog = Program {
+            decls: vec![Decl::Struct {
+                name: "Tracker".to_string(),
+                fields: vec![("handle".to_string(), named("py"))],
+                span: Span::new(1, 1),
+                file: Some("main.nv".to_string()),
+            }],
+        };
+        let syms = extract(&prog);
+        let tracker = syms.iter().find(|s| s.kind == SymbolKind::Struct).unwrap();
+        assert!(tracker.is_py);
+    }
+
+    #[test]
     fn fn_symbol_marks_py_boundary() {
         let f = FnDecl {
             name: "callModel".to_string(),

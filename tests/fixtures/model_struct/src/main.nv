@@ -1,0 +1,13 @@
+import "shapes.nv"
+
+struct Point {
+    X int
+    Y int
+}
+
+fn main() {
+    p := Point{X: 1, Y: 2}
+    q := shapes.Point{X: 3, Y: 4}
+    print(p.X + p.Y)
+    print(q.X + q.Y)
+}

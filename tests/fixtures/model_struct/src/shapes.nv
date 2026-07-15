@@ -1,0 +1,4 @@
+struct Point {
+    X int
+    Y int
+}
