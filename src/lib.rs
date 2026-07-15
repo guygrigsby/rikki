@@ -12,6 +12,7 @@ pub mod format;
 pub mod interp;
 pub mod lexer;
 pub mod loader;
+pub mod model;
 pub mod parser;
 pub mod project;
 pub mod repl;

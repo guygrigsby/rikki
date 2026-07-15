@@ -11,6 +11,8 @@ glob = "0.3"
 regex = "1"
 indexmap = "2"
 toml = "1.1.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 # flock + gethostname for the gputex lock protocol (stdlib/gpu.rs)
 [target.'cfg(unix)'.dependencies]
